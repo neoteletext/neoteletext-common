@@ -110,12 +110,37 @@ The rule that carries across all three: **wait on what you need**. A loop that s
 
 No engine code has run on a device; there is no timing from a microcontroller, no stack measurement, no flash figure for audio or input, and the Cortex-M0 sizes predate the font slots (`TECH-DEBT.md`). These are the first things to measure before choosing a target.
 
-## 8. Recommended work, in order
+## 8. Hundreds of tabs and thousands of pages
+
+The owner asked what happens at scale. Measured on 21 October 2026, release builds:
+
+| What | Measured | At 200 tabs | At 1,000 tabs |
+|---|---|---|---|
+| A decoder process at rest | 16 MB physical, 10.5 MB of it the page store of 4,096 slots allocated up front | 3.2 GB | 16 GB |
+| A fetcher process at rest | 3.6 MB peak resident, 1.5 MB footprint | about 0.3 to 0.7 GB | about 1.5 to 3.6 GB |
+| An idle mixer (a tab that has played a sound) in the audio callback | 2.0 ms of processor time per second of audio | 41 % of a core, on the real-time thread | over a whole core: every tab's sound breaks up |
+| The same, skipping mixers that are not `active()` | 0.28 ms per second for 500 mixers | none to speak of | none to speak of |
+| The decoder's scan of its store on every message (section 5.2 item 5) | 0.37 ms at 1,000 complete pages, 1.5 ms at 4,096 | 1.5 cores if each tab takes five messages a second with a full store | — |
+| Processes the system allows one user (`kern.maxprocperuid`) | 2,666, of which 329 were in use | — | two per web tab: the limit is reached near 1,100 tabs |
+| Threads in one process (`kern.num_taskthreads`) | 4,096 | the core has two reader threads per tab | the core's limit is near 2,000 tabs |
+
+Not measured: the flash ticks (12 a second to every decoder, so 2,400 pipe writes and process wakeups a second at 200 tabs), the interface's tab strip and wall with hundreds of tabs, and a store filling past 4,096 pages and sub-pages.
+
+What follows:
+- **The limit at scale is processes and memory per tab, not threads.** An async runtime would change none of it: decoders and fetchers are separate processes for security (the browser's decision 4), and the core's threads are cheap until about 2,000 tabs.
+- **Skip silent mixers** in the audio callback: one line, measured above.
+- **Put background tabs to sleep**, as other browsers discard tabs: a tab not shown for a while has its decoder stopped and its channel's bytes kept, and its fetcher closed unless it holds a push connection the owner wants kept; showing the tab starts them again. Processes then grow with the tabs in use, not the tabs open.
+- **Size the decoder's store by need** rather than 4,096 slots up front, or from the channel's contents file.
+- **Use the engine's page events** instead of scanning the store, and stop ticking hidden decoders (sections 5.2 and 6).
+- **Fetch politely across tabs, not per tab.** The 200 ms spacing is per fetcher, so 200 tabs of one host ask it 1,000 times a second, and every tab fetches its whole channel when opened: 1,000 pages take 200 s per tab. Background tabs should fetch only what is shown, and fetchers of one host should share its rate.
+
+## 9. Recommended work, in order
 
 Each item is a change of its own, with the measurement that shows it worked.
 
 | # | Change | Repository | Shows it worked |
 |---|---|---|---|
+| 0 | Skip mixers that are not `active()` in the browser's audio callback. | Browser | The idle-mixer timing of section 8, in a test. |
 | 1 | Fix `neottx keyboard`'s channel read (bug 1) with a reader thread per socket and one channel. | Engine | A test where the channel pings and closes; idle wakeups of the bridge. |
 | 2 | Keep every live-feed timer, and wait without a deadline once stopped (bugs 2, 3). | Engine | A test of the keepalive's time after the handshake; idle switches of a stopped feed. |
 | 3 | `neottx view` wakes on frames and on its next deadline, not a 40 ms tick. | Engine | The typing test extended through the viewer; idle switches with a static page. |
