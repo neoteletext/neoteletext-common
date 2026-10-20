@@ -150,7 +150,7 @@ An event is `0xFF`, a type byte, then its fields.
 | `0x06` | FOCUS_OUT | none | always |
 | `0x07` | RESIZE | `cols` uv, `rows` uv, `pw` uv, `ph` uv | always |
 | `0x08` | COMPOSE | `cursor` uv, `str` at most `MAX_COMPOSE` (256) bytes; an empty string ends composition | COMPOSE |
-| `0x09` | HELLO | `version` uv, `caps` uv, `agent`? str (at most 128 bytes) | first, once |
+| `0x09` | HELLO | `version` uv, `caps` uv, `agent`? str (at most 64 bytes) | first, once |
 | `0x0A` | PAGE | `page` uv: `0x100` to `0x8FF` in teletext's hexadecimal page form, or 0 for none | when the receiver has the PAGE capability |
 
 **MOUSE and WHEEL.**
@@ -203,7 +203,22 @@ Every non-character key has one code, which never changes: new keys are only eve
 
 Codes from 128 are the W3C UI Events `KeyboardEvent.key` names not given a code above, in the order of the engine's pinned table (`neoteletext-input`'s `KEY_NAMES`): code 128 plus the name's place among those remaining. A receiver that cannot name a key sends the code of `Unidentified`.
 
-### 5.7 Size
+### 5.7 International keyboards
+
+The protocol carries what the viewer typed, in whatever language and on whatever layout, and leaves its meaning to the channel. The rules for every layout, script and input method:
+
+1. **Text is Unicode, after the layout.** A key's result is sent as the characters the operating system's layout produced: `й` on a Russian layout, `ש` on a Hebrew one, `ß` or `@` on a German one, `ç` on a French one. The receiver never translates text into a teletext character set; the channel maps it onto the sets of the page it draws, and decides what to show for a character none of them has (section 9.5).
+2. **Logical order.** Text goes in the order it was typed, which for Arabic, Hebrew and other right-to-left scripts is logical order, never the visual order a page may be drawn in.
+3. **Normalized.** Text is sent in Unicode Normalization Form C, so `é` typed on any layout or input method arrives as U+00E9, and a channel compares what it receives without normalizing it again.
+4. **Dead keys.** A dead key (an accent pressed before its letter) sends no text: in ALL_KEYS it sends KEY with the functional code of `Dead`, and `base`; the key after it sends the composed character as text (`´` then `e` sends `é`), or, when the two do not compose, both characters, as the layout gives them.
+5. **AltGr is a level shift, not a modifier.** A character typed with AltGr (the right Alt key of European layouts, `AltGraph`) is sent as text with no modifiers. A receiver on a system that reports AltGr as Control and Alt held together (Windows) MUST NOT report it so: when a key with Control and Alt both held produces printable text, it is text. AltGr itself, in ALL_KEYS or KEY_RELEASE, is the key `AltGraph`.
+6. **Input methods.** Chinese, Japanese, Korean and other input methods compose in the receiver: their preedit goes as COMPOSE in that mode, and what they commit as text. Their own keys (`KanaMode`, `HangulMode`, `HanjaMode`, `Convert`, `NonConvert` and the rest of the W3C names) have functional codes from 128 and go as KEY when the receiver passes them on.
+7. **`key` follows the layout; `base` follows the position.** A character key's `key` is the unshifted character of the active layout (`я`, `ф`, `a`); `base`, in BASE_KEY, is the character the same physical key has on a United States layout (`z`, `a`, `q` on AZERTY's `a`). A channel binds a letter by `key` and a position (a game's movement keys) by `base`, so both work on any layout, including after the viewer switches layout.
+8. **Digits.** The keypad's keys are their functional codes in ALL_KEYS, and their characters as text otherwise. A layout that types native digits (`٣`, `३`) sends those characters; a channel that selects pages by number (section 9.4) SHOULD take the decimal digits of any script, Unicode's `Nd` characters, as the digits 0 to 9.
+9. **Lock states and layout changes** send nothing of their own beyond the lock bits in `mods`: the protocol has no event for the layout, and a channel learns of a change only from what is typed, so the viewer's choice of language is never announced.
+10. **Phones.** A phone keyboard's text, in any language its keyboard offers, is text under the same rules.
+
+### 5.8 Size
 
 | Input | Bytes | Size |
 |---|---|---|
@@ -351,7 +366,11 @@ The trusted strip says "Keys go to *host*" while keys go, with "Not secure" on a
 
 A channel that takes input selects pages by videotex's convention, which it implements: `*nnn#` goes to a page, `#` to the next, `*#` to the one before, `*00` shows the page again; three plain digits where the channel has no other use for them. The receiver interprets none of it: it sends the keys.
 
-### 9.5 `neottx view`
+### 9.5 Characters a page cannot show
+
+Echo (section 9.3) draws the viewer's own character in the interface's monospace face, whatever its script, one cell a character, a wide character (Chinese, Japanese, Korean) over two; it is the interface's drawing, not the page's, so a character no teletext set has still echoes. What the channel then draws is the channel's choice: the nearest character of the page's sets, a placeholder, or a page in another set (the engine's area CHR).
+
+### 9.6 `neottx view`
 
 Every key goes while the channel takes input, Control-C included; Control-] leaves and returns. With a terminal that reports releases (the Kitty keyboard protocol), it sends releases in KEY_RELEASE; otherwise a press only. It sends PASTE from bracketed paste, FOCUS from the terminal's focus events, and PAGE when the viewer opens a page.
 
@@ -438,6 +457,8 @@ The normative requirements of the input system. Identifiers continue the engine'
 **REQ-INT-114 — A page's own modes.** A page shall be able to ask for input modes for itself, by an `IM,modes` line in its page file or a PAGE_MODES record; the receiver shall apply them only while that page is open, together with the top of the session's mode stack, and drop them when it closes; the reader shall keep the line and the writer write it back, and a line or record that breaks a bound shall be dropped and reported. *Reason:* a page is the unit a viewer reads, and modes that go with their page cannot be left on (section 6.4). *Verification:* reader and writer tests of the line; a receiver test that the modes come and go with the page and add to the stack; a fuzz target.
 
 **REQ-INT-115 — The mouse only on request.** A receiver shall send MOUSE and WHEEL only in a mouse mode asked for by the channel or the open page, and otherwise give a click and the wheel their ordinary meaning on the page. *Reason:* section 6.5: a click keeps its ordinary meaning; terminals report the mouse only to a program that asks; nothing about the pointer leaves unasked; it costs a channel one mode. *Verification:* a receiver test that a click follows a link, and the wheel scrolls, until a mode or the page asks, and then goes to the channel.
+
+**REQ-INT-116 — International keyboards.** A receiver shall send text as the Unicode characters the layout or input method produced, in logical order and in Normalization Form C, never translated into a teletext character set; shall send a dead key as no text (in ALL_KEYS as the key `Dead`) and the composed character after it; shall not report AltGr as Control and Alt; and shall give a character key's `key` from the active layout and `base` from the United States layout of the same physical key. *Reason:* the protocol carries what the viewer typed, in any language, and leaves its meaning to the channel; a shortcut binds by position, a letter by meaning (section 5.7). *Verification:* receiver tests with Russian, Hebrew, German (AltGr), French (dead keys) and AZERTY layouts, a Japanese input method's preedit and commit, and a decomposed `e` and combining accent sent as U+00E9; a channel test of native digits selecting a page.
 
 **REQ-INT-113 — A host goes to a page.** A cursor record naming another page of the same channel shall open that page while keys go to that channel, and do nothing else; the viewer's own choice shall override it. *Verification:* a trusted-core test.
 
