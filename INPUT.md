@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | Proposed on 21 October 2026, for the owner to adopt. Once adopted it is the one design, architecture and requirements document for input in `neoteletext-engine` and `neoteletext-browser`, and replaces the engine's `docs/spec/design/input.md` and area INT, and the browser's `docs/interaction.md` and requirements section 18, which then point here (section 14). |
+| **Status** | Proposed on 21 October 2026, for the owner to adopt. The owner agreed on 21 October that losing focus releases held input at the channel (section 13 item 11) and that everything the channel says about input travels as teletext records (item 9); whether a plain click goes to the channel only when it asks (item 14) is still open. Once adopted it is the one design, architecture and requirements document for input in `neoteletext-engine` and `neoteletext-browser`, and replaces the engine's `docs/spec/design/input.md` and area INT, and the browser's `docs/interaction.md` and requirements section 18, which then point here (section 14). |
 | **Merges** | The input system built on 20 October 2026 (the engine's decisions E.90 to E.94 and E.97, the browser's decisions 44 to 46), and the owner's *Input Event Protocol v1* of 20 October 2026. Section 13 records what was taken from each and why. |
 | **Protocol** | Version 2. Version 1, the fixed 14-byte key record, is retired (section 14). |
 | **Words** | MUST, SHOULD and MAY as in RFC 2119. A *receiver* is anything that shows a channel and sends input: T42 Browser, `neottx view`, `neottx keyboard`, a microcontroller receiver. A *channel* (or host) is the server that takes the input. |
@@ -150,7 +150,7 @@ An event is `0xFF`, a type byte, then its fields.
 | `0x06` | FOCUS_OUT | none | always |
 | `0x07` | RESIZE | `cols` uv, `rows` uv, `pw` uv, `ph` uv | always |
 | `0x08` | COMPOSE | `cursor` uv, `str` at most `MAX_COMPOSE` (256) bytes; an empty string ends composition | COMPOSE |
-| `0x09` | HELLO | `version` uv, `caps` uv | first, once |
+| `0x09` | HELLO | `version` uv, `caps` uv, `agent`? str (at most 128 bytes) | first, once |
 | `0x0A` | PAGE | `page` uv: `0x100` to `0x8FF` in teletext's hexadecimal page form, or 0 for none | when the receiver has the PAGE capability |
 
 **MOUSE and WHEEL.**
@@ -164,6 +164,8 @@ An event is `0xFF`, a type byte, then its fields.
 **COMPOSE**: `cursor` is a code-point offset into the preedit string.
 
 **RESIZE** gives the page's text area in cells and the page image in pixels as the receiver draws it: a teletext page is 40 by 25 cells (72 with both side panels), so RESIZE changes only when the side panels or the drawn size do. Pixels are 0 when unknown.
+
+**HELLO**'s `agent` is the receiver's user agent string, as the engine's REQ-WEB-031 defines it (`product/version (platform) neoteletext/version`). It is present when `caps` has the AGENT bit (section 6.2), and is sent only over a transport without HTTP, a serial line for instance: over the push WebSocket the channel already has it from the upgrade's `User-Agent` header, so it is not sent twice.
 
 **PAGE** says which page the viewer has open, so the channel knows what to push: sent after RESIZE at the start of a session and whenever the open page changes while keys go to the channel, and with 0 when the viewer leaves the channel's pages.
 
@@ -237,6 +239,7 @@ The version-1 key record took 14 bytes for every key.
 | 65 536 | PAGE | The receiver shows teletext pages and sends PAGE. |
 | 131 072 | CURSOR | The receiver draws the channel's cursor record. |
 | 262 144 | ECHO | The receiver draws provisional echo while the channel acknowledges (section 7.1). |
+| 524 288 | AGENT | HELLO carries the receiver's user agent string (section 5.4); in HELLO only, never in WELCOME. |
 
 A sender uses a new flag bit, field, core type or extension type only when both sides set its capability bit in HELLO and WELCOME. A receiver of the stream that sees an unknown flag bit set treats it as a protocol error.
 
@@ -460,7 +463,7 @@ The normative requirements of the input system. Identifiers continue the engine'
 
 ## 14. Adopting it
 
-On the owner's adoption, recorded as the engine's decision E.99 and the browser's decision 48:
+On the owner's adoption, recorded as the engine's next decision (after E.99, the user agent) and the browser's decision 48:
 
 1. **The engine:**
    - `neoteletext-input`: the version-2 encoder and streaming decoder, the functional codes, the control record; the version-1 record removed.
