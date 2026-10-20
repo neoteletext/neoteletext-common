@@ -32,7 +32,7 @@ Review of 21 October 2026, on the owner's request, of `neoteletext-engine` at 05
 | Fetcher | One channel, as `neottx fetch` (decision 46). | None. |
 | Interface | winit's `Wait`/`WaitUntil`, paced by what moves on screen; a thread polling the mixers every 250 ms; the audio callback. | The poll 4 times a second; the audio stream plays silence for ever. Each redraw is the whole window, about 13 ms at 1440 × 900 (recorded): 10 a second for 3 s after any update, and for good while a channel updates more often than every 3 s. |
 | Keyboard | `Screen::poll(50 ms)`. | 20 a second while open. |
-| Reference channel (`t42-site`) | 100 ms socket timeouts per session; 375 ms polls per SSE client. | A development server; noted only. |
+| Reference channel (`neoteletext-site`) | 100 ms socket timeouts per session; 375 ms polls per SSE client. | A development server; noted only. |
 
 ## 3. Measurements
 

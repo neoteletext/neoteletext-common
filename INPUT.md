@@ -2,10 +2,10 @@
 
 | | |
 |---|---|
-| **Status** | Proposed on 21 October 2026, for the owner to adopt. The owner agreed on 21 October that losing focus releases held input at the channel (section 13 item 11) and that everything the channel says about input travels as teletext records (item 9); whether a plain click goes to the channel only when it asks (item 14) is still open. Once adopted it is the one design, architecture and requirements document for input in `neoteletext-engine` and `neoteletext-browser`, and replaces the engine's `docs/spec/design/input.md` and area INT, and the browser's `docs/interaction.md` and requirements section 18, which then point here (section 14). |
+| **Status** | Proposed on 21 October 2026, for the owner to adopt. The owner agreed on 21 October that losing focus releases held input at the channel (section 13 item 11), that everything the channel says about input travels as teletext records (item 9), and that the mouse goes to a channel only when it asks (item 14), a page asking for itself (section 6.4). |
 | **Merges** | The input system built on 20 October 2026 (the engine's decisions E.90 to E.94 and E.97, the browser's decisions 44 to 46), and the owner's *Input Event Protocol v1* of 20 October 2026. Section 13 records what was taken from each and why. |
 | **Protocol** | Version 2. Version 1, the fixed 14-byte key record, is retired (section 14). |
-| **Words** | MUST, SHOULD and MAY as in RFC 2119. A *receiver* is anything that shows a channel and sends input: T42 Browser, `neottx view`, `neottx keyboard`, a microcontroller receiver. A *channel* (or host) is the server that takes the input. |
+| **Words** | MUST, SHOULD and MAY as in RFC 2119. A *receiver* is anything that shows a channel and sends input: NeoTeletext, `neottx view`, `neottx keyboard`, a microcontroller receiver. A *channel* (or host) is the server that takes the input. |
 
 ---
 
@@ -40,8 +40,8 @@ A teletext channel that takes input is a host, and the receiver is its terminal.
 | `neoteletext-formats` | engine | The TTI `CU` line (a cursor in a page file). |
 | `neoteletext-qrkeyboard` | engine | The screen's side of qrkeyboard's protocol 3: a phone as a keyboard. |
 | `neottx view`, `neottx keyboard`, `neottx qr` | engine | A terminal receiver; a bridge from a phone to a channel; a QR code in a page. |
-| T42 Browser | browser | A windowed receiver of five processes (section 3.3). |
-| `t42-site terminal` | browser | The reference channel: echo, piano, game, podcast and forms over input. |
+| NeoTeletext | browser | A windowed receiver of five processes (section 3.3). |
+| `neoteletext-site terminal` | browser | The reference channel: echo, piano, game, podcast and forms over input. |
 
 ### 3.2 A key, end to end
 
@@ -53,7 +53,7 @@ viewer ◀─ draw ◀─ receiver: render rows; check cursor ◀─ pushed pack
 
 The receiver decides only whether a key goes; the channel decides only what it means. The answer is ordinary teletext: rows pushed as packets or a TTI page, and, optionally, a cursor record.
 
-### 3.3 In T42 Browser
+### 3.3 In NeoTeletext
 
 | Step | Process | Does |
 |---|---|---|
@@ -63,7 +63,7 @@ The receiver decides only whether a key goes; the channel decides only what it m
 | 4 | Decoder | Finds cursor and control records in pushed packets and `CU` lines, untrusted, and passes them on. |
 | 5 | Trusted core | Checks each cursor and control record; applies WELCOME and the mode stack; passes the interface only what it may draw. |
 
-The interface never encodes the wire format: it sends intents, so a compromised interface can at worst type into the one channel the trusted core already lets it type into (the browser's open decision 3). The phone keyboard is a sixth process, `t42-keyboard`, which alone holds the pairing secret; its keys go to the trusted core and on to the interface, which treats them as its own (section 10).
+The interface never encodes the wire format: it sends intents, so a compromised interface can at worst type into the one channel the trusted core already lets it type into (the browser's open decision 3). The phone keyboard is a sixth process, `neoteletext-keyboard`, which alone holds the pairing secret; its keys go to the trusted core and on to the interface, which treats them as its own (section 10).
 
 ### 3.4 In `neottx`
 
@@ -165,7 +165,7 @@ An event is `0xFF`, a type byte, then its fields.
 
 **RESIZE** gives the page's text area in cells and the page image in pixels as the receiver draws it: a teletext page is 40 by 25 cells (72 with both side panels), so RESIZE changes only when the side panels or the drawn size do. Pixels are 0 when unknown.
 
-**HELLO**'s `agent` is the receiver's user agent string, as the engine's REQ-WEB-031 defines it (`product/version (platform) neoteletext/version`). It is present when `caps` has the AGENT bit (section 6.2), and is sent only over a transport without HTTP, a serial line for instance: over the push WebSocket the channel already has it from the upgrade's `User-Agent` header, so it is not sent twice.
+**HELLO**'s `agent` is the receiver's user agent string, as the engine's REQ-WEB-031 defines it (`NeoTeletext/0.1 (macOS)`, or `product/version (platform) neoteletext/version` for another program on the engine). It is present when `caps` has the AGENT bit (section 6.2), and is sent only over a transport without HTTP, a serial line for instance: over the push WebSocket the channel already has it from the upgrade's `User-Agent` header, so it is not sent twice.
 
 **PAGE** says which page the viewer has open, so the channel knows what to push: sent after RESIZE at the start of a session and whenever the open page changes while keys go to the channel, and with 0 when the viewer leaves the channel's pages.
 
@@ -260,6 +260,23 @@ Modes form a stack, so a page or program can restore what was on before it. The 
 
 **Always on, whatever the mode:** raw text, KEY press of a non-text key, PASTE, FOCUS_IN, FOCUS_OUT, RESIZE, PAGE. A mode change applies to events generated after the receiver takes it.
 
+### 6.4 A page's own modes
+
+A teletext page is the unit a viewer reads, so a page can ask for the input it wants, such as the mouse for a game or a picture to click on, without the channel's program having to follow the viewer:
+
+- **In a page file**, a line `IM,modes` (the mode bits of section 6.3, decimal), kept by the reader and written back by the writer, as the `CU` line is.
+- **In packets**, a control record PAGE_MODES (section 7.2) naming the page and its modes.
+
+Those modes apply only while that page is open, and go when it closes: the modes in force are the top of the session's stack and the open page's own modes together. Nothing has to be popped, so no page can leave the mouse switched on behind it, as a crashed terminal program leaves its modes. A channel may still change modes for the whole session with PUSH_MODE and POP_MODE, for instance when PAGE says which page the viewer opened.
+
+### 6.5 Why the mouse goes only when asked
+
+A plain click goes to the channel only in a mouse mode, asked for by the channel or the page (the owner's decision of 21 October 2026):
+1. **A click keeps its ordinary meaning.** On a channel that does not use the mouse, a plain click on the page follows a link or a page number as on any page; if every click went to the channel, the viewer would need the browser's modifier to follow a link on a page that never wanted the click.
+2. **It is how terminals work.** xterm, kitty and the Input Event Protocol report the mouse only to a program that asks.
+3. **Nothing about the pointer leaves unasked.** Motion already goes only when asked; buttons and the wheel follow the same rule, so a channel learns nothing of the pointer it did not request.
+4. **It costs a channel that wants clicks one mode, once,** or one line in its page.
+
 ## 7. The protocol: channel to receiver
 
 Everything a channel says about input is teletext: records of the audio profile's frame (the engine's REQ-AUD-003) on data channel 12, a user-defined service of EN 300 708 clause 6.7.3.2, each one fragment carried in one 4/31 packet, which the audio receiver steps over. A channel sends them as binary push messages (packets), and a page file may carry a cursor as a `CU` line.
@@ -292,6 +309,7 @@ A record whose body is one control message, encoded as receiver events are (`0xF
 | `0x01` | WELCOME | `version` uv, `caps` uv (a subset of the receiver's) |
 | `0x02` | PUSH_MODE | `modes` uv |
 | `0x03` | POP_MODE | `count` uv |
+| `0x04` | PAGE_MODES | `page` uv (`0x100` to `0x8FF`), `modes` uv: the modes of that page while it is open (section 6.4); 0 clears them |
 
 Types `0x40` to `0x7F` are extensions with a length, skipped when unknown, as in section 5.4.
 
@@ -309,7 +327,7 @@ Types `0x40` to `0x7F` are extensions with a length, skipped when unknown, as in
 
 ## 9. The receiver's side
 
-### 9.1 When keys go (T42 Browser)
+### 9.1 When keys go (NeoTeletext)
 
 Keys go to a channel only while all of these hold: the tab is the active one; the page open in it is the channel's; the channel declares input over a WebSocket whose session has been welcomed; the window has the focus; and the viewer is not editing the address. Then every key goes except the browser's own: those with the browser's modifier (Command on macOS, Control-Shift elsewhere), and the strip, the page list, the overview and a background tab, which never take keys. Command-Escape (Control-Shift-Escape elsewhere) leaves the page; plain Escape is the channel's.
 
@@ -342,7 +360,7 @@ Every key goes while the channel takes input, Control-C included; Control-] leav
 A phone scans a QR code and becomes a keyboard, through qrkeyboard's relay and protocol 3 (the engine's `neoteletext-qrkeyboard`, decision E.93):
 
 - The screen's side computes the configuration's hash as qrkeyboard's canonical JSON does, puts the code, the pairing key (no-PIN mode) and the hash only in the QR address's fragment, pairs by salts and, with a PIN, SPAKE2 on P-256 bound to the code and the hash, and seals every frame with AES-256-GCM under a counter nonce taken once and in order. Five wrong PINs lock. Only the layout's keys are taken; a key held past 15 s is released; a relay WebSocket on another host is refused; frames are at most 1024 bytes and response bodies at most 64 KB.
-- **A phone's keys become the protocol's events with no modifiers:** its text becomes text, its named keys their functional codes (its colour keys 92 to 97), as from any keyboard. In T42 Browser the phone's keys go from the keyboard process to the trusted core and on to the interface, which acts on them exactly as on its own: into a page, or choosing pages. A phone's keys reach the address field only after the viewer puts the caret there with the pointer.
+- **A phone's keys become the protocol's events with no modifiers:** its text becomes text, its named keys their functional codes (its colour keys 92 to 97), as from any keyboard. In NeoTeletext the phone's keys go from the keyboard process to the trusted core and on to the interface, which acts on them exactly as on its own: into a page, or choosing pages. A phone's keys reach the address field only after the viewer puts the caret there with the pointer.
 - One phone at a time; Finish in the strip; a dropped phone holds the screen for at most 30 s. The QR is shown only from the panel, with its one-line warning: whoever scans it has the keyboard.
 - qrkeyboard.com runs protocol 3 since 21 October 2026.
 
@@ -389,7 +407,7 @@ Keys are never logged by the receiver. The relay learns a phone keyboard's name,
 
 ## 12. Requirements
 
-The normative requirements of the input system. Identifiers continue the engine's area INT; on adoption, REQ-INT-001 to REQ-INT-004 are withdrawn (replaced by REQ-INT-101 to REQ-INT-111) and REQ-INT-005 to REQ-INT-008 stand as written there, and the browser's requirements 18.1 to 18.10 are replaced by REQ-INT-130 to REQ-INT-139, which name T42 Browser.
+The normative requirements of the input system. Identifiers continue the engine's area INT; on adoption, REQ-INT-001 to REQ-INT-004 are withdrawn (replaced by REQ-INT-101 to REQ-INT-111) and REQ-INT-005 to REQ-INT-008 stand as written there, and the browser's requirements 18.1 to 18.10 are replaced by REQ-INT-130 to REQ-INT-139, which name NeoTeletext.
 
 **The protocol**
 
@@ -417,11 +435,15 @@ The normative requirements of the input system. Identifiers continue the engine'
 
 **REQ-INT-112 — Immediacy.** Every event shall be written when it happens, one write per event, merging only unsent mouse moves and wheel deltas; nothing shall wait on a timer (with REQ-INT-008). *Verification:* the latency tests of REQ-INT-008 and REQ-INT-135.
 
+**REQ-INT-114 — A page's own modes.** A page shall be able to ask for input modes for itself, by an `IM,modes` line in its page file or a PAGE_MODES record; the receiver shall apply them only while that page is open, together with the top of the session's mode stack, and drop them when it closes; the reader shall keep the line and the writer write it back, and a line or record that breaks a bound shall be dropped and reported. *Reason:* a page is the unit a viewer reads, and modes that go with their page cannot be left on (section 6.4). *Verification:* reader and writer tests of the line; a receiver test that the modes come and go with the page and add to the stack; a fuzz target.
+
+**REQ-INT-115 — The mouse only on request.** A receiver shall send MOUSE and WHEEL only in a mouse mode asked for by the channel or the open page, and otherwise give a click and the wheel their ordinary meaning on the page. *Reason:* section 6.5: a click keeps its ordinary meaning; terminals report the mouse only to a program that asks; nothing about the pointer leaves unasked; it costs a channel one mode. *Verification:* a receiver test that a click follows a link, and the wheel scrolls, until a mode or the page asks, and then goes to the channel.
+
 **REQ-INT-113 — A host goes to a page.** A cursor record naming another page of the same channel shall open that page while keys go to that channel, and do nothing else; the viewer's own choice shall override it. *Verification:* a trusted-core test.
 
 **The receivers**
 
-**REQ-INT-130 — When keys go (T42 Browser).** Keys shall go only under every condition of section 9.1, and the trusted core shall check each again; the browser's own keys and those of the strip, the page list, the overview and a background tab never go. *Verification:* trusted-core tests of each condition; an interface test that Command never goes.
+**REQ-INT-130 — When keys go (NeoTeletext).** Keys shall go only under every condition of section 9.1, and the trusted core shall check each again; the browser's own keys and those of the strip, the page list, the overview and a background tab never go. *Verification:* trusted-core tests of each condition; an interface test that Command never goes.
 
 **REQ-INT-131 — The strip.** The strip shall say "Keys go to *host*" while keys go, "Not secure" on plain `ws://`, and the round trip. *Verification:* a strip test.
 
@@ -433,13 +455,13 @@ The normative requirements of the input system. Identifiers continue the engine'
 
 **REQ-INT-135 — Latency.** A key shall be written within 1 ms; the push socket shall have `TCP_NODELAY`; a pushed packet of the page being typed into shall be drawn within 20 ms. *Verification:* the timed test, with the round trip's median on the computer's own network held to 2 ms.
 
-**REQ-INT-136 — Mouse, paste and composition (T42 Browser).** Clicks and the wheel shall go to the channel only in a mouse mode and only over its page, a click with the browser's modifier always following a link; paste shall go as PASTE and the input method's preedit as COMPOSE while keys go. *Verification:* interface and trusted-core tests.
+**REQ-INT-136 — Mouse, paste and composition (NeoTeletext).** Clicks and the wheel shall go to the channel only in a mouse mode and only over its page, a click with the browser's modifier always following a link; paste shall go as PASTE and the input method's preedit as COMPOSE while keys go. *Verification:* interface and trusted-core tests.
 
 **REQ-INT-137 — No key is logged, and the round trip is measured.** No receiver shall log a key; the round trip shall be measured from acknowledgements, with at most 256 sends remembered. *Verification:* a log test; a trusted-core test.
 
-**REQ-INT-138 — The phone keyboard.** As section 10, and the engine's REQ-INT-007; in T42 Browser, its own sandboxed process alone holding the pairing secret. *Verification:* as REQ-INT-007; the browser's sandbox and panel tests; a real phone by hand.
+**REQ-INT-138 — The phone keyboard.** As section 10, and the engine's REQ-INT-007; in NeoTeletext, its own sandboxed process alone holding the pairing secret. *Verification:* as REQ-INT-007; the browser's sandbox and panel tests; a real phone by hand.
 
-**REQ-INT-139 — Compiled out.** In T42 Browser, typing and the phone keyboard shall be features (`interaction`, `phone-keyboard`) that compile out whole. *Verification:* the builds without them.
+**REQ-INT-139 — Compiled out.** In NeoTeletext, typing and the phone keyboard shall be features (`interaction`, `phone-keyboard`) that compile out whole. *Verification:* the builds without them.
 
 ## 13. Decisions in the merge
 
@@ -458,7 +480,7 @@ The normative requirements of the input system. Identifiers continue the engine'
 | 11 | Losing focus releases held input, at the channel | Input Event Protocol | No stuck keys, and no burst of releases on the wire; the built system sent releases from the trusted core. |
 | 12 | A reconnection is a new session | Input Event Protocol | Simpler and safer than the built system's resume record; PAGE makes the channel push the page again. |
 | 13 | The rate of 120 a second, the bounds, the strip, the security model, the phone keyboard | Built system | Measured and reviewed; unchanged. |
-| 14 | Mouse only when the channel asks | Input Event Protocol | The built system sent every left click; asking first keeps pointer tracking off by default. |
+| 14 | Mouse only when the channel or the page asks; a page asks for itself (`IM` line, PAGE_MODES) | Input Event Protocol, extended | Agreed by the owner on 21 October 2026, for the reasons of section 6.5; a page's modes go with the page, so none can be left on. |
 | 15 | Version 1 retired, not kept beside version 2 | — | Nothing outside these repositories speaks it; two formats would be a shim. |
 
 ## 14. Adopting it
@@ -475,6 +497,6 @@ On the owner's adoption, recorded as the engine's next decision (after E.99, the
    - The trusted core encodes version 2, keeps the mode stack and the input count, and sends HELLO, RESIZE, PAGE and FOCUS.
    - The interface sends intents for mouse, wheel, paste and composition.
    - The decoder finds control records.
-   - `t42-site terminal` speaks version 2.
+   - `neoteletext-site terminal` speaks version 2.
    - Requirements 18.1 to 18.10 replaced by pointers to REQ-INT-130 to REQ-INT-139; `docs/interaction.md` replaced by a pointer here, its sections 16 and 17 kept as history.
 3. **Tests:** each requirement's verification above; the latency tests unchanged in what they hold.

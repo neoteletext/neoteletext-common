@@ -3,7 +3,7 @@
 One process for the two neoteletext repositories:
 
 - **`neoteletext-engine`** (`~/devel/neoteletext-engine`, `crowdwave/neoteletext-engine`): the teletext engine, its libraries and the `neottx` program.
-- **`neoteletext-browser`** (`~/devel/neoteletext-browser`, `crowdwave/neoteletext-browser`): T42 Browser, built on the engine at a pinned commit.
+- **`neoteletext-browser`** (`~/devel/neoteletext-browser`, `crowdwave/neoteletext-browser`): NeoTeletext, built on the engine at a pinned commit.
 
 Written on 21 October 2026 by merging the owner's global instructions (`~/.claude/CLAUDE.md`), the engine's `CLAUDE.md`, `README.md`, `IMPLEMENTATION-LOG.md`, `TECH-DEBT.md`, `LICENSING.md`, `docs/spec/` and gate scripts, and the browser's `docs/requirements.md`, `docs/architecture.md`, `docs/licensing.md` and gate scripts. Where they disagreed, the rule chosen and its reason are in appendix A; appendix B lists what each repository still has to change to follow this document.
 
@@ -109,7 +109,7 @@ One set of forms, in both repositories:
 
 ## 5. Decisions
 
-Each repository keeps its own series, since both are cited across the code, the documents and the other repository: the engine's **E.n** in `docs/spec/decisions.md` (Part E), the browser's **Decision n** in the table of `docs/architecture.md` section 2. A decision of one repository cited in the other names its repository: "the engine's decision E.95", "T42 Browser's decision 46". Feature documents may number their own decisions ("`hyperlinks.md` decision 7"); design documents may letter theirs ("decision D3 of `audio-platforms.md`"); implementation log rows are "rows", not decisions.
+Each repository keeps its own series, since both are cited across the code, the documents and the other repository: the engine's **E.n** in `docs/spec/decisions.md` (Part E), the browser's **Decision n** in the table of `docs/architecture.md` section 2. A decision of one repository cited in the other names its repository: "the engine's decision E.95", "NeoTeletext's decision 46". Feature documents may number their own decisions ("`hyperlinks.md` decision 7"); design documents may letter theirs ("decision D3 of `audio-platforms.md`"); implementation log rows are "rows", not decisions.
 
 - **Record before committing behaviour.** Behaviour the standard or the design leaves open is recorded, or the decision amended, before the change is committed (the engine's REQ-DOC-004). During iteration it is noted in `TECH-DEBT.md` and recorded at integration.
 - **A decision says who decided and when** ("Decided by the owner on 20 October 2026", "Decided on 21 October 2026, on the owner's instruction", "taken while the owner was away, as the owner had instructed"), what was chosen, in numbered items where there are several, and its reason.
@@ -183,7 +183,7 @@ There is no continuous integration; the gates are local (the owner's instruction
 - **Nothing is skipped.** A missing tool or an unreachable host fails the gate; nothing passes silently.
 - **The commands.**
   - Engine: `scripts/check.sh fast` (commit), `NEOTELETEXT_REMOTE=foundintelquiet4060 scripts/check.sh full` (full; `cargo xtask features` and the remote stages included).
-  - Browser: `scripts/check.sh commit`, `scripts/check.sh full` (`T42_LINUX_HOST` names the Linux host, `foundintelquiet4060` by default).
+  - Browser: `scripts/check.sh commit`, `scripts/check.sh full` (`NEOTELETEXT_LINUX_HOST` names the Linux host, `foundintelquiet4060` by default).
 - **Pushing.** The browser's `pre-push` runs the full gate on the commits being pushed. The engine pushes its work branch `implementation` after the commit gate, and runs the full gate before `main` moves (the owner's decision of 11 October 2026, the engine's log row 4: about 40 minutes then, about an hour now), so its `pre-push` runs the commit gate except on a push to `main`.
 - **Measured costs.** The engine's commit gate takes over ten minutes on this computer; its full gate about an hour. A cleared build cache adds a full rebuild.
 
