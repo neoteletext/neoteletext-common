@@ -234,9 +234,10 @@ There is no continuous integration; the gates are local (the owner's instruction
 The virtual machine builds offline from a copy in its shared folder:
 1. Export the commit: `git archive HEAD | tar -x -C <scratch>`.
 2. Vendor its crates: in `<scratch>/native`, `cargo vendor --locked ../vendor`, and write `native/.cargo/config.toml` replacing crates.io and the engine's `git+file` source (with its `rev`) by `../vendor`. Check it resolves with `cargo metadata --offline --locked`.
-3. Copy it: `rsync -a --delete <scratch>/ foundintelquiet4060:/mnt/usb/windows/shared/neoteletext-browser/`.
+3. Copy it: `rsync -a --delete --checksum <scratch>/ foundintelquiet4060:/mnt/usb/windows/shared/neoteletext-browser/`. With `--checksum`: `cargo vendor` stamps every file with one date, so a re-vendored crate of the same size looks unchanged to rsync's size-and-time check, and to `robocopy`'s in the virtual machine, whose `C:\build\neoteletext-browser\vendor` is removed before the copy (`confine-build.ps1` on the share does both).
 4. Build and test: on `foundintelquiet4060`, `ssh -i ~/.ssh/winvm_ed25519 -p 2222 Docker@127.0.0.1 "powershell -NoProfile -ExecutionPolicy Bypass -File \\host.lan\Data\build-windows.ps1"`. The shared folder holds `build-windows.ps1` (build and release tests), `test-windows.ps1` (with optional areas compiled in and out) and `latency-windows.ps1`.
 5. Record the result in the requirement's State line, with the date.
+6. Anything with a window or sound runs in the logged-in desktop session, not the `ssh` session (session 0, which has no window station: a confined interface dies there at `CoInitialize`). `desktop-run.ps1` on the share runs a script there through a one-off interactive scheduled task (`schtasks /create /it /rl limited /sc once`, then `/run`) and prints its output; `confine-windows.ps1` runs the confined browser that way with its standard error captured.
 
 ### 12.2 Targets
 
