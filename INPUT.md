@@ -268,12 +268,14 @@ Modes form a stack, so a page or program can restore what was on before it. The 
 | 2 | KEY_RELEASE | Repeat and release actions too |
 | 4 | BASE_KEY | `base` when it differs from `key` |
 | 8 | MOUSE_BUTTONS | MOUSE press and release, and WHEEL |
-| 16 | MOUSE_DRAG | Also moves while a button is held |
-| 32 | MOUSE_ALL | Also every move over the page |
+| 16 | MOUSE_DRAG | MOUSE_BUTTONS, and moves while a button is held |
+| 32 | MOUSE_ALL | MOUSE_BUTTONS, and every move over the page |
 | 64 | MOUSE_PIXELS | `px`, `py` as well as the cell |
 | 128 | COMPOSE | COMPOSE preedit |
 
-**Always on, whatever the mode:** raw text, KEY press of a non-text key, PASTE, FOCUS_IN, FOCUS_OUT, RESIZE, PAGE. A mode change applies to events generated after the receiver takes it.
+Each mouse mode includes the ones above it, as xterm's modes 1000, 1002 and 1003 do: MOUSE_DRAG and MOUSE_ALL send buttons and the wheel too. A field a mode does not ask for (`text`, `base`, `px`, `py`) is left out.
+
+**Always on, whatever the mode:** raw text, KEY press of a non-text key, PASTE, FOCUS_IN, FOCUS_OUT, RESIZE, PAGE. A mode change applies to events generated after the receiver takes it. Two kinds of key are exceptions: a key that only modifies or locks (Shift, Control, Alt, AltGraph, Super, Hyper, Meta, Fn, Symbol, and Caps, Scroll and Num Lock) goes only in ALL_KEYS or KEY_RELEASE, as the Kitty keyboard protocol reports a modifier alone only when asked; and the dead key goes only in ALL_KEYS (section 5.7 rule 4).
 
 ### 6.4 A page's own modes
 
@@ -317,7 +319,7 @@ Echo requires a width; MASKED requires ECHO; no cursor requires column, width an
 
 ### 7.2 The control record (type 5)
 
-A record whose body is one control message, encoded as receiver events are (`0xFF`, a type, its fields), at most 34 bytes so it is one fragment.
+A record whose body is one control message, encoded as receiver events are (`0xFF`, a type, its fields), at most 26 bytes, so the record with its 8 bytes of frame is the 34 bytes of one fragment.
 
 | Type | Name | Fields |
 |---|---|---|
@@ -346,7 +348,7 @@ Types `0x40` to `0x7F` are extensions with a length, skipped when unknown, as in
 
 Keys go to a channel only while all of these hold: the tab is the active one; the page open in it is the channel's; the channel declares input over a WebSocket whose session has been welcomed; the window has the focus; and the viewer is not editing the address. Then every key goes except the browser's own: those with the browser's modifier (Command on macOS, Control-Shift elsewhere), and the strip, the page list, the overview and a background tab, which never take keys. Command-Escape (Control-Shift-Escape elsewhere) leaves the page; plain Escape is the channel's.
 
-When keys start going, the trusted core sends PAGE; when they stop (another tab, another page, the page closed), PAGE 0; when the window loses the focus or the address is being edited, FOCUS_OUT, and FOCUS_IN when it comes back.
+When keys start going, the trusted core sends PAGE and FOCUS_IN; when they stop (another tab, another page, the page closed), FOCUS_OUT and PAGE 0, so the channel lets go of a key held as the viewer left (REQ-INT-108); when the window loses the focus or the address is being edited, FOCUS_OUT, and FOCUS_IN when it comes back.
 
 **The mouse.** A plain click on the page goes to the channel only in a MOUSE mode; otherwise it does what it does on any page (a link, a page number). A click with the browser's modifier always follows a link. The wheel scrolls the browser unless the channel has asked for MOUSE_BUTTONS, and then goes to the channel only while the pointer is over the page.
 
@@ -450,7 +452,7 @@ The normative requirements of the input system. Identifiers continue the engine'
 
 **REQ-INT-110 — The cursor record and the input count.** The cursor record shall be as section 7.1, its acknowledgement the input count acted on; the receiver shall count what it sends as the channel counts it. *Verification:* round trips through a packet; bounds; a sound on the same channel; the count across text, events and a paste.
 
-**REQ-INT-111 — The control record.** WELCOME, PUSH_MODE and POP_MODE shall be records of type 5 as section 7.2, one fragment each, checked whole. *Verification:* round trips; refusals; a fuzz target.
+**REQ-INT-111 — The control record.** WELCOME, PUSH_MODE, POP_MODE and PAGE_MODES shall be records of type 5 as section 7.2, one fragment each, checked whole. *Verification:* round trips; refusals; a fuzz target.
 
 **REQ-INT-112 — Immediacy.** Every event shall be written when it happens, one write per event, merging only unsent mouse moves and wheel deltas; nothing shall wait on a timer (with REQ-INT-008). *Verification:* the latency tests of REQ-INT-008 and REQ-INT-135.
 
@@ -506,14 +508,14 @@ The normative requirements of the input system. Identifiers continue the engine'
 
 ## 14. Adopting it
 
-On the owner's adoption, recorded as the engine's next decision (after E.99, the user agent) and the browser's decision 48:
+Adopted by the owner on 21 October 2026, as the engine's decision E.100 and the browser's decision 48:
 
 1. **The engine:**
    - `neoteletext-input`: the version-2 encoder and streaming decoder, the functional codes, the control record; the version-1 record removed.
    - `neoteletext-web`: `INPUT_MESSAGE_MAX` to 4096.
    - `neoteletext-audio`: record type 5 stepped over.
    - `neottx view`, `neottx keyboard`: version 2.
-   - Area INT: REQ-INT-001 to REQ-INT-004 withdrawn, REQ-INT-101 to REQ-INT-113 added; `docs/spec/design/input.md` replaced by a pointer here; the traceability tool taught to read these requirements.
+   - Area INT: REQ-INT-001 to REQ-INT-004 withdrawn, REQ-INT-101 to REQ-INT-116 added; `docs/spec/design/input.md` replaced by a pointer here; `int.md` keeps each number and title, so the traceability table covers them.
 2. **The browser:**
    - The trusted core encodes version 2, keeps the mode stack and the input count, and sends HELLO, RESIZE, PAGE and FOCUS.
    - The interface sends intents for mouse, wheel, paste and composition.
