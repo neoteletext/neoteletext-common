@@ -855,3 +855,15 @@ Move the pin to the engine commit carrying WP-6 and WP-7, in all three workspace
 
 - **A2's findings**, including the fuzz crashes in `A2/crashes/tti_enhancement` and `A2/crashes/bookmarks_file`. They must be merged when `A2-tool-driven-review.md` exists. The TTI enhancement crash would be an engine formats or core finding, contradicting A4's "no defect found" in formats and core, so it may need a WP-7 item.
 - **Measurements:** none of the kernel- or OS-dependent claims (F-01, F-04, F-21, F-22, F-60, F-70, F-52's launchservices) were measured by the reviews. Each fix's test is the measurement and must be run before the fix is called done.
+
+## Addendum: the tool-driven review (A2), merged 24 October 2026
+
+`A2-tool-driven-review.md` reported after this plan was written. Its findings are added here with the next numbers; its proposed patches are in `A2-patches/`.
+
+| Id | Severity | Repository / crate | Item | Defect | Fix | Package |
+|---|---|---|---|---|---|---|
+| F-101 | Medium (blocks the push gate) | browser / `native/Cargo.lock`, `native/fuzz/Cargo.lock` | `ctutils` 0.4.3 (RUSTSEC-2026-0385) via `secret-service` ← `keyring`; yanked `clipboard-win` 5.4.1 | `cargo deny check` fails, so `scripts/check.sh full` fails; the vulnerable MAC verification is not reached | `cargo update -p ctutils -p clipboard-win` in both workspaces | done on `main` before the merges |
+| F-102 | Low | engine / `neoteletext-formats` | `TtiReader::packed_line` | an X/28 line on a page already holding `RAW_PACKETS` packets sets the page function and coding although the packet is dropped, so write-then-read changes the page | store the packet first; return on capacity failure before setting the function (`A2-patches/tti.diff`); the `tti_enhancement` fuzz reproducer as a unit test | WP-7 |
+| F-103 | Low | engine / `neoteletext-formats` | `TtiReader::description`, the `FT` arm of `TtiReader::command`, `TtiReader::set_text` | a value cut to capacity can end in a carriage return, which the writer writes and the next read drops | one helper that cuts, then trims trailing CRs; reproducer 63 × `a` then `\rxyz` | WP-7 |
+| F-104 | Low | browser / `core` | `Bookmarks::text`, `Bookmarks::read` | the file is written in tree order but read in file order, so write, read, write is not stable; the `bookmarks_file` fuzz target fails within seconds and can turn the full gate red | number lines in the order `text()` writes them (`A2-patches/bookmarks.diff`); the 52-byte reproducer as a unit test | WP-3 |
+| F-105 | Info (hardening) | browser / `interface-core`, `draw-vello`, `draw-embedded` | crate roots | no no-panic deny list; none of the 1,900 strict-lint hits is reachable from untrusted input | add the list to the three roots and to `NO_PANIC_ROOTS` once the restructuring has merged, fixing each hit by bounding it; add `string_slice` to every list | WP-9 |

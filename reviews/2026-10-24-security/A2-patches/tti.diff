@@ -1,0 +1,55 @@
+--- /private/tmp/claude-501/-Users-andrewstuart-devel-neoteletext-browser/0baeb9ff-23b7-4dc4-8727-0fa7d5218d0d/scratchpad/security/A2/engine/crates/neoteletext-formats/src/tti.rs	2026-10-24 04:11:48
++++ tti.rs	2026-10-24 05:37:42
+@@ -478,7 +478,18 @@
+             (_, false) => &mut self.file_source,
+             (_, true) => &mut self.page.source,
+         };
+-        if !target.set(args) {
++        let whole = target.set(args);
++        // A value cut short may end in a carriage return, which reading the
++        // written line back would take as line ending.
++        let kept = target.as_bytes();
++        let end = kept.iter().rposition(|&byte| byte != b'\r').map_or(0, |at| at + 1);
++        if end != kept.len() {
++            let mut copy = [0_u8; 256];
++            let end = end.min(copy.len());
++            copy[..end].copy_from_slice(&kept[..end]);
++            target.set(&copy[..end]);
++        }
++        if !whole {
+             self.diagnostic(DiagnosticKind::CapacityExceeded { what: Capacity::Text }, out);
+         }
+     }
+@@ -550,6 +561,17 @@
+                 }
+                 self.page.fastext_row_24 = links.display_row_24;
+             }
++            return;
++        }
++        let packets = self.page.raw_packets.as_mut_slice();
++        if let Some(existing) =
++            packets.iter_mut().find(|packet| packet.number == number && packet.designation == designation)
++        {
++            *existing = raw;
++        } else if !self.page.raw_packets.push(raw) {
++            // A packet the page cannot hold sets nothing: its function would
++            // be written without the packet that carried it.
++            self.diagnostic(DiagnosticKind::CapacityExceeded { what: Capacity::RawPackets }, out);
+             return;
+         }
+         // REQ-INP-023: X/28/0, X/28/3 and X/28/4 also set the page function
+@@ -571,14 +593,6 @@
+                 self.function_designation = Some(designation);
+             }
+         }
+-        let packets = self.page.raw_packets.as_mut_slice();
+-        if let Some(existing) =
+-            packets.iter_mut().find(|packet| packet.number == number && packet.designation == designation)
+-        {
+-            *existing = raw;
+-        } else if !self.page.raw_packets.push(raw) {
+-            self.diagnostic(DiagnosticKind::CapacityExceeded { what: Capacity::RawPackets }, out);
+-        }
+     }
+ 
+     fn fastext_line(&mut self, args: &[u8], out: &mut dyn FnMut(Item<'_>)) {
