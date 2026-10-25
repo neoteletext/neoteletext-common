@@ -144,7 +144,7 @@ An event is `0xFF`, a type byte, then its fields.
 |---|---|---|---|
 | `0x01` | KEY | section 5.5 | press of a non-text key always; repeat and release in KEY_RELEASE |
 | `0x02` | MOUSE | `flags` u8, `button` u8, `col` uv, `row` uv, `px`? uv, `py`? uv, `mods`? u8 | MOUSE_BUTTONS, MOUSE_DRAG, MOUSE_ALL |
-| `0x03` | WHEEL | `flags` u8, `dx` sv, `dy` sv, `col` uv, `row` uv, `px`? uv, `py`? uv, `mods`? u8 | MOUSE_BUTTONS |
+| `0x03` | WHEEL | `flags` u8, `dx` sv, `dy` sv, `col` uv, `row` uv, `px`? uv, `py`? uv, `mods`? u8 | always, while the pointer is over the page (section 6.5) |
 | `0x04` | PASTE | `str`, at most `MAX_PASTE` (4000) bytes | always |
 | `0x05` | FOCUS_IN | none | always |
 | `0x06` | FOCUS_OUT | none | always |
@@ -267,15 +267,15 @@ Modes form a stack, so a page or program can restore what was on before it. The 
 | 1 | ALL_KEYS | Every key as KEY with `text`; no raw text |
 | 2 | KEY_RELEASE | Repeat and release actions too |
 | 4 | BASE_KEY | `base` when it differs from `key` |
-| 8 | MOUSE_BUTTONS | MOUSE press and release, and WHEEL |
+| 8 | MOUSE_BUTTONS | MOUSE press and release |
 | 16 | MOUSE_DRAG | MOUSE_BUTTONS, and moves while a button is held |
 | 32 | MOUSE_ALL | MOUSE_BUTTONS, and every move over the page |
 | 64 | MOUSE_PIXELS | `px`, `py` as well as the cell |
 | 128 | COMPOSE | COMPOSE preedit |
 
-Each mouse mode includes the ones above it, as xterm's modes 1000, 1002 and 1003 do: MOUSE_DRAG and MOUSE_ALL send buttons and the wheel too. A field a mode does not ask for (`text`, `base`, `px`, `py`) is left out.
+Each mouse mode includes the ones above it, as xterm's modes 1000, 1002 and 1003 do: MOUSE_DRAG and MOUSE_ALL send buttons too. The wheel needs no mode (section 6.5); MOUSE_PIXELS still decides whether it carries `px` and `py`. A field a mode does not ask for (`text`, `base`, `px`, `py`) is left out.
 
-**Always on, whatever the mode:** raw text, KEY press of a non-text key, PASTE, FOCUS_IN, FOCUS_OUT, RESIZE, PAGE. A mode change applies to events generated after the receiver takes it. Two kinds of key are exceptions: a key that only modifies or locks (Shift, Control, Alt, AltGraph, Super, Hyper, Meta, Fn, Symbol, and Caps, Scroll and Num Lock) goes only in ALL_KEYS or KEY_RELEASE, as the Kitty keyboard protocol reports a modifier alone only when asked; and the dead key goes only in ALL_KEYS (section 5.7 rule 4).
+**Always on, whatever the mode:** raw text, KEY press of a non-text key, PASTE, FOCUS_IN, FOCUS_OUT, RESIZE, PAGE, and WHEEL over the page. A mode change applies to events generated after the receiver takes it. Two kinds of key are exceptions: a key that only modifies or locks (Shift, Control, Alt, AltGraph, Super, Hyper, Meta, Fn, Symbol, and Caps, Scroll and Num Lock) goes only in ALL_KEYS or KEY_RELEASE, as the Kitty keyboard protocol reports a modifier alone only when asked; and the dead key goes only in ALL_KEYS (section 5.7 rule 4).
 
 ### 6.4 A page's own modes
 
@@ -286,13 +286,15 @@ A teletext page is the unit a viewer reads, so a page can ask for the input it w
 
 Those modes apply only while that page is open, and go when it closes: the modes in force are the top of the session's stack and the open page's own modes together. Nothing has to be popped, so no page can leave the mouse switched on behind it, as a crashed terminal program leaves its modes. A channel may still change modes for the whole session with PUSH_MODE and POP_MODE, for instance when PAGE says which page the viewer opened.
 
-### 6.5 Why the mouse goes only when asked
+### 6.5 Why the mouse goes only when asked, and the wheel always
 
 A plain click goes to the channel only in a mouse mode, asked for by the channel or the page (the owner's decision of 21 October 2026):
 1. **A click keeps its ordinary meaning.** On a channel that does not use the mouse, a plain click on the page follows a link or a page number as on any page; if every click went to the channel, the viewer would need the browser's modifier to follow a link on a page that never wanted the click.
 2. **It is how terminals work.** xterm, kitty and the Input Event Protocol report the mouse only to a program that asks.
-3. **Nothing about the pointer leaves unasked.** Motion already goes only when asked; buttons and the wheel follow the same rule, so a channel learns nothing of the pointer it did not request.
+3. **Little about the pointer leaves unasked.** Motion and buttons go only when asked, so a channel learns nothing of the pointer's movements it did not request; the wheel is the exception below.
 4. **It costs a channel that wants clicks one mode, once,** or one line in its page.
+
+The wheel goes to a channel that takes input whenever the pointer is over its page, in any mode or none (the owner's decision of 25 October 2026: "pass the mouse wheel through to the server when the mouse is over the teletext window", answered "Always, over any page"). A channel's page is the content the viewer scrolls, as a web page is, and the wheel over it is the viewer reading on: a page that scrolls inside itself, as a long article does, needs it, and a channel that does not use it lets it go. Over the browser's own parts, beside the page, the wheel stays the browser's. A wheel turn says where the pointer is, as a cell; this is the one thing of the pointer a channel learns unasked, and only while the viewer turns the wheel over its page.
 
 ## 7. The protocol: channel to receiver
 
@@ -346,11 +348,11 @@ Types `0x40` to `0x7F` are extensions with a length, skipped when unknown, as in
 
 ### 9.1 When keys go (NeoTeletext)
 
-Keys go to a channel only while all of these hold: the tab is the active one; the page open in it is the channel's; the channel declares input over a WebSocket whose session has been welcomed; the window has the focus; and the viewer is not editing the address. Then every key goes except the browser's own: those with the browser's modifier (Command on macOS, Control-Shift elsewhere), and the strip, the page list, the overview and a background tab, which never take keys. Command-Escape (Control-Shift-Escape elsewhere) leaves the page; plain Escape is the channel's.
+Keys go to a channel only while all of these hold: the tab is the active one; the page open in it is the channel's; the channel declares input over a WebSocket whose session has been welcomed; the window has the focus; and the viewer is not editing the address. Then every key goes except the browser's own: those with the browser's modifier (Command on macOS, Control-Shift elsewhere), and the strip, the overview and a background tab, which never take keys, and the magazines and the page list, which take the arrows from a click on them until a click elsewhere (the browser's decision 105). Command-Escape (Control-Shift-Escape elsewhere) leaves the page; plain Escape is the channel's.
 
 When keys start going, the trusted core sends PAGE and FOCUS_IN; when they stop (another tab, another page, the page closed), FOCUS_OUT and PAGE 0, so the channel lets go of a key held as the viewer left (REQ-INT-108); when the window loses the focus or the address is being edited, FOCUS_OUT, and FOCUS_IN when it comes back.
 
-**The mouse.** A plain click on the page goes to the channel only in a MOUSE mode; otherwise it does what it does on any page (a link, a page number). A click with the browser's modifier always follows a link. The wheel scrolls the browser unless the channel has asked for MOUSE_BUTTONS, and then goes to the channel only while the pointer is over the page.
+**The mouse.** A plain click on the page goes to the channel only in a MOUSE mode; otherwise it does what it does on any page (a link, a page number). A click with the browser's modifier always follows a link. The wheel goes to the channel while the pointer is over the page, in any mode (section 6.5); over the rest of the window it scrolls the browser.
 
 **Paste and composition.** The browser's paste shortcut pastes into the page as PASTE while keys go to it. The window's input method stays enabled while typing; its preedit goes as COMPOSE in that mode, and its committed text as text.
 
@@ -458,7 +460,7 @@ The normative requirements of the input system. Identifiers continue the engine'
 
 **REQ-INT-114 — A page's own modes.** A page shall be able to ask for input modes for itself, by an `IM,modes` line in its page file or a PAGE_MODES record; the receiver shall apply them only while that page is open, together with the top of the session's mode stack, and drop them when it closes; the reader shall keep the line and the writer write it back, and a line or record that breaks a bound shall be dropped and reported. *Reason:* a page is the unit a viewer reads, and modes that go with their page cannot be left on (section 6.4). *Verification:* reader and writer tests of the line; a receiver test that the modes come and go with the page and add to the stack; a fuzz target.
 
-**REQ-INT-115 — The mouse only on request.** A receiver shall send MOUSE and WHEEL only in a mouse mode asked for by the channel or the open page, and otherwise give a click and the wheel their ordinary meaning on the page. *Reason:* section 6.5: a click keeps its ordinary meaning; terminals report the mouse only to a program that asks; nothing about the pointer leaves unasked; it costs a channel one mode. *Verification:* a receiver test that a click follows a link, and the wheel scrolls, until a mode or the page asks, and then goes to the channel.
+**REQ-INT-115 — The mouse only on request; the wheel over the page.** A receiver shall send MOUSE only in a mouse mode asked for by the channel or the open page, and otherwise give a click its ordinary meaning on the page; it shall send WHEEL, in any mode, while the pointer is over the page (amended 25 October 2026, the owner's decision in section 6.5). *Reason:* section 6.5: a click keeps its ordinary meaning; terminals report the mouse only to a program that asks; little about the pointer leaves unasked; it costs a channel one mode; and the wheel over a page is the viewer reading on, which a page that scrolls itself needs. *Verification:* a receiver test that a click follows a link until a mode or the page asks, and then goes to the channel; and that the wheel goes to the channel over its page with no mode.
 
 **REQ-INT-116 — International keyboards.** A receiver shall send text as the Unicode characters the layout or input method produced, in logical order and in Normalization Form C, never translated into a teletext character set; shall send a dead key as no text (in ALL_KEYS as the key `Dead`) and the composed character after it; shall not report AltGr as Control and Alt; and shall give a character key's `key` from the active layout and `base` from the United States layout of the same physical key. *Reason:* the protocol carries what the viewer typed, in any language, and leaves its meaning to the channel; a shortcut binds by position, a letter by meaning (section 5.7). *Verification:* receiver tests with Russian, Hebrew, German (AltGr), French (dead keys) and AZERTY layouts, a Japanese input method's preedit and commit, and a decomposed `e` and combining accent sent as U+00E9; a channel test of native digits selecting a page.
 
@@ -478,7 +480,7 @@ The normative requirements of the input system. Identifiers continue the engine'
 
 **REQ-INT-135 — Latency.** A key shall be written within 1 ms; the push socket shall have `TCP_NODELAY`; a pushed packet of the page being typed into shall be drawn within 20 ms. *Verification:* the timed test, with the round trip's median on the computer's own network held to 2 ms.
 
-**REQ-INT-136 — Mouse, paste and composition (NeoTeletext).** Clicks and the wheel shall go to the channel only in a mouse mode and only over its page, a click with the browser's modifier always following a link; paste shall go as PASTE and the input method's preedit as COMPOSE while keys go. *Verification:* interface and trusted-core tests.
+**REQ-INT-136 — Mouse, paste and composition (NeoTeletext).** Clicks shall go to the channel only in a mouse mode and only over its page, a click with the browser's modifier always following a link; the wheel shall go to the channel over its page in any mode, and scroll the browser elsewhere (amended 25 October 2026); paste shall go as PASTE and the input method's preedit as COMPOSE while keys go. *Verification:* interface and trusted-core tests.
 
 **REQ-INT-137 — No key is logged, and the round trip is measured.** No receiver shall log a key; the round trip shall be measured from acknowledgements, with at most 256 sends remembered. *Verification:* a log test; a trusted-core test.
 
