@@ -61,7 +61,7 @@ The receiver decides only whether a key goes; the channel decides only what it m
 | 2 | Trusted core | Checks every condition again (requirement REQ-INT-130), applies the rate limit, tracks held keys and the input count, **encodes the protocol**, and alone sends HELLO, RESIZE, PAGE, FOCUS and the releases. Measures the round trip from acknowledgements. |
 | 3 | Fetcher | Writes each message it is given to the channel's push WebSocket at once. It takes nothing else and opens nothing (requirement REQ-INT-133). |
 | 4 | Decoder | Finds cursor and control records in pushed packets and `CU` lines, untrusted, and passes them on. |
-| 5 | Trusted core | Checks each cursor and control record; applies WELCOME and the mode stack; passes the interface only what it may draw. |
+| 5 | Trusted core | Checks each cursor and control record; applies WELCOME; passes the interface only what it may draw. |
 
 The interface never encodes the wire format: it sends intents, so a compromised interface can at worst type into the one channel the trusted core already lets it type into (the browser's open decision 3). The phone keyboard is a sixth process, `neoteletext-keyboard`, which alone holds the pairing secret; its keys go to the trusted core and on to the interface, which treats them as its own (section 10).
 
@@ -124,11 +124,10 @@ Fields marked `?` are present only when the matching flag bit is set.
 
 Any byte other than `0xFF` begins raw UTF-8 text.
 
-- A key press whose result, after the layout applies Shift, AltGr or Caps Lock, is printable text is sent as that text: `a`, `A`, `@` by AltGr, `é`.
 - Committed text from an input method, or from a phone, is sent as text.
 - Text MUST NOT contain control characters (U+0000 to U+001F, U+007F to U+009F). Enter, Tab, Backspace, Escape and every Control, Alt, Super, Hyper or Meta combination are key events.
 - Bytes `0xC0`, `0xC1` and `0xF5` to `0xFE` outside an event, and malformed UTF-8, are protocol errors.
-- In the ALL_KEYS mode no raw text is sent; every key is a KEY event carrying its text.
+- A key is never sent as raw text: every key is a KEY event carrying its text (section 5.5). Raw text is what does not come from a key: an input method's committed text and a phone's.
 
 ### 5.4 Events
 
@@ -140,24 +139,26 @@ An event is `0xFF`, a type byte, then its fields.
 | `0x40`–`0x7F` | Extensions: `uv` length, then the payload. A receiver of the stream skips one it does not know. |
 | `0x00`, `0x80`–`0xFF` | Reserved: a protocol error. |
 
-| Type | Name | Fields | Always sent, or in which mode |
+| Type | Name | Fields | When |
 |---|---|---|---|
-| `0x01` | KEY | section 5.5 | press of a non-text key always; repeat and release in KEY_RELEASE |
-| `0x02` | MOUSE | `flags` u8, `button` u8, `col` uv, `row` uv, `px`? uv, `py`? uv, `mods`? u8 | MOUSE_BUTTONS, MOUSE_DRAG, MOUSE_ALL |
-| `0x03` | WHEEL | `flags` u8, `dx` sv, `dy` sv, `col` uv, `row` uv, `px`? uv, `py`? uv, `mods`? u8 | always, while the pointer is over the page (section 6.5) |
+| `0x01` | KEY | section 5.5 | every press, repeat and release |
+| `0x02` | MOUSE | `flags` u8, `button` u8, `col` uv, `row` uv, `px`? uv, `py`? uv, `mods`? u8 | every press and release over the page; a move that changes the dot while a button is held, or in a pointer area (section 7.4) |
+| `0x03` | WHEEL | `flags` u8, `dx` sv, `dy` sv, `col` uv, `row` uv, `px`? uv, `py`? uv, `mods`? u8 | while the pointer is over the page |
 | `0x04` | PASTE | `str`, at most `MAX_PASTE` (4000) bytes | always |
 | `0x05` | FOCUS_IN | none | always |
 | `0x06` | FOCUS_OUT | none | always |
 | `0x07` | RESIZE | `cols` uv, `rows` uv, `pw` uv, `ph` uv | always |
-| `0x08` | COMPOSE | `cursor` uv, `str` at most `MAX_COMPOSE` (256) bytes; an empty string ends composition | COMPOSE |
+| `0x08` | COMPOSE | `cursor` uv, `str` at most `MAX_COMPOSE` (256) bytes; an empty string ends composition | while an input method composes |
 | `0x09` | HELLO | `version` uv, `caps` uv, `agent`? str (at most 64 bytes) | first, once |
 | `0x0A` | PAGE | `page` uv: `0x100` to `0x8FF` in teletext's hexadecimal page form, or 0 for none | when the receiver has the PAGE capability |
+
+**HOVER**, an extension (`0x43`, so a channel that does not know it skips it): `uv` length, then `flags` u8 (bit 0: 1 when the pointer left the control, 0 when it entered; others a protocol error), `col` uv and `row` uv, the control's first cell, its top left (section 7.3). It goes as the pointer enters and leaves a control of the open page while keys go to the channel: leaving one control for another sends the leave, then the enter. It lets a channel show something as the pointer passes, a row's summary or a help line, at two messages a control crossed, where a pointer area (section 7.4) would send every move. Like a move, it is not counted against the rate (section 8 rule 4).
 
 **MOUSE and WHEEL.**
 - `flags` bits 0–1: MOUSE action, 0 press, 1 release, 2 move (unused in WHEEL); bit 2: `px`, `py` present; bit 3: `mods` present.
 - `button`: on press and release, 0 left, 1 middle, 2 right, 3 back, 4 forward, 5 and up others; on move, a bit mask of the buttons held.
-- `col`, `row`: the character cell, from the top left of the page: columns 0 to 39 (to 71 with side panels), rows 0 to 24. `px`, `py`: pixels of the page image from the same origin.
-- `dx`, `dy`: scroll in 1/120ths of a line, positive right and down.
+- `col`, `row`: the character cell, from the top left of the page: columns 0 to 39 (to 71 with side panels), rows 0 to 24. `px`, `py`: the dot of the page image from the same origin, 12 to a cell across and 20 down; sent whenever the receiver knows them.
+- `dx`, `dy`: scroll in 1/120ths of a line, positive right and down. A wheel that moves in notches sends at least a whole line (120) a notch: macOS reports a slow notch as a tenth of a line, and a channel that moves a line at a time would need ten. A faster notch keeps the system's acceleration; a trackpad's continuous scrolling is sent as it comes.
 
 **PASTE** is the whole paste as one event. It may contain control characters: the channel treats it as data, never as keystrokes. A paste longer than `MAX_PASTE` is cut at a character boundary.
 
@@ -178,8 +179,8 @@ An event is `0xFF`, a type byte, then its fields.
 | 0–1 | Action: 0 press, 1 repeat, 2 release |
 | 2 | F: `key` is a functional code (section 5.6), not a code point |
 | 3 | M: `mods` present (omitted when 0) |
-| 4 | T: `text` present (ALL_KEYS only) |
-| 5 | B: `base` present (BASE_KEY only, when it differs from `key`) |
+| 4 | T: `text` present: the key produced text |
+| 5 | B: `base` present: it differs from `key` |
 | 6–7 | Reserved: a protocol error when set |
 
 - **`key`**: for a character key, the Unicode code point of the key without Shift (Control-Shift-A sends `a` with Shift and Control); otherwise a functional code.
@@ -210,11 +211,11 @@ The protocol carries what the viewer typed, in whatever language and on whatever
 1. **Text is Unicode, after the layout.** A key's result is sent as the characters the operating system's layout produced: `й` on a Russian layout, `ש` on a Hebrew one, `ß` or `@` on a German one, `ç` on a French one. The receiver never translates text into a teletext character set; the channel maps it onto the sets of the page it draws, and decides what to show for a character none of them has (section 9.5).
 2. **Logical order.** Text goes in the order it was typed, which for Arabic, Hebrew and other right-to-left scripts is logical order, never the visual order a page may be drawn in.
 3. **Normalized.** Text is sent in Unicode Normalization Form C, so `é` typed on any layout or input method arrives as U+00E9, and a channel compares what it receives without normalizing it again.
-4. **Dead keys.** A dead key (an accent pressed before its letter) sends no text: in ALL_KEYS it sends KEY with the functional code of `Dead`, and `base`; the key after it sends the composed character as text (`´` then `e` sends `é`), or, when the two do not compose, both characters, as the layout gives them.
-5. **AltGr is a level shift, not a modifier.** A character typed with AltGr (the right Alt key of European layouts, `AltGraph`) is sent as text with no modifiers. A receiver on a system that reports AltGr as Control and Alt held together (Windows) MUST NOT report it so: when a key with Control and Alt both held produces printable text, it is text. AltGr itself, in ALL_KEYS or KEY_RELEASE, is the key `AltGraph`.
-6. **Input methods.** Chinese, Japanese, Korean and other input methods compose in the receiver: their preedit goes as COMPOSE in that mode, and what they commit as text. Their own keys (`KanaMode`, `HangulMode`, `HanjaMode`, `Convert`, `NonConvert` and the rest of the W3C names) have functional codes from 128 and go as KEY when the receiver passes them on.
-7. **`key` follows the layout; `base` follows the position.** A character key's `key` is the unshifted character of the active layout (`я`, `ф`, `a`); `base`, in BASE_KEY, is the character the same physical key has on a United States layout (`z`, `a`, `q` on AZERTY's `a`). A channel binds a letter by `key` and a position (a game's movement keys) by `base`, so both work on any layout, including after the viewer switches layout.
-8. **Digits.** The keypad's keys are their functional codes in ALL_KEYS, and their characters as text otherwise. A layout that types native digits (`٣`, `३`) sends those characters; a channel that selects pages by number (section 9.4) SHOULD take the decimal digits of any script, Unicode's `Nd` characters, as the digits 0 to 9.
+4. **Dead keys.** A dead key (an accent pressed before its letter) sends no text: it sends KEY with the functional code of `Dead`, and `base`; the key after it sends the composed character as text (`´` then `e` sends `é`), or, when the two do not compose, both characters, as the layout gives them.
+5. **AltGr is a level shift, not a modifier.** A character typed with AltGr (the right Alt key of European layouts, `AltGraph`) is sent as KEY with that text and no modifiers. A receiver on a system that reports AltGr as Control and Alt held together (Windows) MUST NOT report it so: when a key with Control and Alt both held produces printable text, it carries that text and no modifiers. AltGr itself is the key `AltGraph`.
+6. **Input methods.** Chinese, Japanese, Korean and other input methods compose in the receiver: their preedit goes as COMPOSE, and what they commit as text. Their own keys (`KanaMode`, `HangulMode`, `HanjaMode`, `Convert`, `NonConvert` and the rest of the W3C names) have functional codes from 128 and go as KEY when the receiver passes them on.
+7. **`key` follows the layout; `base` follows the position.** A character key's `key` is the unshifted character of the active layout (`я`, `ф`, `a`); `base` is the character the same physical key has on a United States layout (`z`, `a`, `q` on AZERTY's `a`). A channel binds a letter by `key` and a position (a game's movement keys) by `base`, so both work on any layout, including after the viewer switches layout.
+8. **Digits.** The keypad's keys are their functional codes, with their characters as `text`. A layout that types native digits (`٣`, `३`) sends those characters; a channel that selects pages by number (section 9.4) SHOULD take the decimal digits of any script, Unicode's `Nd` characters, as the digits 0 to 9.
 9. **Lock states and layout changes** send nothing of their own beyond the lock bits in `mods`: the protocol has no event for the layout, and a channel learns of a change only from what is typed, so the viewer's choice of language is never announced.
 10. **Phones.** A phone keyboard's text, in any language its keyboard offers, is text under the same rules.
 
@@ -235,7 +236,7 @@ The protocol carries what the viewer typed, in whatever language and on whatever
 
 The version-1 key record took 14 bytes for every key.
 
-## 6. Negotiation and modes
+## 6. Negotiation
 
 ### 6.1 The session
 
@@ -243,11 +244,11 @@ The version-1 key record took 14 bytes for every key.
 2. The channel answers with WELCOME (section 7.2): the version it speaks and the subset of the capabilities it will use. A channel that cannot speak the version closes the connection.
 3. Then the receiver sends RESIZE, FOCUS_IN or FOCUS_OUT, and PAGE if it has that capability; and from then on the viewer's input.
 4. The receiver sends no input before WELCOME. A channel that has not answered within `WELCOME_TIMEOUT` (10 s) is taken not to take input, and the receiver says so.
-5. **A reconnection is a new session:** HELLO again, the mode stack empty, nothing held, the input count from zero. The channel pushes the open page again when it receives PAGE.
+5. **A reconnection is a new session:** HELLO again, nothing held, the input count from zero. The channel pushes the open page again when it receives PAGE.
 
 ### 6.2 Capabilities
 
-`caps` is a bit set. Bits 0 to 15 are mode bits, with the values of the mode table below (bits 8 to 15 reserved for future modes). Bits 16 and up are features that are not modes:
+`caps` is a bit set of what a receiver can do. Bits 0 to 15 were input modes until 27 October 2026 (section 6.3): they are reserved, never set, and ignored when a peer still sets them. The capabilities are:
 
 | Value | Capability | Meaning |
 |---|---|---|
@@ -258,43 +259,18 @@ The version-1 key record took 14 bytes for every key.
 
 A sender uses a new flag bit, field, core type or extension type only when both sides set its capability bit in HELLO and WELCOME. A receiver of the stream that sees an unknown flag bit set treats it as a protocol error.
 
-### 6.3 Modes
+### 6.3 No modes: everything is sent
 
-Modes form a stack, so a page or program can restore what was on before it. The receiver uses the top entry; an empty stack means 0. The receiver keeps at least 16 entries and drops the oldest beyond that.
+Every event goes to the channel whenever keys go to it, and the channel ignores what it does not use. There is nothing to ask for and nothing to switch: no mode stack, no page modes (the owner's decision of 27 October 2026: "simplify all this remove the config", engine decision E.125). Until then a channel asked for each kind of input by a mode, as xterm's modes 1000 to 1003 do; those modes, the records that set them (PUSH_MODE, POP_MODE, PAGE_MODES) and a page's `IM` line are withdrawn.
 
-| Bit | Mode | Effect |
-|---|---|---|
-| 1 | ALL_KEYS | Every key as KEY with `text`; no raw text |
-| 2 | KEY_RELEASE | Repeat and release actions too |
-| 4 | BASE_KEY | `base` when it differs from `key` |
-| 8 | MOUSE_BUTTONS | MOUSE press and release |
-| 16 | MOUSE_DRAG | MOUSE_BUTTONS, and moves while a button is held |
-| 32 | MOUSE_ALL | MOUSE_BUTTONS, and every move over the page |
-| 64 | MOUSE_PIXELS | `px`, `py` as well as the cell |
-| 128 | COMPOSE | COMPOSE preedit |
+- **Keys:** every press, repeat and release as KEY, with its `text` when it produced text and its `base` when that differs from `key`, the keys that only modify or lock included, and the dead key (section 5.7). A channel that only types takes `text` from presses and repeats.
+- **The mouse:** every press and release over the open page, with the cell, the dot (`px`, `py`) and the modifiers held; and a move that changes the dot under the pointer while a button is held (a drag), or anywhere in a pointer area the page declares (section 7.4). Plain hovering elsewhere sends nothing: the receiver draws hover itself (section 9.7), as terminal programs mostly ask xterm only for drags (mode 1002). The browser's modifier keeps a click the browser's (section 9.1). A plain click on a page that takes input is the channel's, not a link's: the browser's modifier follows a link there.
+- **The wheel:** over the page, as before.
+- **HOVER:** as the pointer enters and leaves each control of the page (section 5.4).
+- **COMPOSE:** an input method's preedit, as it changes.
+- **Raw text:** what does not come from a key, an input method's committed text and a phone's.
 
-Each mouse mode includes the ones above it, as xterm's modes 1000, 1002 and 1003 do: MOUSE_DRAG and MOUSE_ALL send buttons too. The wheel needs no mode (section 6.5); MOUSE_PIXELS still decides whether it carries `px` and `py`. A field a mode does not ask for (`text`, `base`, `px`, `py`) is left out.
-
-**Always on, whatever the mode:** raw text, KEY press of a non-text key, PASTE, FOCUS_IN, FOCUS_OUT, RESIZE, PAGE, and WHEEL over the page. A mode change applies to events generated after the receiver takes it. Two kinds of key are exceptions: a key that only modifies or locks (Shift, Control, Alt, AltGraph, Super, Hyper, Meta, Fn, Symbol, and Caps, Scroll and Num Lock) goes only in ALL_KEYS or KEY_RELEASE, as the Kitty keyboard protocol reports a modifier alone only when asked; and the dead key goes only in ALL_KEYS (section 5.7 rule 4).
-
-### 6.4 A page's own modes
-
-A teletext page is the unit a viewer reads, so a page can ask for the input it wants, such as the mouse for a game or a picture to click on, without the channel's program having to follow the viewer:
-
-- **In a page file**, a line `IM,modes` (the mode bits of section 6.3, decimal), kept by the reader and written back by the writer, as the `CU` line is.
-- **In packets**, a control record PAGE_MODES (section 7.2) naming the page and its modes.
-
-Those modes apply only while that page is open, and go when it closes: the modes in force are the top of the session's stack and the open page's own modes together. Nothing has to be popped, so no page can leave the mouse switched on behind it, as a crashed terminal program leaves its modes. A channel may still change modes for the whole session with PUSH_MODE and POP_MODE, for instance when PAGE says which page the viewer opened.
-
-### 6.5 Why the mouse goes only when asked, and the wheel always
-
-A plain click goes to the channel only in a mouse mode, asked for by the channel or the page (the owner's decision of 21 October 2026):
-1. **A click keeps its ordinary meaning.** On a channel that does not use the mouse, a plain click on the page follows a link or a page number as on any page; if every click went to the channel, the viewer would need the browser's modifier to follow a link on a page that never wanted the click.
-2. **It is how terminals work.** xterm, kitty and the Input Event Protocol report the mouse only to a program that asks.
-3. **Little about the pointer leaves unasked.** Motion and buttons go only when asked, so a channel learns nothing of the pointer's movements it did not request; the wheel is the exception below.
-4. **It costs a channel that wants clicks one mode, once,** or one line in its page.
-
-The wheel goes to a channel that takes input whenever the pointer is over its page, in any mode or none (the owner's decision of 25 October 2026: "pass the mouse wheel through to the server when the mouse is over the teletext window", answered "Always, over any page"). A channel's page is the content the viewer scrolls, as a web page is, and the wheel over it is the viewer reading on: a page that scrolls inside itself, as a long article does, needs it, and a channel that does not use it lets it go. Over the browser's own parts, beside the page, the wheel stays the browser's. A wheel turn says where the pointer is, as a cell; this is the one thing of the pointer a channel learns unasked, and only while the viewer turns the wheel over its page.
+**Why there are no modes.** A mode is configuration that every channel, page and receiver must get right, and a channel that forgot one silently lost input: a slider no one could drag because no one asked for MOUSE_DRAG. Sending everything costs a few bytes an event. Moves are bounded by the rule above and by section 8 rule 4, so they can never crowd out a key. What a channel learns of the pointer is its clicks and drags over its own page, and its moves only within the pointer areas the page declares, while keys go to it; nothing elsewhere (section 11.3).
 
 ## 7. The protocol: channel to receiver
 
@@ -326,18 +302,52 @@ A record whose body is one control message, encoded as receiver events are (`0xF
 | Type | Name | Fields |
 |---|---|---|
 | `0x01` | WELCOME | `version` uv, `caps` uv (a subset of the receiver's) |
-| `0x02` | PUSH_MODE | `modes` uv |
-| `0x03` | POP_MODE | `count` uv |
-| `0x04` | PAGE_MODES | `page` uv (`0x100` to `0x8FF`), `modes` uv: the modes of that page while it is open (section 6.4); 0 clears them |
+| `0x02` | (withdrawn) | Was PUSH_MODE. Reserved; a record of it is ignored |
+| `0x03` | (withdrawn) | Was POP_MODE. Reserved; a record of it is ignored |
+| `0x04` | (withdrawn) | Was PAGE_MODES. Reserved; a record of it is ignored |
 
 Types `0x40` to `0x7F` are extensions with a length, skipped when unknown, as in section 5.4.
+
+### 7.3 Controls (column mode 00101)
+
+A page says which of its cells it answers itself, its buttons and the rows of its lists, so that a receiver can show them as it shows links: a hand over them, and a look under the pointer (section 9.7). The declaration is part of the page, not a record beside it: a triplet in the page's own packets X/26, in column mode 00101, which EN 300 706 Table 29 reserves and every decoder skips. A page with controls therefore looks the same on every receiver, and its controls travel, are stored, coalesced and recorded with its rows, in a page frame, a `.t42` file or a TTI page's `OL,26` lines (the engine's decision E.127).
+
+| Field | Bits | Meaning |
+|---|---|---|
+| Address | 6 | The control's first column, 0 to 39 |
+| Mode | 5 | `00101` |
+| Data D5–D0 | 6 | Its width, 1 to 40 cells, not past column 39 |
+| Data D6 | 1 | Joined: this run continues the control on the row above, at the same column and width |
+
+- **The row** is the active row: the Set Active Position (or Full Row Colour) triplet before it, as for every column triplet (clause 12.3.2). Rows 1 to 23 only.
+- **One triplet is one control** on its row, so four buttons on a row are four triplets, separate even where they touch. A taller control repeats its triplet on each row below with D6 set.
+- **Only the page's local enhancement data** declares controls, up to its first Termination Marker or Object Definition; an object declares none.
+- **A triplet that breaks a rule is dropped and reported**, and the others are kept: a row outside 1 to 23, no width, a run past column 39, a cell already in a control, a joined run under no control of its column and width, or more than 32 controls (the engine's `MAX_CONTROLS`).
+
+Four buttons on row 20, nine cells each, as transmitted (Hamming 24/18):
+
+| Triplet | Value | Bytes |
+|---|---|---|
+| Set Active Position, row 20 | `0x0013C` | `60 93 80` |
+| Control, column 1, width 9 | `0x04941` | `8f 94 89` |
+| Control, column 11, width 9 | `0x0494B` | `dd 94 09` |
+| Control, column 21, width 9 | `0x04955` | `24 95 89` |
+| Control, column 31, width 9 | `0x0495F` | `76 95 09` |
+
+A control is only where a click lands: the click still goes to the channel as MOUSE, at its cell, as every click over the page does (section 6.3), and the channel decides what it means. Declaring controls asks for nothing and lets the receiver do nothing it could not do before.
+
+### 7.4 Pointer areas (column mode 01010)
+
+A page that wants the pointer's moves without a button held, for a canvas that shows where the brush will fall, a game aimed by the pointer, or rows that show something as the pointer passes, declares where. The triplet is the control triplet's shape in column mode 01010, also reserved by Table 29 and skipped by every decoder: the address is the first column, D5 to D0 the width, D6 joins the run to the area above at the same column and width. A width of 0, not joined, makes the whole page one pointer area. Areas may overlap each other and the controls; a page has at most 8 (the engine's `MAX_POINTER_AREAS`), and a triplet that breaks a rule is dropped and reported, as a control's is (section 7.3).
+
+While the pointer is in a pointer area of the open page and keys go to its channel, every move that changes the dot under the pointer goes as MOUSE, button held or not. Elsewhere on the page a move goes only while a button is held. The trusted part of a receiver checks the area itself before it sends a move with no button, so a page's area cannot be widened by a compromised drawing process.
 
 ## 8. Behaviour
 
 1. **Send at once.** One write per event. The receiver MAY merge consecutive unsent mouse moves (keeping the latest) and sum unsent wheel deltas; nothing else is merged or dropped.
 2. **Order** is the stream's order.
 3. **Held input.** On FOCUS_OUT or a lost connection the channel treats every held key and button as released; the receiver sends no release for them.
-4. **The rate.** A receiver sends at most `MAX_PER_SECOND` (120) input units in any second, counted as the input count counts them, and never drops a release to keep to it. 120 is qrkeyboard's relay limit.
+4. **The rate.** A receiver sends at most `MAX_PER_SECOND` (120) input units in any second, counted as the input count counts them, and never drops a release to keep to it. 120 is qrkeyboard's relay limit. A mouse move and a HOVER count nothing: a move is sent only when the dot under the pointer changes, and an unsent move gives way to the next (rule 1); a HOVER only as a control is crossed. So the pointer can never cost a key.
 5. **Protocol errors** close the connection, on either side.
 6. **Bounds.** A message over `MAX_MESSAGE`, a field over its maximum, a varint over 5 bytes or not minimal: a protocol error.
 7. **Nothing waits on a timer.** A receiver sends an event when it happens and draws what comes back when it arrives (decision E.97, REQ-INT-008); the heartbeat (a ping after 25 s of silence, a pong within 10 s) is the push connection's own.
@@ -352,9 +362,9 @@ Keys go to a channel only while all of these hold: the tab is the active one; th
 
 When keys start going, the trusted core sends PAGE and FOCUS_IN; when they stop (another tab, another page, the page closed), FOCUS_OUT and PAGE 0, so the channel lets go of a key held as the viewer left (REQ-INT-108); when the window loses the focus or the address is being edited, FOCUS_OUT, and FOCUS_IN when it comes back.
 
-**The mouse.** A plain click on the page goes to the channel only in a MOUSE mode; otherwise it does what it does on any page (a link, a page number). A click with the browser's modifier always follows a link. The wheel goes to the channel while the pointer is over the page, in any mode (section 6.5); over the rest of the window it scrolls the browser.
+**The mouse.** Every press, release and move over the page goes to the channel while keys go to it (section 6.3); a click with the browser's modifier is the browser's, and follows a link. The wheel goes to the channel while the pointer is over the page; over the rest of the window it scrolls the browser.
 
-**Paste and composition.** The browser's paste shortcut pastes into the page as PASTE while keys go to it. The window's input method stays enabled while typing; its preedit goes as COMPOSE in that mode, and its committed text as text.
+**Paste and composition.** The browser's paste shortcut pastes into the page as PASTE while keys go to it. The window's input method stays enabled while typing; its preedit goes as COMPOSE, and its committed text as text.
 
 ### 9.2 The strip
 
@@ -376,7 +386,15 @@ Echo (section 9.3) draws the viewer's own character in the interface's monospace
 
 ### 9.6 `neottx view`
 
-Every key goes while the channel takes input, Control-C included; Control-] leaves and returns. With a terminal that reports releases (the Kitty keyboard protocol), it sends releases in KEY_RELEASE; otherwise a press only. It sends PASTE from bracketed paste, FOCUS from the terminal's focus events, and PAGE when the viewer opens a page.
+Every key goes while the channel takes input, Control-C included; Control-] leaves and returns. With a terminal that reports releases (the Kitty keyboard protocol), it sends releases too; otherwise a press only. It sends PASTE from bracketed paste, FOCUS from the terminal's focus events, and PAGE when the viewer opens a page.
+
+### 9.7 Controls and links under the pointer
+
+While keys go to the open page's channel, so that a click goes to it, the page's controls (section 7.3) are shown as links are: the pointer is a hand over them. A control or a link under the pointer takes a look the receiver draws from the page's own colours, with what Level 2.5 already does to them (the engine's decision E.127):
+- **Hover:** each colour of its cells becomes the same entry of the adjacent CLUT, the pairing of the Additional Flash Functions' colour flash (CLUT 0 with 1, 2 with 3). A page chooses its hover colours by defining CLUTs 2 and 3 in packet X/28/0 Format 1 and drawing its controls from them; with Table 30's colours, hover is the half-intensity colour of CLUT 1.
+- **Pressed,** while a button is held down on it: the hover colours with foreground and background exchanged, as Invert Colour exchanges them.
+
+The receiver draws both itself, at once, and sends nothing for them: the looks need no message, and a page lights under the pointer without the channel drawing a copy of it for each viewer. While keys do not go to the channel a page's controls are not shown, since a click on them would not reach it.
 
 ## 10. The phone keyboard
 
@@ -404,11 +422,12 @@ A channel's author; a network attacker; a compromised interface, fetcher, decode
 | A page or channel starts taking keys unasked | Only a descriptor declares input; the strip says "Keys go to"; keys go only to the open page of the active tab. |
 | Keys go somewhere else | The push address is on the channel's origin; the fetcher takes no address; nothing in the protocol names one. |
 | A keylogger on a plain connection | `ws://` is "Not secure" in the strip; `wss` is the default for any channel worth typing into. |
-| The channel tracks the pointer | Mouse motion goes only in MOUSE_DRAG or MOUSE_ALL, which the channel must ask for, and only over its own page while keys go to it. |
-| Fingerprinting by keyboard layout | `base` goes only in BASE_KEY; lock states only in `mods`, as any terminal sends them. There is no clock: the channel learns typing rhythm only from arrival times, which the network blurs, and no physical key code. |
+| The channel tracks the pointer | It learns its clicks and drags over its own page, and moves only within the pointer areas its page declares (section 7.4), while keys go to it; nothing of the pointer anywhere else (section 6.3). |
+| Fingerprinting by keyboard layout | `base` names a key position, not a layout's name; lock states only in `mods`, as any terminal sends them. There is no clock: the channel learns typing rhythm only from arrival times, which the network blurs, and no physical key code. |
 | A paste runs as keystrokes | PASTE is one length-prefixed event the channel treats as data; it cannot break out of itself. |
 | A flood from the channel | Pushed rows are coalesced to the display rate; records are bounded and checked; a protocol error closes the connection. |
 | A flood from a receiver | 120 units a second, at the relay, the keyboard process and the trusted core. |
+| A page dresses a control as a link, or the other way round | A control gives the page no power: its click is the MOUSE event every click over the page already sends. A link's destination is shown only by the trusted strip, never for a control. Controls are bounded (32 a page) and checked like every enhancement triplet. |
 | A forged cursor, echo or strip | The cursor and echo are drawn in styles no page can draw, only within rows 1 to 23 and the record's width; the strip is outside the page. Echo is only of the viewer's own keys. |
 | A compromised interface types | It can only send intents for the channel the trusted core already lets it type into, and the trusted core encodes. |
 | A compromised fetcher | It holds no keys but those going to its own channel, and reads only bounded messages. |
@@ -440,13 +459,13 @@ The normative requirements of the input system. Identifiers continue the engine'
 
 **REQ-INT-103 — Events.** The core events shall be KEY, MOUSE, WHEEL, PASTE, FOCUS_IN, FOCUS_OUT, RESIZE, COMPOSE, HELLO and PAGE, with the layouts of sections 5.4 and 5.5; PASTE at most 4000 bytes and COMPOSE at most 256. *Verification:* round trips of every event and every field's bounds.
 
-**REQ-INT-104 — Keys.** A printable result of a key shall be sent as text, except in ALL_KEYS; every other key as KEY, a character key by its unshifted code point and every other by its functional code, with modifiers as the Kitty bit set and `base` only in BASE_KEY. *Verification:* tests of text, a Control combination, a named key and a non-United-States layout.
+**REQ-INT-104 — Keys.** Every press, repeat and release of a key shall be sent as KEY, a character key by its unshifted code point and every other by its functional code, with modifiers as the Kitty bit set, `text` when it produced text and `base` when it differs from `key`; raw text shall carry only what does not come from a key (amended 27 October 2026, decision E.125). *Verification:* tests of a letter, a Control combination, a named key, a modifier alone, a release and a non-United-States layout.
 
 **REQ-INT-105 — Functional codes.** The codes of section 5.6 shall be fixed, and only ever added to; codes from 128 shall follow the engine's pinned W3C name table. *Verification:* a test pins the codes of Enter, Up, Red and F1, and the first code from 128.
 
-**REQ-INT-106 — Negotiation.** A receiver shall send HELLO first and no input before WELCOME; it shall use only the capabilities both sides set; a reconnection shall start a new session with the mode stack empty, nothing held and the input count at zero. *Verification:* a session test; a test that nothing goes before WELCOME; a reconnection test.
+**REQ-INT-106 — Negotiation.** A receiver shall send HELLO first and no input before WELCOME; it shall use only the capabilities both sides set; a reconnection shall start a new session with nothing held and the input count at zero. *Verification:* a session test; a test that nothing goes before WELCOME; a reconnection test.
 
-**REQ-INT-107 — Modes.** A receiver shall keep a mode stack of at least 16 entries, apply PUSH_MODE and POP_MODE to events generated after it takes them, and send in each mode exactly what section 6.3 says, the always-on events in every mode. *Verification:* tests of each mode.
+**REQ-INT-107 — Withdrawn (modes).** Withdrawn on 27 October 2026 (decision E.125): every event is sent, and there is no mode stack (section 6.3).
 
 **REQ-INT-108 — Held input.** On FOCUS_OUT or a lost connection a channel's decoder shall treat every held key and button as released, and a receiver shall send no release for them. *Verification:* a decoder test.
 
@@ -454,15 +473,25 @@ The normative requirements of the input system. Identifiers continue the engine'
 
 **REQ-INT-110 — The cursor record and the input count.** The cursor record shall be as section 7.1, its acknowledgement the input count acted on; the receiver shall count what it sends as the channel counts it. *Verification:* round trips through a packet; bounds; a sound on the same channel; the count across text, events and a paste.
 
-**REQ-INT-111 — The control record.** WELCOME, PUSH_MODE, POP_MODE and PAGE_MODES shall be records of type 5 as section 7.2, one fragment each, checked whole. *Verification:* round trips; refusals; a fuzz target.
+**REQ-INT-111 — The control record.** WELCOME shall be a record of type 5 as section 7.2, one fragment, checked whole; a record of a withdrawn type (`0x02` to `0x04`) shall be ignored (amended 27 October 2026). *Verification:* round trips; refusals; a fuzz target.
 
 **REQ-INT-112 — Immediacy.** Every event shall be written when it happens, one write per event, merging only unsent mouse moves and wheel deltas; nothing shall wait on a timer (with REQ-INT-008). *Verification:* the latency tests of REQ-INT-008 and REQ-INT-135.
 
-**REQ-INT-114 — A page's own modes.** A page shall be able to ask for input modes for itself, by an `IM,modes` line in its page file or a PAGE_MODES record; the receiver shall apply them only while that page is open, together with the top of the session's mode stack, and drop them when it closes; the reader shall keep the line and the writer write it back, and a line or record that breaks a bound shall be dropped and reported. *Reason:* a page is the unit a viewer reads, and modes that go with their page cannot be left on (section 6.4). *Verification:* reader and writer tests of the line; a receiver test that the modes come and go with the page and add to the stack; a fuzz target.
+**REQ-INT-114 — Withdrawn (a page's own modes).** Withdrawn on 27 October 2026 (decision E.125): a page's `IM` line is an unknown line, reported and skipped, and a PAGE_MODES record is ignored.
 
-**REQ-INT-115 — The mouse only on request; the wheel over the page.** A receiver shall send MOUSE only in a mouse mode asked for by the channel or the open page, and otherwise give a click its ordinary meaning on the page; it shall send WHEEL, in any mode, while the pointer is over the page (amended 25 October 2026, the owner's decision in section 6.5). *Reason:* section 6.5: a click keeps its ordinary meaning; terminals report the mouse only to a program that asks; little about the pointer leaves unasked; it costs a channel one mode; and the wheel over a page is the viewer reading on, which a page that scrolls itself needs. *Verification:* a receiver test that a click follows a link until a mode or the page asks, and then goes to the channel; and that the wheel goes to the channel over its page with no mode.
+**REQ-INT-115 — The mouse and the wheel over the page.** A receiver shall send every MOUSE press and release over the open page, with the cell, the dot and the modifiers, while keys go to its channel, a click with the browser's modifier staying the browser's; a move that changes the dot under the pointer while a button is held, or within a pointer area of the open page (section 7.4), and no other; and WHEEL while the pointer is over the page (amended 27 October 2026, the owner's decisions in section 6.3). *Verification:* receiver tests that a click and a drag go with no request, that a move with no button goes only within a pointer area or a whole-page one, that a move to the same dot is not sent again, and that a click with the modifier follows a link.
 
-**REQ-INT-116 — International keyboards.** A receiver shall send text as the Unicode characters the layout or input method produced, in logical order and in Normalization Form C, never translated into a teletext character set; shall send a dead key as no text (in ALL_KEYS as the key `Dead`) and the composed character after it; shall not report AltGr as Control and Alt; and shall give a character key's `key` from the active layout and `base` from the United States layout of the same physical key. *Reason:* the protocol carries what the viewer typed, in any language, and leaves its meaning to the channel; a shortcut binds by position, a letter by meaning (section 5.7). *Verification:* receiver tests with Russian, Hebrew, German (AltGr), French (dead keys) and AZERTY layouts, a Japanese input method's preedit and commit, and a decomposed `e` and combining accent sent as U+00E9; a channel test of native digits selecting a page.
+**REQ-INT-116 — International keyboards.** A receiver shall send text as the Unicode characters the layout or input method produced, in logical order and in Normalization Form C, never translated into a teletext character set; shall send a dead key as the key `Dead` with no text and the composed character after it; shall not report AltGr as Control and Alt; and shall give a character key's `key` from the active layout and `base` from the United States layout of the same physical key. *Reason:* the protocol carries what the viewer typed, in any language, and leaves its meaning to the channel; a shortcut binds by position, a letter by meaning (section 5.7). *Verification:* receiver tests with Russian, Hebrew, German (AltGr), French (dead keys) and AZERTY layouts, a Japanese input method's preedit and commit, and a decomposed `e` and combining accent sent as U+00E9; a channel test of native digits selecting a page.
+
+**REQ-INT-117 — Controls.** A page shall be able to declare the cells it answers itself by triplets of column mode 00101 in its local enhancement data, as section 7.3: the address the first column, D5 to D0 the width, D6 joining the run to the control above at the same column and width, the row the active row; a triplet in an object shall declare nothing. *Reason:* a reserved mode is part of the page and skipped by every decoder, so controls travel with the rows they describe and change nothing drawn (decision E.127). *Verification:* engine tests of four controls on a row, joined runs, the end of the local data, and that the triplet is still a reserved mode to the enhancement processor; a render of a page with and without controls compared byte for byte.
+
+**REQ-INT-118 — Controls are bounded and checked.** A control triplet outside rows 1 to 23, of no width, past column 39, over a cell of another control, joined to no control above, or beyond 32 controls a page shall be dropped and counted, and the others kept. *Verification:* engine tests of each rule and of the bound.
+
+**REQ-INT-119 — Controls and links under the pointer.** A receiver with a pointer shall show a page's controls only while keys go to its channel, with the pointer it shows over a link; it shall give the control or link under the pointer the hover look, each colour of its cells moved to the same entry of the adjacent CLUT, and while a button is held down on it the pressed look, the hover colours with foreground and background exchanged; it shall send the channel nothing for either. *Reason:* section 9.7: the looks are Level 2.5's own colour operations, the page chooses them with CLUTs 2 and 3, and the pointer's movement stays the viewer's. *Verification:* engine tests of both looks; receiver tests of the pointer, the looks and that nothing is sent.
+
+**REQ-INT-120 — Pointer areas.** A page shall be able to declare pointer areas by triplets of column mode 01010 in its local enhancement data, as section 7.4: the control triplet's fields, a width of 0 not joined meaning the whole page, at most 8, overlapping allowed; a triplet that breaks a rule shall be dropped and counted. *Reason:* moves without a button cost a message each, so they go only where a page has a use for them (section 6.3); the declaration travels with the page, as a control's does. *Verification:* engine tests of the triplet, overlap, the whole page and the bound; a receiver test that a move with no button goes only within an area.
+
+**REQ-INT-121 — HOVER.** A receiver shall send HOVER, the extension `0x43` of section 5.4, as the pointer enters and leaves each control of the open page while keys go to its channel, the leave before the enter when it goes from one to another, with the control's first cell; the trusted part of the receiver shall send one only for a control of the page's latest image. A channel shall skip it when it does not use it. *Reason:* a channel can show something as the pointer passes for two messages a control crossed (section 5.4). *Verification:* engine tests of the event; receiver tests of enter, leave, and from one control to another.
 
 **REQ-INT-113 — A host goes to a page.** A cursor record naming another page of the same channel shall open that page while keys go to that channel, and do nothing else; the viewer's own choice shall override it. *Verification:* a trusted-core test.
 
@@ -480,7 +509,7 @@ The normative requirements of the input system. Identifiers continue the engine'
 
 **REQ-INT-135 — Latency.** A key shall be written within 1 ms; the push socket shall have `TCP_NODELAY`; a pushed packet of the page being typed into shall be drawn within 20 ms. *Verification:* the timed test, with the round trip's median on the computer's own network held to 2 ms.
 
-**REQ-INT-136 — Mouse, paste and composition (NeoTeletext).** Clicks shall go to the channel only in a mouse mode and only over its page, a click with the browser's modifier always following a link; the wheel shall go to the channel over its page in any mode, and scroll the browser elsewhere (amended 25 October 2026); paste shall go as PASTE and the input method's preedit as COMPOSE while keys go. *Verification:* interface and trusted-core tests.
+**REQ-INT-136 — Mouse, paste and composition (NeoTeletext).** Every click and move over the page shall go to the channel while keys go to it, a click with the browser's modifier always following a link; the wheel shall go to the channel over its page and scroll the browser elsewhere; paste shall go as PASTE and the input method's preedit as COMPOSE while keys go (amended 27 October 2026, section 6.3). *Verification:* interface and trusted-core tests.
 
 **REQ-INT-137 — No key is logged, and the round trip is measured.** No receiver shall log a key; the round trip shall be measured from acknowledgements, with at most 256 sends remembered. *Verification:* a log test; a trusted-core test.
 
@@ -505,7 +534,7 @@ The normative requirements of the input system. Identifiers continue the engine'
 | 11 | Losing focus releases held input, at the channel | Input Event Protocol | No stuck keys, and no burst of releases on the wire; the built system sent releases from the trusted core. |
 | 12 | A reconnection is a new session | Input Event Protocol | Simpler and safer than the built system's resume record; PAGE makes the channel push the page again. |
 | 13 | The rate of 120 a second, the bounds, the strip, the security model, the phone keyboard | Built system | Measured and reviewed; unchanged. |
-| 14 | Mouse only when the channel or the page asks; a page asks for itself (`IM` line, PAGE_MODES) | Input Event Protocol, extended | Agreed by the owner on 21 October 2026, for the reasons of section 6.5; a page's modes go with the page, so none can be left on. |
+| 14 | Mouse only when the channel or the page asks; a page asks for itself (`IM` line, PAGE_MODES) | Input Event Protocol, extended | Agreed by the owner on 21 October 2026; withdrawn on 27 October 2026 with every mode (section 6.3). |
 | 15 | Version 1 retired, not kept beside version 2 | — | Nothing outside these repositories speaks it; two formats would be a shim. |
 
 ## 14. Adopting it
@@ -519,7 +548,7 @@ Adopted by the owner on 21 October 2026, as the engine's decision E.100 and the 
    - `neottx view`, `neottx keyboard`: version 2.
    - Area INT: REQ-INT-001 to REQ-INT-004 withdrawn, REQ-INT-101 to REQ-INT-116 added; `docs/spec/design/input.md` replaced by a pointer here; `int.md` keeps each number and title, so the traceability table covers them.
 2. **The browser:**
-   - The trusted core encodes version 2, keeps the mode stack and the input count, and sends HELLO, RESIZE, PAGE and FOCUS.
+   - The trusted core encodes version 2, keeps the input count, and sends HELLO, RESIZE, PAGE and FOCUS.
    - The interface sends intents for mouse, wheel, paste and composition.
    - The decoder finds control records.
    - `neoteletext-site terminal` speaks version 2.
