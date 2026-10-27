@@ -133,7 +133,13 @@ The protocol of section 7 is the interface; a kit is a convenience. One referenc
 
 The server serves exactly this, with `ETag` and conditional requests, which the engine's agent already makes, plus the WebSocket that `push` names. A static channel is that folder on any web server, with no NeoTeletext server.
 
-**Why not new paths** (`/news/200/3`): every channel and client that exists already works with the layout, and a static host needs nothing new. A sub-page file, `NNN-SSSS.t42`, can be added if a client needs one.
+**Why not new paths** (`/news/200/3`): every channel and client that exists already works with the layout, and a static host needs nothing new.
+
+**Sub-pages have files of their own** (decided 26 October 2026, `STANDARD-LIMITS.md` section 4), since a page may have 8,190 and a page response is bounded (the engine's REQ-WEB-008):
+- `NNN.t42` holds the page, or its first sub-page when it has several;
+- `NNN-SSSS.t42` holds sub-page SSSS, four hexadecimal digits;
+- `NNN.sub` lists the page's sub-codes with their validators and titles;
+- `index.t42` carries first sub-pages only.
 
 ## 5. The wire
 
@@ -151,7 +157,7 @@ Downstream is binary WebSocket messages, each a whole number of 42-byte packets 
 
 | Frame | Contents | Delivery |
 |---|---|---|
-| **Page frame** | One page's update: its X/0 header, in serial magazine mode (C11 set), then either the changed rows and, if any changed, the whole group of enhancements (X/26, X/27, X/28); or the whole page with the erase bit (C4) set | Coalesced: a slow client gets the difference from what it last received (section 6.3) |
+| **Page frame** | One sub-page's update: its X/0 header, in serial magazine mode (C11 set), then either the changed rows and, if any changed, the whole group of enhancements (X/26, X/27, X/28); or the whole page with the erase bit (C4) set | Coalesced: a slow client gets the difference from what it last received (section 6.3) |
 | **Stream frame** | Packets of an ordered stream: a recording, a carousel, an application's raw packets (section 7.4) | In order, never coalesced, through a bounded queue |
 | **Audio frame** | One audio record as packet 4/31 on data channel 12 (section 9) | In order, through a bounded queue |
 | **Control frame** | One control record on data channel 12 (section 5.5) | In order |
@@ -198,8 +204,11 @@ Version 3 adds two events, as extensions (`0x40`–`0x7F`, length-prefixed), whi
 
 | Type | Name | Payload |
 |---|---|---|
-| `0x40` | TUNE | `count` uv, then `count` × (`page` uv, `sub` uv or 0 for all sub-pages), `flags` u8: bit 0 `preview` |
-| `0x41` | UNTUNE | `count` uv, then `count` × `page` uv |
+| `0x40` | TUNE | `count` uv, then `count` × (`page` uv, `sub` uv), `flags` u8: bit 0 `preview` |
+| `0x41` | UNTUNE | `count` uv, then `count` × (`page` uv, `sub` uv) |
+| `0x42` | TITLES | `page` uv, `first` uv (a place, 1 to 8,190), `count` uv: the titles of those sub-pages, at most the budget a record carries |
+
+**A tune names a sub-page** (decided 26 October 2026, `STANDARD-LIMITS.md` section 4): `sub` is a sub-code, and only tuned sub-pages pass the wire. Tuning any sub-page of a page brings the page's catalogue (SUBPAGES, section 5.5) and its changes; `sub` 0 tunes a page that has no sub-pages, or, on a page that has, its catalogue alone. A sub-code outside the mask or 3F7F is refused.
 
 A channel that does not tune keeps sending what it sends today.
 
@@ -222,7 +231,9 @@ Control records are teletext packets, as WELCOME is today: data channel 12, pack
 |---|---|---|
 | WELCOME, PUSH_MODE, POP_MODE, PAGE_MODES | As INPUT.md | As today |
 | DENIED | `page`, `reason` code: not found, not allowed, unavailable, limit | A tune refused |
-| LIMITS | The numbers of section 11 | Advertised after WELCOME, revised at any time |
+| LIMITS | The standard's maxima and the budgets of section 11 | Advertised after WELCOME, revised at any time |
+| SUBPAGES | A page, then its sub-codes, each with its version; or the change since the last | Sent for each page a client tunes, then as its sub-pages are added, removed or changed |
+| TITLES | A page, the first place, then titles | The answer to a TITLES request (section 5.4) |
 | SET_COOKIE | One `Set-Cookie` header line | A cookie set mid-connection (section 8.2) |
 | INDEX | Page numbers and titles | The channel's index (section 6.5) |
 | CHANGED | Page numbers | The coalesced change digest (section 6.5) |
@@ -242,22 +253,23 @@ The client says which pages its views show. **The owner decided (25 October 2026
 
 | Tuned | What arrives |
 |---|---|
-| A page | Each of its sub-pages as a whole page frame, then their changes |
+| A sub-page | Its page frame, then its changes; and its page's catalogue (SUBPAGES), then the catalogue's changes |
+| A page's other sub-pages | Nothing but their entries in the catalogue, until they are tuned |
 | A Level 2.5 or 3.5 page | The pages it references as well: its POP and GPOP object pages, DRCS and GDRCS pages, and the MOT, which the server reads to find them |
 | A `preview` tune (a wall of thumbnails) | The page's shared copy only, at a slow rate, with nothing personalised and no `view` sent to its application |
 | A page that does not exist or is refused | DENIED |
 
-**Sub-pages:** the server does not rotate them, since that traffic would scale with the audience. The client rotates or steps them (browser decision 67). A tune brings at most the limit of section 11; 79 by convention, against 3F7F addressable.
+**Sub-pages:** the server does not rotate them, since that traffic would scale with the audience. The client rotates or steps them (browser decision 67), tuning the sub-page it shows and, within a budget, those either side of it, so stepping is instant; to show the latest as it arrives, it tunes the one whose version in the catalogue changed last. A page may have every sub-page the standard allows, 8,190 (`STANDARD-LIMITS.md` section 1); none passes the wire until tuned.
 
 ### 6.2 The page store
 
-- **Each published page is held once:** its rows as shared pointers plus its encoded packets. A row update replaces one pointer and never copies the page.
+- **Each published sub-page is held once:** its rows as shared pointers, its encoded packets, its version and its title, made by the engine's title function when it is published. A row update replaces one pointer and never copies the sub-page. A page is its catalogue: its sub-codes and their versions.
 - **Static pages** are read and encoded at their first tune, and held while tuned.
 - **A session's pages** are held while the session's views tune them.
 
 ### 6.3 The sender
 
-- **Per connection, per tuned page, one pointer:** the version this client was last sent. A change marks the tuned entries dirty.
+- **Per connection, per tuned sub-page, one pointer:** the version this client was last sent. A change marks the tuned entries dirty; a change to a sub-page the client does not tune marks only its page's catalogue.
 - **At a flush,** the sender compares last-sent with current (25 pointer comparisons) and sends a page frame of the changed rows, or the whole page if the client holds nothing.
 - **The encoded delta is cached by (previous version, current version)**, so the usual case, every client one version behind, is encoded once. A session's page has one viewer and gains nothing from the cache; its shared base rows do.
 - **Slow clients:** they need no queue. A client behind gets, at its next flush, the difference from what it actually received. This is better than a fresh snapshot, never more bytes, and as correct.
@@ -306,7 +318,8 @@ It costs bytes in proportion to the audience, but only numbers, and only for cli
 | Server → app | `first_viewer` / `last_viewer {page}` | A channel page gained its first or lost its last viewer, so the application may idle; it publishes at once on the next |
 | Server → app | `close {session}` | The session ended; discard its state |
 | Server → app | `tick {timer}` | A timer the application asked for (for WebAssembly applications, which have no clock) |
-| App → server | `publish {page, sub?, owner, tti \| rows \| region}` | Content, at any granularity (section 7.3) |
+| App → server | `publish {page, sub?, owner, tti \| rows \| region}` | Content, at any granularity (section 7.3): a sub-page, several, or every one |
+| App → server | `remove {page, subs, owner}` | Sub-pages that end; the others are kept |
 | App → server | `packets {stream, owner, base64}` | Raw packets (section 7.4) |
 | App → server | `audio {owner, play \| object \| record}` | Sound (section 9) |
 | App → server | `cookie {session, set-cookie}` | Write a viewer's cookie (section 8.2) |
@@ -323,6 +336,7 @@ It costs bytes in proportion to the audience, but only numbers, and only for cli
   - `region` names a region the channel declares.
 
   The engine's `TtiReader` parses it, fuzzed, with its escapes, national option sets (the control bits C12 to C14 and X/28), Fastext and links. There is no second row-text format to define. One content format serves files, applications and tests, and a page moves between a file and an application unchanged.
+- **A publication puts sub-pages, not a page:** it names each sub-page it carries by sub-code (TTI's `SC`, four hexadecimal digits) and leaves the page's others as they were, so a page of 8,190 sub-pages changes one sub-page at the cost of one. An application never states a limit of its own: the server tells it the standard's maxima and the server's budgets in `start` (`STANDARD-LIMITS.md` section 3).
 - **Ownership is where the content was published:**
   - `owner: channel` is one shared copy, sent to every viewer tuned;
   - `owner: <session>` is that session's views only.
@@ -436,9 +450,12 @@ Low latency is a requirement from the start, not a later optimisation. The criti
 
 ## 11. Limits
 
+**Maxima are not limits here** (`STANDARD-LIMITS.md` section 2): every page and sub-page the standard allows may exist, 2,022 pages a channel and 8,190 sub-pages a page, defined once in the engine (`neoteletext_core::limits`). What follows are budgets, which bound what is held and sent at once, never what may exist.
+
 About ten numbers, in the server's configuration, overridable per channel, advertised in LIMITS:
 - tuned pages per connection;
-- sub-pages per tune;
+- sub-pages tuned either side of the one shown;
+- titles a TITLES record carries;
 - session pages per session;
 - connections per address and per session;
 - inbound events per second and bytes per message;
@@ -465,7 +482,7 @@ The other 799 pages are files until tuned.
 | Session | Viewers of applications that personalise | Cookie, application handles, time to live |
 | Application state | Its sessions | Inside the application: the expensive, unavoidable term |
 
-A whole Level 1 page is 1,092 bytes; a channel of 800 pages × 79 sub-pages is about 70 MB. Connections and sessions are the memory to watch, not pages.
+A whole Level 1 page is 1,092 bytes. A channel at the standard's maximum, 2,022 pages × 8,190 sub-pages, would be about 18 GB held whole; it is held as its applications publish it and its files are read, and only tuned sub-pages are sent, so the cost follows what is read. Connections and sessions are the memory to watch, not pages.
 
 ## 13. Carousel: an authentic broadcast
 
@@ -589,6 +606,7 @@ Each step is usable on its own.
 10. ~~What counts as visible in the browser, and the overview~~ **Decided 25 October 2026:** the open page, the wall's thumbnails as previews, and each background tab's open page fully live; the overview gets INDEX and CHANGED; the interface decides what is tuned (sections 6.1 and 6.5).
 11. `B/site` becomes the server's applications (section 3.3).
 12. One reference kit, in TypeScript (section 3.4).
+13. **Decided 26 October 2026:** the engine, the server and the browser allow every page and sub-page the standard allows, 2,022 pages and 8,190 sub-pages a page, defined in one place, the engine's `neoteletext_core::limits`, and sub-pages pass the wire only when tuned (`STANDARD-LIMITS.md`; sections 4, 5.4, 5.5, 6, 7.3, 11 and 12).
 
 ## 20. Unsolved
 
@@ -598,6 +616,6 @@ Each step is usable on its own.
 4. **A stalled application's sessions:** how long the server waits before DENIED, and what a viewer sees meanwhile.
 5. **The delta cache with overlays:** its hit rate when most viewers have overlays; measured on the weather application with a logged-in header.
 6. **Header text:** whether clients draw the clock, for every channel, or applications publish it.
-7. **Sub-page limits and enhanced pages' references:** how many pages a single tune may bring in.
+7. **Enhanced pages' references:** how many object, DRCS and MOT pages a single tune may bring in. (The sub-page limit is settled: `STANDARD-LIMITS.md`.)
 8. **Cloudflare:** WebSocket hibernation, and whether Workers can host the actor; not needed for version 1.
 9. **Carousel bandwidth** at realistic rates, measured.
