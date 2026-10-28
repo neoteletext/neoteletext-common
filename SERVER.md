@@ -450,7 +450,7 @@ Low latency is a requirement from the start, not a later optimisation. The criti
 
 ## 11. Limits
 
-**Maxima are not limits here** (`STANDARD-LIMITS.md` section 2): every page and sub-page the standard allows may exist, 2,022 pages a channel and 8,190 sub-pages a page, defined once in the engine (`neoteletext_core::limits`). What follows are budgets, which bound what is held and sent at once, never what may exist.
+**Maxima are not limits here** (`STANDARD-LIMITS.md` section 2): every page and sub-page the standard allows may exist, 2,022 page numbers a channel (shared by display and data pages) and 8,190 sub-pages a page, defined once in the engine (`neoteletext_core::limits`), every numbering rule being a requirement of the engine's area NUM (its decision E.130). What follows are budgets, which bound what is held and sent at once, never what may exist.
 
 About ten numbers, in the server's configuration, overridable per channel, advertised in LIMITS:
 - tuned pages per connection;
@@ -606,7 +606,7 @@ Each step is usable on its own.
 10. ~~What counts as visible in the browser, and the overview~~ **Decided 25 October 2026:** the open page, the wall's thumbnails as previews, and each background tab's open page fully live; the overview gets INDEX and CHANGED; the interface decides what is tuned (sections 6.1 and 6.5).
 11. `B/site` becomes the server's applications (section 3.3).
 12. One reference kit, in TypeScript (section 3.4).
-13. **Decided 26 October 2026:** the engine, the server and the browser allow every page and sub-page the standard allows, 2,022 pages and 8,190 sub-pages a page, defined in one place, the engine's `neoteletext_core::limits`, and sub-pages pass the wire only when tuned (`STANDARD-LIMITS.md`; sections 4, 5.4, 5.5, 6, 7.3, 11 and 12).
+13. **Decided 26 October 2026:** the engine, the server and the browser allow every page and sub-page the standard allows, 2,022 page numbers and 8,190 sub-pages a page, defined in one place, the engine's `neoteletext_core::limits`, and sub-pages pass the wire only when tuned (`STANDARD-LIMITS.md`; sections 4, 5.4, 5.5, 6, 7.3, 11 and 12). *28 October 2026:* every address the standard defines is accepted and every numbering rule of World System Teletext is a requirement, the engine's area NUM (its decision E.130, the browser's decision 119, the server's decision 14).
 
 ## 20. Unsolved
 
