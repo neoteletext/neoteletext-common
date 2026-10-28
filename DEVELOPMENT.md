@@ -173,19 +173,22 @@ The engine records changes in the decision's text; the browser in its table's "N
 
 ## 9. Gates
 
-There is no continuous integration; the gates are local (the owner's instruction). One check script per repository runs every gate, and git hooks in `.githooks/` run it, enabled once per clone with `git config core.hooksPath .githooks`. Never bypass a hook (`--no-verify`); if a gate is slow, batch the work.
+There is no continuous integration; the gates are local (the owner's instruction). One check script per repository runs every gate, and git hooks in `.githooks/` run it, enabled once per clone with `git config core.hooksPath .githooks`. Never bypass a hook (`--no-verify`).
+
+The owner's instruction of 29 October 2026: every process "as fast as possible", and "I need to know when I am committing to a long integration step". So the gates are three tiers, and only the third is long.
 
 | Gate | When | What it must do |
 |---|---|---|
-| **Commit gate** | `pre-commit`, every commit | Formatting, Clippy with warnings as errors in every feature set the repository builds, lockfiles current, the no-panic list identical, the tests of what the commit touches, and the architecture checks. It checks what is staged: it refuses while a part it checks has unstaged or untracked changes, so what passed is what is committed. |
-| **Full gate** | before anything reaches `main` on GitHub, and before a release | Everything: release tests, documentation tests, tests with optional areas compiled out, every target, fuzzing, licences and advisories, unused dependencies, the Linux build host, and in the engine size, features and coverage. It runs on a clean tree at the commit being pushed, and fails if running it changed a committed file. |
+| **Commit gate** | `pre-commit`, every commit | The code compiles clean, and no more: formatting, Clippy with warnings as errors in the default feature set (the engine: every feature), lockfiles current, the no-panic list identical, the text checks of a few seconds. In the browser it checks what is staged and refuses while a part it checks has unstaged or untracked changes, so what passed is what is committed. Seconds when the build is warm. |
+| **Push gate** | `pre-push` of any branch but `main` | The commit gate (skipped when it passed on the same tree), plus Clippy in every feature set the repository builds, the tests, and in the engine the architecture checks, documentation and fonts. On a clean tree at the commit pushed. |
+| **Full gate** | `pre-push` to `main`, and before a release: the long integration step | The push gate (skipped when it passed on the same tree), plus everything: release tests, documentation tests, tests with optional areas compiled out, every target, fuzzing, licences and advisories, unused dependencies, the Linux build host, and in the engine size, features and coverage. The Linux host's steps run alongside the local ones. It runs on a clean tree at the commit pushed, and fails if running it changed a committed file. |
 
-- **Nothing is skipped.** A missing tool or an unreachable host fails the gate; nothing passes silently.
-- **The commands.**
-  - Engine: `scripts/check.sh fast` (commit), `NEOTELETEXT_REMOTE=foundintelquiet4060 scripts/check.sh full` (full; `cargo xtask features` and the remote stages included).
-  - Browser: `scripts/check.sh commit`, `scripts/check.sh full` (`NEOTELETEXT_LINUX_HOST` names the Linux host, `foundintelquiet4060` by default).
-- **Pushing.** The browser's `pre-push` runs the full gate on the commits being pushed. The engine pushes its work branch `implementation` after the commit gate, and runs the full gate before `main` moves (the owner's decision of 11 October 2026, the engine's log row 4: about 40 minutes then, about an hour now), so its `pre-push` runs the commit gate except on a push to `main`.
-- **Measured costs.** The engine's commit gate takes over ten minutes on this computer; its full gate about an hour. A cleared build cache adds a full rebuild.
+- **Each gate says its cost first.** Before it starts, a gate prints how long its last pass took and its three slowest steps (`gate-times-<tier>` in the git directory); each step prints its time as it ends.
+- **No step runs twice on one tree.** A pass records the tree it passed on (`gate-passed-<tier>`), and a higher tier skips a lower one already passed on that tree.
+- **Nothing is skipped silently.** A missing tool or an unreachable host fails the gate.
+- **The copy to the Linux host compares content** (`rsync --no-times --checksum`): with this machine's times kept, a file edited here before the host's last build looks older than that build, and Cargo reuses the stale crate.
+- **The commands.** `scripts/check.sh commit | push | full`, in both. The engine's full gate needs `NEOTELETEXT_REMOTE` (its hook names `foundintelquiet4060` when unset); the browser's names its host with `NEOTELETEXT_LINUX_HOST`, `foundintelquiet4060` by default.
+- **Measured costs.** The engine's commit gate: 3 seconds warm (29 October 2026; over ten minutes before the tiers). The full gates: about an hour each before the tiers; each gate now prints its own last measured time.
 
 ## 10. Commits, branches and pushing
 
@@ -200,8 +203,7 @@ There is no continuous integration; the gates are local (the owner's instruction
 
 ### 10.2 Branches and pushing
 
-- **The browser** works on `main`; its `pre-push` full gate guards what reaches GitHub.
-- **The engine** works on `implementation` and merges to `main` after the full gate; feature branches (for example `audio`) merge into `implementation` once their work is committed. A backup branch is made before a destructive change (`backup-before-drcs-removal`).
+- **Both repositories work on `livedevelopment`** (the owner's name, 29 October 2026; the engine's was `implementation`), pushed through the push gate. `main` moves only by the full gate, when the owner says to merge. Feature branches merge into `livedevelopment` once their work is committed. A backup branch is made before a destructive change (`backup-before-drcs-removal`).
 - **Push when the owner says.**
 - **Moving a branch:** `git branch <new> <sha>`, and `git reset --soft` if needed; never `reset --hard`, `clean -fd`, `checkout -- <path>` or `filter-repo` on a dirty tree. Run `git status` first and stash everything, including files that seem not to be yours.
 - **Another session may be working in the same repository.** If HEAD or files change unexpectedly, stop and report; don't fight it.
