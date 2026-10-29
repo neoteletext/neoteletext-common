@@ -14,7 +14,7 @@ Written on 21 October 2026 by merging the owner's global instructions (`~/.claud
 1. **The owner's global instructions** (`~/.claude/CLAUDE.md`) apply to both repositories. This document adds to them; it departs from them only where it says so, with the owner's decision cited.
 2. **This document** is the development process. A repository's `CLAUDE.md` says what is particular to that repository and points here for the rest; where a repository's own text and this document disagree, this document holds until appendix B's change is made there.
 3. **The standard, datasheet or specification is the source of truth** for behaviour. Read it before writing code against it and cite the clause in comments (`// EN 300 706 clause 9.3.1: ...`). A datasheet wins over a web snippet. Read PDFs with page ranges, not through a text extractor that mangles tables. Standards and datasheets live in `~/devel/teletext-reference/`, never in either repository.
-4. **Each repository's requirements are its only normative text.** The engine's are `docs/spec/requirements/`; the browser's are `docs/requirements.md`. Decisions record choices and their reasons; design documents explain; neither overrides a requirement.
+4. **Each repository's requirements are its only normative text, and they are kept in rdm** (since 30 October 2026, rdm decision DEC-1389), with the decisions, the checklists and the work owed. rdm is reached through its MCP tools; no repository keeps a file of requirements, decisions or to-dos, and a hook refuses edits to the files that used to. Decisions record choices and their reasons; design documents explain; neither overrides a requirement.
 5. **Security overrides every other requirement** in both repositories (the engine's area SEC and decision E.32; the browser's decision 4 and requirement 1.2). A conflict is recorded as a decision and the other requirement is amended. No option may switch security off.
 6. **Each fact has one home.** Link rather than restate. Process lives here; behaviour lives in the requirements; choices in the decisions; explanation in design documents; where code lives in the engine's `ARCHITECTURE.md` and the browser's `docs/architecture.md`.
 
@@ -37,17 +37,17 @@ The owner shapes behaviour by asking for changes and looking at the result (the 
 
 **Rapid iteration** is the default while behaviour is being shaped.
 - Make the change, rebuild with the fast profile and show the result: in the engine `cargo build --profile iterate -p neoteletext-cli`, then `target/iterate/neottx`; in the browser `scripts/try.sh` (Clippy on every save) or `scripts/try.sh <crate> [filter]`, and the program itself. Check the output, then tell the owner it is ready to look at.
-- Do not write tests, user-guide text, requirement prose, log rows or traceability yet. Run the existing tests of the code touched when that is quick.
+- Do not write tests, user-guide text, requirement prose or log rows yet. Run the existing tests of the code touched when that is quick.
 - Commit rarely, and never bypass a hook: batch the work instead.
-- **Everything owed goes in the repository's `TECH-DEBT.md`** as it arises: tests, requirements and decisions to record, documents to update, verification to run, shortcuts taken, loose ends. Nothing deferred may exist only in a reply.
+- **Everything owed is an rdm to-do** as it arises (`create_record`, type `todo`, linked to the requirement or decision it concerns): tests, requirements and decisions to record, documents to update, verification to run, shortcuts taken, loose ends. Nothing deferred may exist only in a reply.
 
-**Integration** starts when the owner says the feature works as they expect. Work through its `TECH-DEBT.md` items, in this order:
-1. record the decision and the requirements (sections 4 and 5);
-2. write the tests, each failing on the old code (section 8);
+**Integration** starts when the owner says the feature works as they expect. Work through its open to-dos, in this order:
+1. record the decision and the requirements in rdm (sections 4 and 5);
+2. write the tests, each failing on the old code and naming the requirement it verifies (section 8);
 3. update the user guide, the architecture document and the other documents;
 4. add the implementation log row, if the work met a question without the owner (section 3.3);
-5. regenerate traceability in the engine; update the requirement State lines in the browser;
-6. commit through the gates in small commits that reference their issues (section 10), and remove each item from `TECH-DEBT.md` as it is done.
+5. set each requirement's implementation status in rdm, on the commit that meets it;
+6. commit through the gates in small commits that reference their issues (section 10), and mark each to-do done in rdm as it is done.
 
 Behaviour may be tried before it is recorded, but none is committed without its decision and requirements.
 
@@ -62,22 +62,22 @@ A feature large enough to need design goes through these steps; both repositorie
 
 ### 2.4 Decisions while the owner is away
 
-When the owner asks for work to continue without questions, decisions are taken and recorded as usual, marked as taken while the owner was away, and listed for the owner's review. An implementation log row records each question met.
+When the owner asks for work to continue without questions, decisions are taken and recorded in rdm as usual, created with `needs_confirmation`, which lists them for the owner's review; only the owner's own words confirm one. An implementation log row records each question met.
 
 ## 3. Tracking work
 
 ### 3.1 GitHub issues
 
 Both repositories track work in GitHub issues on their own repository (`crowdwave/neoteletext-engine`, `crowdwave/neoteletext-browser`). An issue links to the requirement or decision it serves rather than restating it.
-- **Work starts from an issue.** If none exists, open one. During rapid iteration one issue per feature is enough; small changes go in `TECH-DEBT.md`.
+- **Work starts from an issue.** If none exists, open one. During rapid iteration one issue per feature is enough; small changes are rdm to-dos.
 - **Commits reference it**: `Refs #123` for progress, `Closes #123` on the commit that finishes it (section 10.1).
 - **Log what you find.** A bug, a gap or a decision for the owner gets an issue, not just a mention in a reply. Decisions for the owner carry the `decision` label.
 - **Keep the milestones true.** Close finished work with the commit that did it; close work the design has overtaken as "not planned" with the reason. Delete an issue only with the owner's agreement.
 - Work that concerns the other repository is moved there.
 
-### 3.2 `TECH-DEBT.md`
+### 3.2 Work owed
 
-Each repository keeps one. Each item says what is owed and why. An item is removed when done, and moved to an issue when it needs the owner.
+Each item is an rdm to-do: what is owed and why, linked to what it concerns. It is marked done (with the commit) or cancelled (with the reason), never deleted; one that needs the owner gets an issue, and a task only the owner can do says so in its title.
 
 ### 3.3 The implementation log
 
@@ -89,46 +89,43 @@ Lead with the result. Report a failure as a failure, with its output; never clai
 
 ## 4. Requirements
 
-Each repository keeps its numbering, since numbers are cited everywhere: the engine's `REQ-<AREA>-<NNN>` in `docs/spec/requirements/<area>.md`, the browser's "Requirement <section>.<n>" in `docs/requirements.md`.
+Requirements are rdm records. Each repository's numbering stays valid, since numbers are cited everywhere: the engine's `REQ-<AREA>-<NNN>`, the browser's and the server's "Requirement <section>.<n>" resolve in rdm as the records' original IDs. A new requirement takes rdm's ID (`REQ-n`); in the engine its title starts with its area code (`[INP] …`), in the browser and the server with its section.
 
-- **Numbers are permanent.** They are never reused; gaps are deliberate. A new requirement takes the next free number in its area or section.
+- **Numbers are permanent.** They are never reused; a requirement is never deleted.
 - **Modal verbs.** "Shall" or "must" is mandatory; "should" is expected unless a recorded reason says otherwise; "may" is an option.
 - **Every requirement has a reason and a verification.** Verification is a test (automated), a check (automated, in the check script), an inspection or a review (recorded by a person), or a demonstration.
-- **The browser's requirements also carry a Source** (the decision that made them) **and a State**: met, partly met or not met, with dated evidence ("measured by `<test>` on 21 October 2026, release build") and what is missing. The engine's state is its generated traceability table (`cargo xtask traceability`, `docs/traceability.md`), regenerated at integration.
-- **Phases.** In the engine a Phase 2 requirement carries a `*Phase:*` line under its title and is listed in `requirements/README.md` section F.0.1; Phase 1 must not depend on Phase 2, and a Phase 2 feature's tests come with it.
+- **Source and state.** A requirement links to the decision that made it (`decides`). Whether it is met is rdm's implementation status, per branch, set on the commit that meets it; tests that name the requirement are linked to it, with their results (the engine's REQ-DOC-003).
+- **Phases.** In the engine a Phase 2 requirement says so in its body and is listed in decision F.0.1; Phase 1 must not depend on Phase 2, and a Phase 2 feature's tests come with it.
 - **Writing.** Full narrative sentences; terms spelled out (the engine's glossary is `docs/spec/glossary.md`, the browser's `docs/architecture.md` section 17); the standard cited by clause or table.
-- **References resolve.** Every requirement identifier cited anywhere must name one that exists. The engine's check is in its `CLAUDE.md`; write its scratch files to the session scratchpad or `tmp/`, not `/tmp`.
-- **The engine's state machine tables are normative** (area FSM): if a table and prose disagree, fix both.
+- **References resolve.** Every requirement identifier cited anywhere must name one that exists in rdm.
+- **The engine's state machine tables are normative** (area FSM): if a table and prose disagree, revise both.
 
 ### 4.1 Changing a requirement
 
-One set of forms, in both repositories:
-- **Amended:** a line at the end of the requirement, `*Amended 20 October 2026 (decision E.95):* what changed.`, the decision named whenever there is one.
-- **Withdrawn:** the title becomes `Withdrawn: <old title>`, so the engine's traceability tool recognises it, and the body says `Withdrawn on <date> (decision <n>): <why>.` In the browser the old statement is kept under **Was:**. The number is kept.
-- **Moved:** a requirement that moves to the other repository is withdrawn here with "Moved to <repository> on <date>", and its number is kept.
+- **Amended:** `revise_record` writes the complete new version, with the reason (naming the decision whenever there is one); rdm keeps every earlier version.
+- **Withdrawn:** `set_status` lifecycle `cancelled`, with the date's reason; or `superseded`, naming the requirement that replaces it.
+- **Moved:** a requirement that moves to another repository is created there and the old one superseded by it.
 
 ## 5. Decisions
 
-Each repository keeps its own series, since both are cited across the code, the documents and the other repository: the engine's **E.n** in `docs/spec/decisions.md` (Part E), the browser's **Decision n** in the table of `docs/architecture.md` section 2. A decision of one repository cited in the other names its repository: "the engine's decision E.95", "NeoTeletext's decision 46". Feature documents may number their own decisions ("`hyperlinks.md` decision 7"); design documents may letter theirs ("decision D3 of `audio-platforms.md`"); implementation log rows are "rows", not decisions.
+Decisions are rdm records. Each repository's series stays valid as original IDs, since both are cited across the code and the documents: the engine's **E.n**, the browser's and the server's **Decision n**. A decision of one repository cited in another names its repository: "the engine's decision E.95", "NeoTeletext's decision 46". A new decision takes rdm's ID (`DEC-n`). Feature documents may number their own decisions ("`hyperlinks.md` decision 7"); implementation log rows are "rows", not decisions.
 
-- **Record before committing behaviour.** Behaviour the standard or the design leaves open is recorded, or the decision amended, before the change is committed (the engine's REQ-DOC-004). During iteration it is noted in `TECH-DEBT.md` and recorded at integration.
-- **A decision says who decided and when** ("Decided by the owner on 20 October 2026", "Decided on 21 October 2026, on the owner's instruction", "taken while the owner was away, as the owner had instructed"), what was chosen, in numbered items where there are several, and its reason.
+- **Record before committing behaviour.** Behaviour the standard or the design leaves open is recorded in rdm, or the decision revised, before the change is committed (the engine's REQ-DOC-004). During iteration it is an rdm to-do, decided at integration.
+- **A decision says who decided and when**, what was chosen, in numbered items where there are several, and its reason. rdm records who made each version and the conversation it came from.
+- **A decision taken without the owner needs the owner's confirmation:** it is created with `needs_confirmation`, and only the owner's words confirm it (`set_status` confirmation `confirmed`, quoting them).
 - **A dependency of a microcontroller crate** of the engine needs a decision (section 7).
 - **Decisions keep their history.** They are never deleted or renumbered.
 
 ### 5.1 Changing a decision
 
-The engine records changes in the decision's text; the browser in its table's "Now" column, with the text unchanged. The forms:
-
-| Change | In the engine's text | In the browser's "Now" column |
-|---|---|---|
-| Amended | `*Amended 18 October 2026 (decision E.76):* ...` | Amended by decision 37: ... |
-| No longer applies in part | `*Note of 20 October 2026:* what this decision says of ... no longer applies (decision E.95).` | Amended by decision n |
-| Superseded | `*Superseded on 12 October 2026 by decision E.72:* ...` | Superseded by decision 33 |
-| Withdrawn | the entry shrinks to one line that keeps its number: `**E.54 — <title>.** Withdrawn on 20 October 2026: <why> (decision E.95).` | Retired by decision 33 |
-| Moved to the other repository | one line: `Moved out of the engine on 16 October 2026 (decision E.76) ...` | Moved: ... |
-| Confirmed by the owner | `*Confirmed by the owner on 21 October 2026,* with the browser's decision 45: ...` | Confirmed by decision 46 |
-| Still unconfirmed | (named in the decision) | Owner to confirm ... |
+| Change | In rdm |
+|---|---|
+| Amended | `revise_record`: a complete new version, with the reason |
+| Superseded | `set_status` lifecycle `superseded`, naming the decision that replaces it |
+| Withdrawn | `set_status` lifecycle `cancelled`, with the reason |
+| Moved to another repository | created there; the old one superseded by it |
+| Confirmed by the owner | `set_status` confirmation `confirmed`, quoting the owner's words |
+| Still unconfirmed | confirmation `needs_confirmation` |
 
 ## 6. Code
 
@@ -150,7 +147,7 @@ The engine records changes in the decision's text; the browser in its table's "N
 ## 7. Dependencies and licences
 
 - **Every library needs the owner's approval by name**, whatever its licence and whichever crate uses it, before it is added. Record the approval in a decision. A system library is recorded in the repository's licensing document before it is used.
-- **The engine's microcontroller crates** take a dependency only by a decision in Part E, and only one that builds `no_std` without allocation for `thumbv6m`, `riscv32imc` and Xtensa, uses no compare-and-swap or floating point, has no build script or native code, has its flash cost measured and passes the symbol check (REQ-GEN-017). `cargo xtask check-deps` compares each crate's dependencies with its permitted list.
+- **The engine's microcontroller crates** take a dependency only by a decision in rdm, and only one that builds `no_std` without allocation for `thumbv6m`, `riscv32imc` and Xtensa, uses no compare-and-swap or floating point, has no build script or native code, has its flash cost measured and passes the symbol check (REQ-GEN-017). `cargo xtask check-deps` compares each crate's dependencies with its permitted list.
 - **Licences.** The projects are MIT, and nothing linked may change that: MIT, Apache-2.0 (with or without the LLVM exception), BSD-2-Clause, BSD-3-Clause, Zlib, ISC and CC0 are accepted; OFL for fonts; LGPL only as a system library linked dynamically and not shipped. Never GPL or AGPL; MPL or EPL only by the owner's decision. An exception in `deny.toml` names one crate and one licence, with its reason. The engine's `LICENSING.md` is the full rule; the browser's `docs/licensing.md` applies it.
 - **No GPL code**, ever: zvbi, vhs-teletext, vbit2 and QTeletextMaker may run as separate programs or test oracles only; never copy their code or test files.
 - **Versions.** `Cargo.lock` is committed in every workspace, including fuzzing's, and its changes are reviewed. Application crates (the browser's, and the engine's `neoteletext-app`, `neoteletext-cli` and `neoteletext-qrkeyboard`) pin their own dependencies' exact versions (`=x.y.z`), each with a comment giving its licence and reason. The engine's library crates use ordinary version requirements, so that a program depending on them can resolve; their lockfile is the pin for the engine's own builds.
@@ -261,12 +258,9 @@ The engine's targets are its REQ-GEN-015: Arm Cortex-M0 to M33 and Arm Linux; RI
 | Document | Engine | Browser |
 |---|---|---|
 | Repository guidance, pointing here | `CLAUDE.md` | `CLAUDE.md` |
-| Requirements | `docs/spec/requirements/` | `docs/requirements.md` |
-| Decisions | `docs/spec/decisions.md` | `docs/architecture.md` section 2 |
+| Requirements, decisions, checklists, owed work, state and traceability | rdm | rdm |
 | Where code lives | `ARCHITECTURE.md` | `docs/architecture.md` |
 | Design and explanation | `docs/spec/design/` | feature documents in `docs/` |
-| Traceability or state | `docs/traceability.md` (generated) | State lines in `docs/requirements.md` |
-| Owed work | `TECH-DEBT.md` | `TECH-DEBT.md` (to be made, appendix B) |
 | Questions met without the owner | `IMPLEMENTATION-LOG.md` | `IMPLEMENTATION-LOG.md` (to be made, appendix B) |
 | Security | `SECURITY.md`, `THREAT-MODEL.md`, area SEC | `docs/security-analysis.md`, per-feature analyses |
 | Licences and credits | `LICENSING.md`, `CREDITS.md` | `docs/licensing.md`, `CREDITS.md` |
@@ -277,6 +271,8 @@ Every public function, type and constant is documented (REQ-DOC-001; `missing_do
 ---
 
 ## Appendix A. Choices made in merging
+
+*Note of 30 October 2026:* appendices A and B are the record of 21 October 2026. Where they name `TECH-DEBT.md`, requirement or decision files, or traceability, those are now rdm (section 1, rdm decision DEC-1389).
 
 Where the sources disagreed, this document chose as follows. Each is open to the owner's change.
 
