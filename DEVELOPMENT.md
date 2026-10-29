@@ -173,27 +173,8 @@ The engine records changes in the decision's text; the browser in its table's "N
 
 ## 9. Gates
 
-There is no continuous integration; the gates are local (the owner's instruction). One check script per repository runs every gate, and git hooks in `.githooks/` run it, enabled once per clone with `git config core.hooksPath .githooks`. Never bypass a hook (`--no-verify`).
+There is no continuous integration; the gates are local (the owner's instruction). How the gates work, their tiers, the day-to-day routine and where their one shared copy lives are in **`gates.md`**, beside this file; it is the only description, and each repository's `CLAUDE.md` imports it.
 
-The owner's instruction of 29 October 2026: every process "as fast as possible", and "I need to know when I am committing to a long integration step". So the gates are three tiers, and only the third is long.
-
-| Gate | When | What it must do |
-|---|---|---|
-| **Commit gate** | `pre-commit`, every commit | The code compiles clean, and no more: formatting, Clippy with warnings as errors in the default feature set (the engine: every feature), lockfiles current, the no-panic list identical, the text checks of a few seconds. In the browser it checks what is staged and refuses while a part it checks has unstaged or untracked changes, so what passed is what is committed. Seconds when the build is warm. |
-| **Push gate** | `pre-push` of any branch but `main` | The commit gate (skipped when it passed on the same tree), plus Clippy in every feature set the repository builds, the tests, and in the engine the architecture checks, documentation and fonts. On a clean tree at the commit pushed. |
-| **Full gate** | `pre-push` to `main`, and before a release: the long integration step | The push gate (skipped when it passed on the same tree), plus everything: release tests, documentation tests, tests with optional areas compiled out, every target, fuzzing, licences and advisories, unused dependencies, the Linux build host, and in the engine size, features and coverage. The Linux host's steps run alongside the local ones. It runs on a clean tree at the commit pushed, and fails if running it changed a committed file. |
-
-- **Day to day, nothing long starts.**
-  1. Work on `livedevelopment`.
-  2. Build and run as often as you like: building or running a program (`cargo run`, `scripts/try.sh`, a channel's `npm start`) runs no gate.
-  3. Commit whenever a step compiles: the commit gate checks only that.
-  4. Push `livedevelopment` whenever the work should be on GitHub: the push gate runs the tests, and nothing already passed on the same tree.
-  5. Push to `main` only to integrate, when the owner says: that is the one long step, and it prints its last measured time before it starts, so Ctrl-C stops it if now is not the time.
-- **Each gate says its cost first.** Before it starts, a gate prints how long its last pass took and its three slowest steps (`gate-times-<tier>` in the git directory); each step prints its time as it ends.
-- **No step runs twice on one tree.** A pass records the tree it passed on (`gate-passed-<tier>`), and a higher tier skips a lower one already passed on that tree.
-- **Nothing is skipped silently.** A missing tool or an unreachable host fails the gate.
-- **The copy to the Linux host compares content** (`rsync --no-times --checksum`): with this machine's times kept, a file edited here before the host's last build looks older than that build, and Cargo reuses the stale crate.
-- **The commands.** `scripts/check.sh commit | push | full`, in both. The engine's full gate needs `NEOTELETEXT_REMOTE` (its hook names `foundintelquiet4060` when unset); the browser's names its host with `NEOTELETEXT_LINUX_HOST`, `foundintelquiet4060` by default.
 - **Measured costs.** The engine's commit gate: 3 seconds warm (29 October 2026; over ten minutes before the tiers). The full gates: about an hour each before the tiers; each gate now prints its own last measured time.
 
 ## 10. Commits, branches and pushing
