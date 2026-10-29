@@ -183,6 +183,12 @@ The owner's instruction of 29 October 2026: every process "as fast as possible",
 | **Push gate** | `pre-push` of any branch but `main` | The commit gate (skipped when it passed on the same tree), plus Clippy in every feature set the repository builds, the tests, and in the engine the architecture checks, documentation and fonts. On a clean tree at the commit pushed. |
 | **Full gate** | `pre-push` to `main`, and before a release: the long integration step | The push gate (skipped when it passed on the same tree), plus everything: release tests, documentation tests, tests with optional areas compiled out, every target, fuzzing, licences and advisories, unused dependencies, the Linux build host, and in the engine size, features and coverage. The Linux host's steps run alongside the local ones. It runs on a clean tree at the commit pushed, and fails if running it changed a committed file. |
 
+- **Day to day, nothing long starts.**
+  1. Work on `livedevelopment`.
+  2. Build and run as often as you like: building or running a program (`cargo run`, `scripts/try.sh`, a channel's `npm start`) runs no gate.
+  3. Commit whenever a step compiles: the commit gate checks only that.
+  4. Push `livedevelopment` whenever the work should be on GitHub: the push gate runs the tests, and nothing already passed on the same tree.
+  5. Push to `main` only to integrate, when the owner says: that is the one long step, and it prints its last measured time before it starts, so Ctrl-C stops it if now is not the time.
 - **Each gate says its cost first.** Before it starts, a gate prints how long its last pass took and its three slowest steps (`gate-times-<tier>` in the git directory); each step prints its time as it ends.
 - **No step runs twice on one tree.** A pass records the tree it passed on (`gate-passed-<tier>`), and a higher tier skips a lower one already passed on that tree.
 - **Nothing is skipped silently.** A missing tool or an unreachable host fails the gate.
