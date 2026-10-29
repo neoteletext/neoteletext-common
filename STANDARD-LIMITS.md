@@ -6,7 +6,9 @@ The design for two instructions the owner gave on 26 October 2026:
 
 > "I WANT SUB PAGES TO PASS THE WIRE ONLY WHEN NEEDED"
 
-It is recorded as the engine's decision E.122, the browser's decision 112 and the server's decision 10. The wire it describes is specified in `SERVER.md` (sections 4, 5, 6, 7.3, 11 and 12); this document says why, and lists the work (section 7). Nothing here is built yet.
+It is recorded as the engine's decision E.122, the browser's decision 112 and the server's decision 10. The wire it describes is specified in `SERVER.md` (sections 4, 5, 6, 7.3, 11 and 12); this document says why, and lists the work (section 7), with the state of each item (section 7.2 lists the literal limits still in force).
+
+**State on 29 October 2026:** the engine's items are built (E.130, E.132), and the browser's, except tuning a server's sub-pages (decision 121). The server's items 8 to 15 and the kits' are not started: the server still holds at most 64 sub-pages a page and 800 pages a channel, and sends a page whole to every viewer.
 
 **28 October 2026: every address accepted, the maximum implemented, every rule a requirement.** The owner's words: "WE MUST 'accept every address the standard defines'. ALSO WE COMPLY ONLY TO WORLD SYSTEM TELETEXT PAGE/SUBPAGE NUMBERING. ENSURE ALL THE CLAUSES, RULES AND DETAILS OF THE TELETEXT SPECIFICATION BECOME REQUIREMENTS", and "i just said we are implementing the maximum sub pages". It is the engine's decision E.130, the browser's decision 119 and the server's decision 14. Every numbering rule of section 1 is now a requirement of the engine's area NUM (`neoteletext-engine/docs/spec/requirements/num.md`, REQ-NUM-001 to REQ-NUM-031), which the server and the browser take from the engine. This design stands as written: a page may have 8,190 sub-pages, every part holds and reaches every one (REQ-NUM-030), and sub-pages pass the wire only when needed (section 4). Question 1 is answered by the code of practice's numbering (section 1), and section 7.1 adds the rest of area NUM to the work.
 
@@ -105,44 +107,44 @@ Today the server holds a page as one frame of all its sub-pages, sends the whole
    - **(b)** following the code of practice: a page of up to 79 sub-pages numbers them 0001 to 0079; a page of more uses only sub-codes above 0079, the decimal ones first (0100 to 3979: 3,120 a viewer can key), then the rest ascending, so it has at most **8,069**. A page that grows past 79 is renumbered, every one of its sub-codes changing once.
 
    Recommended: (b), so that a NeoTeletext channel behaves on other makers' receivers as the code of practice says; the maximum the parts accept stays 8,190, since any sub-code may be received.
-2. **The row 0 status area** is seven columns (the engine's decision E.10): "P100" and a place such as "/12". A place up to 8,190 needs four digits. Keep the place in the browser's own controls and show in row 0 only what fits, or widen the status area into the header?
-3. **Pages with hexadecimal digits** (2,022 page numbers a channel, shared with data pages, 800 of them keyable): the browser's overview shows 800 squares. Show the other 1,222 as well, and how?
-4. **Budgets' first values:** sub-pages either side of the shown one that are tuned ahead (suggested 2), titles a TITLES record carries (suggested 64), and the decoder store (unchanged at 256 to 4,096 sub-pages, now a cache).
+2. **The row 0 status area** is seven columns (the engine's decision E.10): "P100" and a place such as "/12". A place up to 8,190 needs four digits. Keep the place in the browser's own controls and show in row 0 only what fits, or widen the status area into the header? *Open. Built meanwhile, without the owner (the browser's decision 121 item 6):* the engine's viewer shows "P100/12", "100/123" past 99 and "100/+++" past 999, within the seven columns, and the browser's page controls show every place.
+3. **Pages with hexadecimal digits** (2,022 page numbers a channel, shared with data pages, 800 of them keyable): the browser's overview shows 800 squares. Show the other 1,222 as well, and how? *Open.* Every part accepts them (REQ-NUM-002); the browser's overview and page list do not yet show them (its decision 119).
+4. **Budgets' first values:** sub-pages either side of the shown one that are tuned ahead (suggested 2), titles a TITLES record carries (suggested 64), and the decoder store (unchanged at 256 to 4,096 sub-pages, now a cache). *Open. Taken meanwhile, without the owner, by the browser* (its decision 121): one sub-page either side, the titles of 64 rows a request, a catalogue sent from fetcher to core in parts of 1,024 entries, 16 catalogues held a channel, and the store unchanged. The server has none yet.
 
 ## 7. The work
 
-In order; each is one commit or a few, through each repository's gates. Section 7.1 adds the rest of area NUM.
+In order; each is one commit or a few, through each repository's gates. Section 7.1 adds the rest of area NUM. Each item ends with its state on 29 October 2026, in italics.
 
 **The engine** (one decision, E.122; then a re-pin in the server and the browser):
-1. `neoteletext_core::limits`: the maxima of section 1 with their clauses, the reserved and recommended page numbers, the sub-code layouts of enhancement data pages and data broadcasting pages, `sub_code_of(place)` and `place_of(sub_code)` per question 1, with tests of every row of section 1's table.
-2. Replace the restatements: `consts::pages` re-exports from `limits`; `contents::MAX_PAGES` and its siblings name `limits`.
-3. Withdraw `viewer::MAX_LISTED_SUBPAGES`: the viewer steps and counts sub-pages through the store (next and previous sub-code after a given one, and a count), with no fixed array, so a microcontroller's stack does not grow with the maximum.
-4. REQ-NAV-005 amended: up to 8,190 sub-pages, four-digit entry within the decimal places; the status area per question 2.
-5. The static layout: `NNN-SSSS.t42`, `NNN.sub` and first sub-pages in `index.t42`; REQ-WEB-025's neighbour requirements amended, the reader of `NNN.sub` written and fuzzed.
-6. The TTI reader's `SC` field checked to carry all 8,190 sub-codes (REQ-INP-013).
-7. Re-pin the server and the browser at the commit.
+1. `neoteletext_core::limits`: the maxima of section 1 with their clauses, the reserved and recommended page numbers, the sub-code layouts of enhancement data pages and data broadcasting pages, `sub_code_of(place)` and `place_of(sub_code)` per question 1, with tests of every row of section 1's table. *Built (E.130).*
+2. Replace the restatements: `consts::pages` re-exports from `limits`; `contents::MAX_PAGES` and its siblings name `limits`. *Built (E.130).*
+3. Withdraw `viewer::MAX_LISTED_SUBPAGES`: the viewer steps and counts sub-pages through the store (next and previous sub-code after a given one, and a count), with no fixed array, so a microcontroller's stack does not grow with the maximum. *Built (E.130): `subcodes`, `subpage_count`, `subpage_place`, `next_subpage`, `previous_subpage`.*
+4. REQ-NAV-005 amended: up to 8,190 sub-pages, four-digit entry within the decimal places; the status area per question 2. *Built, the status area as question 2 records, the question still open.*
+5. The static layout: `NNN-SSSS.t42`, `NNN.sub` and first sub-pages in `index.t42`; REQ-WEB-025's neighbour requirements amended, the reader of `NNN.sub` written and fuzzed. *Built (E.132): `neoteletext_web::subpages`, its reader, `write_entry` and `ChannelFiles`.*
+6. The TTI reader's `SC` field checked to carry all 8,190 sub-codes (REQ-INP-013). *Built (E.130).*
+7. Re-pin the server and the browser at the commit. *Done: the browser at `8c59a89`, the server at `a58958f`; the server pins the engine with `limits` but does not use it.*
 
 **The server:**
-8. `teletext-runtime` uses `limits`: `MOST_SUBPAGES` and `MOST_PAGES` withdrawn; a channel may declare every content page.
-9. The page store per sub-page (`SERVER.md` section 6.2): held, versioned, titled and encoded per sub-page.
-10. `publish` with sub-pages and `remove`, `start` with `standard` and `budgets` (`applications.md`); validation per sub-page.
-11. TUNE and UNTUNE with sub-pages, the SUBPAGES and TITLES records, LIMITS with the maxima (`SERVER.md` sections 5.4 and 5.5); fuzzed.
-12. The sender per tuned sub-page; catalogue changes for the rest (`SERVER.md` section 6.3).
-13. The static files: `NNN-SSSS.t42`, `NNN.sub`, `index.t42` of first sub-pages.
-14. The Python kit and the TypeScript kit: limits from `start`, publication by sub-page, a channel's literal limits removed (the Hackaday channel's `MOST_SUBPAGES` and `TEXT_SUBPAGES`); each kit's test that it holds no literal.
-15. Measure: a page of 8,190 sub-pages published, tuned, stepped and changed, with bytes on the wire per action, before and after.
+8. `teletext-runtime` uses `limits`: `MOST_SUBPAGES` and `MOST_PAGES` withdrawn; a channel may declare every content page. *Not started: `remote.rs` holds 64 and 800 (section 7.2).*
+9. The page store per sub-page (`SERVER.md` section 6.2): held, versioned, titled and encoded per sub-page. *Not started: a page is one frame of all its sub-pages.*
+10. `publish` with sub-pages and `remove`, `start` with `standard` and `budgets` (`applications.md`); validation per sub-page. *Not started.*
+11. TUNE and UNTUNE with sub-pages, the SUBPAGES and TITLES records, LIMITS with the maxima (`SERVER.md` sections 5.4 and 5.5); fuzzed. *Not started. Their bytes are not yet specified: `SERVER.md` names the fields, `INPUT.md` has no layout for them.*
+12. The sender per tuned sub-page; catalogue changes for the rest (`SERVER.md` section 6.3). *Not started: every viewer of a page is sent all its sub-pages.*
+13. The static files: `NNN-SSSS.t42`, `NNN.sub`, `index.t42` of first sub-pages. *Not started.*
+14. The Python kit and the TypeScript kit: limits from `start`, publication by sub-page, a channel's literal limits removed (the Hackaday channel's `MOST_SUBPAGES` and `TEXT_SUBPAGES`); each kit's test that it holds no literal. *Not started. The Python kit holds no literal; the TypeScript kit, which came after this list, holds 64 and 800 (section 7.2).*
+15. Measure: a page of 8,190 sub-pages published, tuned, stepped and changed, with bytes on the wire per action, before and after. *Not started.*
 
 **The browser:**
-16. Re-pin; `interface_core` depends on `neoteletext-core` with no features and names `limits`; `MAX_SUBPAGES` and `ANY_SUBCODE` withdrawn.
-17. The protocol's sub-page counts and places become 16-bit (`FromDecoder::SubPages`, `SubPageTitles`, `ToInterface::SubPages`, `PageControls`), with round-trip and refusal tests at 8,190 and 8,191.
-18. The decoder store as a cache of sub-pages (section 2), the fetcher asking for `NNN-SSSS.t42` and `NNN.sub` on static channels.
-19. The trusted core tunes sub-pages (the shown one and its neighbours within the budget), with the rate limit of `SERVER.md` section 20 item 2.
-20. The sub-page list from the catalogue, titles by range, as a virtual list; the page controls' place and count to 8,190.
-21. The security analysis amended (section 5); requirement 22.5 amended; the hostile harness given a channel that publishes 8,190 sub-pages on every page.
-22. Measure: memory and bytes with that channel open, before and after.
+16. Re-pin; `interface_core` depends on `neoteletext-core` with no features and names `limits`; `MAX_SUBPAGES` and `ANY_SUBCODE` withdrawn. *Built (decision 121).*
+17. The protocol's sub-page counts and places become 16-bit (`FromDecoder::SubPages`, `SubPageTitles`, `ToInterface::SubPages`, `PageControls`), with round-trip and refusal tests at 8,190 and 8,191. *Built (decision 121).*
+18. The decoder store as a cache of sub-pages (section 2), the fetcher asking for `NNN-SSSS.t42` and `NNN.sub` on static channels. *Built (decision 121).*
+19. The trusted core tunes sub-pages (the shown one and its neighbours within the budget), with the rate limit of `SERVER.md` section 20 item 2. *Built for static channels, from their files; not for a push channel, which awaits items 11 and 12.*
+20. The sub-page list from the catalogue, titles by range, as a virtual list; the page controls' place and count to 8,190. *Built (decision 121), from a catalogue file or the decoder's store; a server's SUBPAGES and TITLES await item 11.*
+21. The security analysis amended (section 5); requirement 22.5 amended; the hostile harness given a channel that publishes 8,190 sub-pages on every page. *Built (decision 121).*
+22. Measure: memory and bytes with that channel open, before and after. *Not recorded.*
 
 **Both kits' channels:**
-23. The Hackaday channel uses the new limit where a page needs it (a day's headlines, a long thread) and publishes changed sub-pages only.
+23. The Hackaday channel uses the new limit where a page needs it (a day's headlines, a long thread) and publishes changed sub-pages only. *Not started: `views.py` holds `MOST_SUBPAGES` 64 and `TEXT_SUBPAGES` 28.*
 
 ### 7.1 Area NUM
 
@@ -159,3 +161,15 @@ Every item above stands. The engine's area NUM is their specification, and adds,
 - TOP pages stored and served as the data pages they are (REQ-NUM-028);
 - C9 and C11 (REQ-NUM-029);
 - the server's requirements 3.1 to 3.3 amended to cite area NUM, and its requirement 3.4, the rules that fall to an inserter (done 28 October 2026 in the documents; not built).
+
+### 7.2 Literal limits still in force
+
+Each of these is a limit written as a literal, where section 3 says the parts take it from `limits` or from `start`. Each goes with the item named.
+
+| Where | What | Item |
+|---|---|---|
+| neoteletext-app-server `crates/teletext-runtime/src/remote.rs` | `MOST_SUBPAGES` 64, `MOST_PAGES` 800 | 8 |
+| neoteletext-app-server `crates/teletext-runtime/src/store.rs` | `MOST_FRAME_BYTES`, 64 sub-pages' packets: a page's frame | 9 |
+| neoteletext-server-ts-protocol `src/wire/limits.ts` | `MOST_SUBPAGES` 64, `MOST_PAGES` 800, checked in `src/wire/app.ts` | 14 |
+| neoteletext-server-channel-uicomponentsdemo `src/assets/pictures.ts` | `MOST_PICTURES`, the kit's 64: the gallery shows 64 of the 251 pictures (10 examples, 34 characters, 20 sprites, shared out by `sharesOf`), each at Level 2.5 only, though each is converted at Levels 1.5, 2.5 and 3.5 | 14 |
+| Hackaday `src/hackaday/views.py` | `MOST_SUBPAGES` 64, `TEXT_SUBPAGES` 28 | 23 |
