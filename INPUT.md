@@ -156,6 +156,13 @@ An event is `0xFF`, a type byte, then its fields.
 
 **TOUCH**, an extension (`0x44`, so a channel that does not know it skips it, REQ-RCH-043): `uv` length, then `flags` u8 (bits 0 and 1 the action, as MOUSE's: 0 down, 1 up, 2 move, 3 gone; bit 2 `px`, `py` present; bits 3 to 7 a protocol error), `id` u8, `col` uv, `row` uv, `px`? uv, `py`? uv, and nothing after. It is every contact on a touch screen after the first, which goes as MOUSE (section 9.8): `id` is 1 to 9, the contact's number from its beginning to its end, the lowest free when it begins; an `id` of 0 or above 9 is a protocol error. At most `MAX_CONTACTS` (10) contacts are on the page at once, ten fingers. TOUCH is sent only when both sides set TOUCH (section 6.2). Its down and up count one input unit each, as a click's press and release do; a move and gone count none (REQ-RCH-054).
 
+**SELECT**, an extension (`0x40`, so a channel that does not know it skips it; REQ-INT-140), decided by the owner on 29 October 2026: "we send an event saying which page the user has selected and if there are subpages then the server transmits them at that time. also the same event should send if the user has selected a subpage". `uv` length, then `view` uv, `page` uv and `sub` uv, and nothing after:
+- `view` is the receiver's number for the view the selection is made in, a tab: 0 to `MAX_VIEWS` − 1 (16 views a connection), so that views which share one connection (the browser's decision 11) each have their own selection. A receiver with one view a connection sends 0. A higher value is a protocol error.
+- `page` is the page selected, `0x100` to `0x8FF` in teletext's hexadecimal page form, or 0 when the view no longer shows a page of the channel.
+- `sub` is the sub-page selected, a sub-code `0x0000` to `0x3F7F` (EN 300 706 clause 9.3.1.2): the sub-page the viewer chose, or `0x3F7F`, any sub-page (clause 9.6.1), when they chose the page and none of its sub-pages. A value with a bit outside the sub-code's thirteen is a protocol error; with `page` 0 it is `0x3F7F`.
+
+It is sent whenever the page or the sub-page selected in a view changes: a page keyed or followed by a link, a sub-page stepped to or chosen from the list, a tab of the channel opened. It is sent whether or not keys go to the channel, which is what tells it apart from PAGE: PAGE names the page that has the keys, SELECT the page each view shows. At the start of a session, after HELLO (and after RESUME), it is sent for each view showing a page of the channel, so a reconnection is sent its pages again. A sub-page that changes by itself, the latest of a rotating page shown as it arrives, is not a selection and sends nothing. It is sent only when both sides set SELECT (section 6.2), counts no input units, and is held to the rate as other events are (section 8). What the channel sends in answer is `SERVER.md` section 6.1's.
+
 **RESUME**, an extension (`0x45`): `uv` length, then the session's `token` (16 bytes, `TOKEN_BYTES`) and `acked` u16 big-endian, the last acknowledgement the receiver took; exactly 18 bytes of payload. It follows HELLO in a reconnection's first message, when the receiver asks to resume its session (section 6.4); a channel that does not know it skips it, and so begins a new session. It counts nothing.
 
 **MOUSE and WHEEL.**
@@ -274,6 +281,7 @@ The version-1 key record took 14 bytes for every key.
 | 524 288 | AGENT | HELLO carries the receiver's user agent string (section 5.4); in HELLO only, never in WELCOME. |
 | 1 048 576 | TOUCH | The receiver sends touch: MOUSE's device bits and TOUCH (section 5.4, REQ-RCH-041 to REQ-RCH-043). Without it touch goes as the mouse, the first contact alone. |
 | 2 097 152 | RESUME | A lost connection's session may be resumed (section 6.4, REQ-RCH-013): WELCOME carries the session's token, and a reconnection's first message carries RESUME after HELLO. |
+| 4 194 304 | SELECT | The receiver sends SELECT for each view's page and sub-page (section 5.4); a channel that sets it sends a page's sub-pages when the page is selected, and otherwise only first sub-pages (`SERVER.md` section 6.1). |
 
 A sender uses a new flag bit, field, core type or extension type only when both sides set its capability bit in HELLO and WELCOME. A receiver of the stream that sees an unknown flag bit set treats it as a protocol error.
 
@@ -394,6 +402,8 @@ Withdrawn on 28 October 2026 (`RETURN-CHANNEL.md` decision E, REQ-RCH-037; the e
 ### 9.1 When keys go (NeoTeletext)
 
 Keys go to a channel only while all of these hold: the tab is the active one; the page open in it is the channel's; the channel declares input over a WebSocket whose session has been welcomed; the window has the focus; and the viewer is not editing the address. Then every key goes except the browser's own: those with the browser's modifier (Command on macOS, Control-Shift elsewhere), and the strip, the overview and a background tab, which never take keys, and the magazines and the page list, which take the arrows from a click on them until a click elsewhere (the browser's decision 105). Command-Escape (Control-Shift-Escape elsewhere) leaves the page; plain Escape is the channel's.
+
+Whatever the keys do, the trusted core sends SELECT for a view of the channel whenever its page or its sub-page changes, and SELECT with page 0 when the view leaves the channel's pages or closes (section 5.4).
 
 When keys start going, the trusted core sends PAGE and FOCUS_IN; when they stop (another tab, another page, the page closed), FOCUS_OUT and PAGE 0, so the channel lets go of a key held as the viewer left (REQ-INT-108); when the window loses the focus or the address is being edited, FOCUS_OUT, and FOCUS_IN when it comes back.
 
@@ -592,6 +602,8 @@ The normative requirements of the input system. Identifiers continue the engine'
 **REQ-INT-138 — The phone keyboard.** As section 10, and the engine's REQ-INT-007; in NeoTeletext, its own sandboxed process alone holding the pairing secret. *Verification:* as REQ-INT-007; the browser's sandbox and panel tests; a real phone by hand.
 
 **REQ-INT-139 — Compiled out.** In NeoTeletext, typing and the phone keyboard shall be features (`interaction`, `phone-keyboard`) that compile out whole. *Verification:* the builds without them.
+
+**REQ-INT-140 — The page and sub-page selected.** A receiver that sets SELECT shall send it, as section 5.4 says, for every view showing a page of the channel: whenever the page or the sub-page selected in the view changes, whether or not keys go to the channel; at the start of each session; and with page 0 when the view leaves the channel's pages. A channel shall refuse, as a protocol error, a `view` of `MAX_VIEWS` or more, a `page` that is neither 0 nor `0x100` to `0x8FF`, and a `sub` with a bit outside the thirteen. *Reason:* the owner's decision of 29 October 2026, so that a channel sends a page's sub-pages only to the viewers who select the page (`SERVER.md` section 6.1). *Verification:* round trips of SELECT at every bound and one past it; the receiver's tests that it is sent on a page keyed, a link followed, a sub-page stepped to and chosen, a tab opened and closed, and at a session's start, and not for a rotating page's new sub-page.
 
 ## 13. Decisions in the merge
 

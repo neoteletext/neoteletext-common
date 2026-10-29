@@ -41,7 +41,7 @@ Rules from the start, since retrofitting them is a rewrite:
 | **Channel** | A teletext service: a folder on a web origin (engine decision E.70). Where a client connects, whose cookies it holds, what sessions belong to. | Web origin and path |
 | **Page and sub-page** | A teletext page, `100` to `8FF`, and its sub-codes. Addressable, cacheable, tunable. | Web resource |
 | **Session** | A viewer's relationship with a channel's application across connections. | tmux session |
-| **View** | One place in a client showing a page: a tab, a window, a thumbnail. A client has many; the server knows only which pages are tuned and which one has focus. | Terminal window |
+| **View** | One place in a client showing a page: a tab, a window, a thumbnail. A client has many; the server knows only which page and sub-page each view has selected (SELECT, section 5.4) and which one has the keys (PAGE). Elsewhere in this document a page a view has selected is called **tuned**, the word used before 29 October 2026. | Terminal window |
 | **Application** | A program behind live or interactive pages, outside the server, serving every viewer at once. | Terminal program |
 
 Deliberately not concepts for application developers:
@@ -79,7 +79,7 @@ The server's teletext is almost all in the engine.
 1. **A row diff:** the changed rows between two versions of an engine `PageFile`, and whether its enhancements changed.
 2. **A push protocol crate, both sides** (`teletext-push`, sans I/O):
    - page frames, stream frames and control records (section 5);
-   - the TUNE and UNTUNE events (section 5.4);
+   - the SELECT event (section 5.4);
    - used by the server, and imported by the browser's fetcher, as `neoteletext-input` serves receivers and channels.
 3. **The channel side of an INPUT.md session:** the counterpart of the receiver's `Session`, built on the engine's `StreamDecoder` and control records.
 4. **Server WebSocket frames:** unmasked writes, masked reads, beside the engine's `ws::accept_for`.
@@ -200,17 +200,17 @@ Upstream is the input protocol already built on both sides and fuzzed (`C/INPUT.
 - RESIZE;
 - **PAGE**, which says which page has the keys.
 
-Version 3 adds two events, as extensions (`0x40`–`0x7F`, length-prefixed), which a channel that does not know them skips, where an unknown core type would be a protocol error (`C/INPUT.md` §5.4):
+**The receiver says what each view has selected** (the owner's decision of 29 October 2026: "we send an event saying which page the user has selected and if there are subpages then the server transmits them at that time. also the same event should send if the user has selected a subpage"). One event, an extension, which a channel that does not know it skips (`INPUT.md` section 5.4, REQ-INT-140):
 
 | Type | Name | Payload |
 |---|---|---|
-| `0x40` | TUNE | `count` uv, then `count` × (`page` uv, `sub` uv), `flags` u8: bit 0 `preview` |
-| `0x41` | UNTUNE | `count` uv, then `count` × (`page` uv, `sub` uv) |
-| `0x42` | TITLES | `page` uv, `first` uv (a place, 1 to 8,190), `count` uv: the titles of those sub-pages, at most the budget a record carries |
+| `0x40` | SELECT | `view` uv (0 to 15), `page` uv (`0x100` to `0x8FF`, or 0 for none), `sub` uv (the sub-code chosen, or `0x3F7F` when the page was chosen and none of its sub-pages) |
 
-**A tune names a sub-page** (decided 26 October 2026, `STANDARD-LIMITS.md` section 4): `sub` is a sub-code, and only tuned sub-pages pass the wire. Tuning any sub-page of a page brings the page's catalogue (SUBPAGES, section 5.5) and its changes; `sub` 0 tunes a page that has no sub-pages, or, on a page that has, its catalogue alone. A sub-code outside the mask or 3F7F is refused.
+It is sent whenever a view's page or sub-page changes, whether or not keys go to the channel, and at the start of each session. Section 6.1 says what the server sends in answer.
 
-A channel that does not tune keeps sending what it sends today.
+*Withdrawn on 29 October 2026, never built:* TUNE (`0x40`, a list of sub-pages tuned, with a `preview` flag), UNTUNE (`0x41`) and TITLES (`0x42`, titles by range), designed on 26 October 2026 for a receiver to tune single sub-pages and their neighbours. SELECT takes `0x40`; `0x41` and `0x42` are reserved.
+
+A receiver that does not set SELECT is sent what it is sent today: every sub-page of every shared page.
 
 - **Focus** is the existing PAGE event, with FOCUS_IN and FOCUS_OUT: one page per connection has the keys.
 - **Keys are never batched or queued** in either direction.
@@ -230,36 +230,37 @@ Control records are teletext packets, as WELCOME is today: data channel 12, pack
 | Kind | Fields | Meaning |
 |---|---|---|
 | WELCOME, PUSH_MODE, POP_MODE, PAGE_MODES | As INPUT.md | As today |
-| DENIED | `page`, `reason` code: not found, not allowed, unavailable, limit | A tune refused |
+| DENIED | `page`, `reason` code: not found, not allowed, unavailable, limit | A selection refused |
 | LIMITS | The standard's maxima and the budgets of section 11 | Advertised after WELCOME, revised at any time |
-| SUBPAGES | A page, then its sub-codes, each with its version; or the change since the last | Sent for each page a client tunes, then as its sub-pages are added, removed or changed |
-| TITLES | A page, the first place, then titles | The answer to a TITLES request (section 5.4) |
 | SET_COOKIE | One `Set-Cookie` header line | A cookie set mid-connection (section 8.2) |
 | INDEX | Page numbers and titles | The channel's index (section 6.5) |
 | CHANGED | Page numbers | The coalesced change digest (section 6.5) |
+
+*Withdrawn on 29 October 2026, never built:* SUBPAGES (a tuned page's catalogue) and TITLES (titles by range). A selected page's sub-pages come whole (section 6.1), so the receiver has their titles from what it decodes; a channel served as files lists them in `NNN.sub` (section 4).
 
 Reasons are codes; the words are the client's. A decoder that knows none of this skips the records, as EN 300 708 says.
 
 ## 6. Tuning and delivery
 
-### 6.1 What a client tunes
+### 6.1 What a client selects, and what it is sent
 
-The client says which pages its views show. **The owner decided (25 October 2026):**
-- **Tuned:** the open page; the wall's visible thumbnails, as `preview` tunes; and **each background tab's open page, fully live**.
-- **Not tuned:** every other page.
-- **The interface decides what is tuned**, from what it shows; the trusted core passes its tunes on.
+The receiver says, with SELECT (section 5.4), which page and which sub-page each of its views has selected. **The owner decided (29 October 2026)** that a page's sub-pages are sent when the page is selected, and that a sub-page selected is said with the same event. This replaces the tuning of single sub-pages designed on 26 October (section 5.4's withdrawn TUNE). A connection whose receiver set SELECT is sent:
 
-**The consequence, accepted by the owner:** a compromised interface could signal what it saw on one channel through the pattern of tunes it makes on another. Browser requirement 4.7 and decision 20 had kept the interface from steering requests. A limit on how fast a channel's tuned set may change, enforced by the trusted core, narrows that signal without closing it (section 11).
-
-| Tuned | What arrives |
+| When | What it is sent |
 |---|---|
-| A sub-page | Its page frame, then its changes; and its page's catalogue (SUBPAGES), then the catalogue's changes |
-| A page's other sub-pages | Nothing but their entries in the catalogue, until they are tuned |
-| A Level 2.5 or 3.5 page | The pages it references as well: its POP and GPOP object pages, DRCS and GDRCS pages, and the MOT, which the server reads to find them |
-| A `preview` tune (a wall of thumbnails) | The page's shared copy only, at a slow rate, with nothing personalised and no `view` sent to its application |
+| At connection, and as they change | Each shared page's first sub-page alone, the sub-page `NNN.t42` and `index.t42` hold (section 4): enough for the overview, the page lists and thumbnails |
+| A page is selected in one of its views | Every sub-page of the page it does not hold at its current version, at once, the one `sub` names first when it names one; then, while any of its views has the page selected, every sub-page of it as it is published, added or changed |
+| A sub-page of a page already selected | That sub-page, at once, even if it was sent before, so a receiver whose store let it go holds it again; the page's others are not sent again |
+| A page no view selects any longer | Its first sub-page alone again, as at connection |
 | A page that does not exist or is refused | DENIED |
+| A page the session owns (its own copy) | Every sub-page, as it is published, as before: one viewer, who has it open |
 
-**Sub-pages:** the server does not rotate them, since that traffic would scale with the audience. The client rotates or steps them (browser decision 67), tuning the sub-page it shows and, within a budget, those either side of it, so stepping is instant; to show the latest as it arrives, it tunes the one whose version in the catalogue changed last. A page may have every sub-page the standard allows, 8,190 (`STANDARD-LIMITS.md` section 1); none passes the wire until tuned.
+- **Why whole pages:** the receiver steps through a selected page's sub-pages with nothing more to ask for and nothing to wait for, and has every sub-page to list and title. The cost is the page once per selection, and a page's changes while it is selected: page 602 of the demo site, 2,223 sub-pages, was 3.4 MB measured whole on 29 October 2026; a page of the standard's 8,190 is about 9 MB at the most a sub-page encodes to. A page selected again at the version it was sent costs nothing.
+- **Bounded per connection:** what a connection is sent grows with the pages its views select and their changes, never with the pages in the channel, and never with SELECTs: a SELECT costs at most the sub-pages the receiver lacks, or one sub-page. At most `MAX_VIEWS`, 16, selections a connection.
+- **Sub-pages are not rotated by the server**, since that traffic would scale with the audience. The receiver rotates or steps them (browser decision 67) from what it holds.
+- **What the channel learns:** which page and which sub-page each viewer reads, detail of the kind PAGE already gives of the page with the keys. **The consequence, accepted by the owner on 25 October 2026 for tuning, stands:** a compromised interface could signal what it saw on one channel through what it selects on another. The trusted core sends SELECT from what the views show and limits how fast it may change (section 11).
+- **Level 2.5 and 3.5 pages:** a selected page's object pages, DRCS pages and MOT come with it, as the server finds them from the MOT (not built).
+- *Withdrawn with TUNE on 29 October 2026:* `preview` tunes for the wall's thumbnails, which now show first sub-pages, as every connection is sent them.
 
 ### 6.2 The page store
 
@@ -269,7 +270,7 @@ The client says which pages its views show. **The owner decided (25 October 2026
 
 ### 6.3 The sender
 
-- **Per connection, per tuned sub-page, one pointer:** the version this client was last sent. A change marks the tuned entries dirty; a change to a sub-page the client does not tune marks only its page's catalogue.
+- **Per connection, per selected page, one pointer:** the version of the page this client was last sent, and of every other shared page the version of its first sub-page. A change to a selected page marks it dirty; a change to another page marks it dirty only when its first sub-page changed.
 - **At a flush,** the sender compares last-sent with current (25 pointer comparisons) and sends a page frame of the changed rows, or the whole page if the client holds nothing.
 - **The encoded delta is cached by (previous version, current version)**, so the usual case, every client one version behind, is encoded once. A session's page has one viewer and gains nothing from the cache; its shared base rows do.
 - **Slow clients:** they need no queue. A client behind gets, at its next flush, the difference from what it actually received. This is better than a fresh snapshot, never more bytes, and as correct.
@@ -453,9 +454,8 @@ Low latency is a requirement from the start, not a later optimisation. The criti
 **Maxima are not limits here** (`STANDARD-LIMITS.md` section 2): every page and sub-page the standard allows may exist, 2,022 page numbers a channel (shared by display and data pages) and 8,190 sub-pages a page, defined once in the engine (`neoteletext_core::limits`), every numbering rule being a requirement of the engine's area NUM (its decision E.130). What follows are budgets, which bound what is held and sent at once, never what may exist.
 
 About ten numbers, in the server's configuration, overridable per channel, advertised in LIMITS:
-- tuned pages per connection;
-- sub-pages tuned either side of the one shown;
-- titles a TITLES record carries;
+- views a connection selects pages in (`MAX_VIEWS`, 16);
+- SELECTs a second, as other inbound events;
 - session pages per session;
 - connections per address and per session;
 - inbound events per second and bytes per message;
@@ -558,7 +558,7 @@ Each step is usable on its own.
 1. **In `teletext-server`, the pieces of section 3.2:**
    - the row diff;
    - the push protocol crate, both sides, which the browser will import;
-   - INPUT.md version 3's TUNE and UNTUNE;
+   - INPUT.md's SELECT;
    - the channel side of an input session;
    - server WebSocket frames;
    - the descriptor and contents writers;
@@ -566,7 +566,7 @@ Each step is usable on its own.
 
    Each imports the engine's page model, encoder and codes.
 2. **The server repository:** the static layout over HTTPS with `ETag`; the runtime actor with the page store, tune tables and last-sent pointers.
-3. **The WebSocket:** HELLO, WELCOME, TUNE, PAGE; page frames; flush policies; conflation.
+3. **The WebSocket:** HELLO, WELCOME, SELECT, PAGE; page frames; flush policies; conflation.
 4. **Applications over stdio:** TTI content, ownership, overlays, `open`, `input`, cookies, validation, isolation.
 5. **`B/site` ported to applications;** the browser's tests and latency test against the server.
 6. **The browser:** the trusted core's tuning (decision 104), INDEX and CHANGED, sub-pages, enhanced pages' references.
@@ -596,7 +596,7 @@ Each step is usable on its own.
 
 1. **Decided 25 October 2026: B.** A repository of its own, `~/devel/teletext-server`, private on GitHub, importing the engine at a pinned revision; the engine's scope unchanged; what the engine lacks written in the server once (section 3.2).
 2. Four frame kinds, a page frame always self-contained in serial mode (section 5.2).
-3. INPUT.md version 3 upstream, with TUNE and UNTUNE as extensions; no JSON on the client wire (section 5.4).
+3. INPUT.md upstream, with SELECT as an extension (29 October 2026; TUNE and UNTUNE withdrawn); no JSON on the client wire (section 5.4).
 4. Control as teletext records, including SET_COOKIE, INDEX and CHANGED (section 5.5).
 5. The engine's channel layout, not new paths (section 4).
 6. Ownership by publication, not a per-response flag (section 7.3).
@@ -607,11 +607,12 @@ Each step is usable on its own.
 11. `B/site` becomes the server's applications (section 3.3).
 12. One reference kit, in TypeScript (section 3.4).
 13. **Decided 26 October 2026:** the engine, the server and the browser allow every page and sub-page the standard allows, 2,022 page numbers and 8,190 sub-pages a page, defined in one place, the engine's `neoteletext_core::limits`, and sub-pages pass the wire only when tuned (`STANDARD-LIMITS.md`; sections 4, 5.4, 5.5, 6, 7.3, 11 and 12). *28 October 2026:* every address the standard defines is accepted and every numbering rule of World System Teletext is a requirement, the engine's area NUM (its decision E.130, the browser's decision 119, the server's decision 14).
+14. **Decided 29 October 2026:** the receiver sends SELECT, which page and which sub-page each view has selected, whether or not keys go to the channel; the server sends every connection each page's first sub-page, and a page's sub-pages only to the connections that select it, at that time and as they change (sections 5.4 and 6.1). It replaces item 13's tuning of single sub-pages, with its TUNE, UNTUNE, TITLES, SUBPAGES and TITLES records, which were never built, and item 10's previews: thumbnails show first sub-pages.
 
 ## 20. Unsolved
 
 1. **Login:** how a viewer authenticates, with no password field, typed on a page or delegated to the web (section 8.3).
-2. **Tuning's rate limit in the browser:** with the interface deciding what is tuned (section 6.1), the value that narrows a compromised interface's signal without making a wall of pages slow.
+2. **Selection's rate limit in the browser:** with the views deciding what is selected (section 6.1), the value that narrows a compromised interface's signal without making stepping through sub-pages slow.
 3. **Routing:** every connection to a channel reaching its one actor, behind load balancers; fan-out over several servers.
 4. **A stalled application's sessions:** how long the server waits before DENIED, and what a viewer sees meanwhile.
 5. **The delta cache with overlays:** its hit rate when most viewers have overlays; measured on the weather application with a logged-in header.
