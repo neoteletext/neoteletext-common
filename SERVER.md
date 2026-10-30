@@ -41,7 +41,7 @@ Rules from the start, since retrofitting them is a rewrite:
 | **Channel** | A teletext service: a folder on a web origin (engine decision E.70). Where a client connects, whose cookies it holds, what sessions belong to. | Web origin and path |
 | **Page and sub-page** | A teletext page, `100` to `8FF`, and its sub-codes. Addressable, cacheable, tunable. | Web resource |
 | **Session** | A viewer's relationship with a channel's application across connections. | tmux session |
-| **View** | One place in a client showing a page: a tab, a window, a thumbnail. A client has many; the server knows only which page and sub-page each view has selected (SELECT, section 5.4) and which one has the keys (PAGE). Elsewhere in this document a page a view has selected is called **tuned**, the word used before 29 October 2026. | Terminal window |
+| **View** | One place in a client showing a page. Each browser tab of a live channel has its own connection (DEC-1527), so to the server a view is a connection: it knows only the one page and sub-page that connection has selected, its **selection** (SELECT, section 5.4), and which page has the keys (PAGE). "Focus" is only the keyboard's (section 6.1). Elsewhere in this document a page a view has selected is called **tuned**, the word used before 29 October 2026. | Terminal window |
 | **Application** | A program behind live or interactive pages, outside the server, serving every viewer at once. | Terminal program |
 
 Deliberately not concepts for application developers:
@@ -145,7 +145,7 @@ The protocol of section 7 is the interface; a kit is a convenience. One referenc
 
 ### 5.1 Transport
 
-- **One WebSocket per channel per client**, shared by every view of that channel in that client.
+- **One WebSocket per tab** (DEC-1527): each browser tab showing a live channel opens its own, with its own decoder and store, never shared with another tab, even one on the same channel. The server sees one connection as one view with one selection (section 6.1); the channel's cookies stay shared by its tabs (section 8.2).
 - `TCP_NODELAY` on.
 - **No `permessage-deflate`:** the payload is small and already dense, and a private overlay compressed in one context with attacker-influenced public rows makes a compression oracle (CRIME and BREACH).
 - **SSE:** the engine's client keeps it for channels made elsewhere; this server needs only the WebSocket, since input needs the upgrade anyway.
@@ -157,28 +157,32 @@ The protocol of section 7 is the interface; a kit is a convenience. One referenc
 
 | Frame | Contents | Delivery |
 |---|---|---|
-| **Page frame** | One sub-page's update: its X/0 header, in serial magazine mode (C11 set), then either the changed rows and, if any changed, the whole group of enhancements (X/26, X/27, X/28); or the whole page with the erase bit (C4) set | Coalesced: a slow client gets the difference from what it last received (section 6.3) |
+| **Page frame** | Exactly one sub-page (DEC-1500, REQ-1501): its X/0 header, in serial magazine mode (C11 set), then either the whole sub-page with the erase bit (C4) set, or, for a later version of the same sub-page, only its changed rows and, if any of them changed, the whole group of enhancements (X/26, X/27, X/28). It is followed straight after by that sub-page's LINKS record whenever the sub-page has Link Extension links (section 5.5) | Only to the connection whose selection that sub-page is (section 6.1); changed rows are taken against what that connection was last sent (section 6.3) |
 | **Stream frame** | Packets of an ordered stream: a recording, a carousel, an application's raw packets (section 7.4) | In order, never coalesced, through a bounded queue |
 | **Audio frame** | One audio record as packet 4/31 on data channel 12 (section 9) | In order, through a bounded queue |
 | **Control frame** | One control record on data channel 12 (section 5.5) | In order |
 
+**One sub-page per frame, never a page's sub-pages together** (the owner, 30 October 2026: "IT IS VERY IMPORTANT THAT SUBPAGES ARE NOT TRANSMITTED WITH THEIR PARENT PAGE - SUBPAGES MUST BEHAVE IN EXACTLY THE SAME WAY AS PAGES", DEC-1500). No event sends two sub-pages in one frame, of the same page or of different pages: not a connection, not a selection, not a change. A page with one sub-page is a page whose list has one entry, sent the same way. A frame is therefore at most one sub-page, 3,108 bytes, and a page of the standard's 8,190 sub-pages, about 15 MB, is never sent to anyone at once.
+
 **Why a page frame begins with its header every time.** A row belongs to the last header sent. A frame that begins with its own header stands alone: it can be applied, dropped or resent by itself, in any binding, with no state carried between frames.
 
-- The cost: one 42-byte header per update, where a second change to the page just addressed could do without. At an update a second per viewed page, that is 42 bytes a second per viewer.
+- The cost: one 42-byte header per update, where a second change to the sub-page just addressed could do without. At an update a second, that is 42 bytes a second per connection.
 - Serial mode makes the stream valid teletext, and a `.t42` recording of it plays.
 
 **The sender's rules:**
-- A **whole page sets the erase bit**, so a page tuned again keeps nothing of its previous version.
-- **Enhancements go as a group** whenever any changed, so a page is never inconsistent with them.
-- **The header's text is the page's,** published like any row. The server never rewrites it: no clock ticking per viewer. A client draws its own clock, as receivers commonly do, or an application publishes header changes.
-- **A page is 25 rows plus enhancements:**
+- **A whole sub-page sets the erase bit**, so a sub-page selected again keeps nothing of an older version the receiver's store may hold. The first sub-page sent on a connection, the first after its selection changes, and every sub-page whose page or sub-code differs from the one last sent to the connection, go whole (section 6.3).
+- **Changed rows go only for the same sub-code.** A frame of changed rows is sent only for a later version of the very sub-page, same page number and same sub-code, that the connection was last sent. Its header does not set the erase bit; the receiver keeps every row the frame does not carry (DEC-1499, REQ-1504).
+- **Enhancements go as a group** whenever any changed, so a sub-page is never inconsistent with them.
+- **Links follow every frame** of a sub-page that has Link Extension links, whole or changed rows, whether or not the links changed. A frame not followed by a LINKS record means the sub-page has no Link Extension links, and the receiver drops any it held for it (DEC-1517, which awaits the owner's confirmation; REQ-1494).
+- **The header's text is the sub-page's,** sent like any row. The server never rewrites it: no clock ticking per viewer. A client draws its own clock, as receivers commonly do, or the program sends header changes.
+- **A sub-page is 25 rows plus enhancements:**
   - header row 0;
   - rows 1 to 23;
   - row 24, the Fastext prompts;
   - X/26 to X/28.
 
-  A Level 1 page with links is 26 packets, 1,092 bytes, one TCP segment.
-- **Over WebSocket, frames need no sequence numbers:** TCP is ordered and the server knows what each client was sent. The packets have no spare field for one: every header bit is defined (EN 300 706 clause 9.3.1). A transport that loses or reorders data, if one is ever built, carries its sequence number as a record on data channel 12, one per datagram, never outside the packets (DEC-1459, which withdrew the 16-bit sequence number per page planned here).
+  A Level 1 sub-page with links is 26 packets, 1,092 bytes, one TCP segment.
+- **Over WebSocket, frames need no sequence numbers:** TCP is ordered and the server knows what each connection was sent. The packets have no spare field for one: every header bit is defined (EN 300 706 clause 9.3.1). A transport that loses or reorders data, if one is ever built, carries its sequence number as a record on data channel 12, one per datagram, never outside the packets (DEC-1459, which withdrew the 16-bit sequence number per page planned here).
 
 ### 5.3 Receiver-compatible and authentic delivery
 
@@ -200,17 +204,17 @@ Upstream is the input protocol already built on both sides and fuzzed (`C/INPUT.
 - RESIZE;
 - **PAGE**, which says which page has the keys.
 
-**The receiver says what each view has selected** (the owner's decision of 29 October 2026: "we send an event saying which page the user has selected and if there are subpages then the server transmits them at that time. also the same event should send if the user has selected a subpage"). One event, an extension, which a channel that does not know it skips (`INPUT.md` section 5.4, REQ-INT-140):
+**The receiver says what its connection has selected** (the owner's decision of 29 October 2026: "we send an event saying which page the user has selected and if there are subpages then the server transmits them at that time. also the same event should send if the user has selected a subpage"). One event, an extension, which a channel that does not know it skips (`INPUT.md` section 5.4, REQ-INT-140):
 
 | Type | Name | Payload |
 |---|---|---|
-| `0x40` | SELECT | `view` uv (0 to 15), `page` uv (`0x100` to `0x8FF`, or 0 for none), `sub` uv (the sub-code chosen, or `0x3F7F` when the page was chosen and none of its sub-pages) |
+| `0x40` | SELECT | `page` uv (`0x100` to `0x8FF`, or 0 for none), `sub` uv (the sub-code chosen, or `0x3F7F`, "no particular page sub-code", when the page was chosen and none of its sub-pages), and nothing after |
 
-It is sent whenever a view's page or sub-page changes, whether or not keys go to the channel, and at the start of each session. Section 6.1 says what the server sends in answer.
+It is sent whenever the page or sub-page the tab has selected changes, whether or not keys go to the channel, and at the start of each session. It carries no view number: a connection is one tab with one selection (DEC-1527, which withdrew the `view` field and `MAX_VIEWS` of 29 October 2026). Section 6.1 says what the server sends in answer.
 
 *Withdrawn on 29 October 2026, never built:* TUNE (`0x40`, a list of sub-pages tuned, with a `preview` flag), UNTUNE (`0x41`) and TITLES (`0x42`, titles by range), designed on 26 October 2026 for a receiver to tune single sub-pages and their neighbours. SELECT takes `0x40`; `0x41` and `0x42` are reserved.
 
-A receiver that does not set SELECT is sent what it is sent today: every sub-page of every shared page.
+A receiver that does not set SELECT has no selection: its connection is shown the program's answer to `connected` with no selection, the channel's initial page (REQ-1471).
 
 - **Focus** is the existing PAGE event, with FOCUS_IN and FOCUS_OUT: one page per connection has the keys.
 - **Keys are never batched or queued** in either direction.
@@ -225,58 +229,75 @@ JSON belongs to the application protocol (section 7), which people read and writ
 
 ### 5.5 Control records
 
-Control records are teletext packets, as WELCOME is today: data channel 12, packet 4/31, records of the audio profile's frame. WELCOME is a kind of the control record, type 5 (`C/INPUT.md` §7.2); the index, LOG, SET_COOKIE, LINKS and SUBPAGES records are record types of their own, 6, 7, 8, 9 and 10, whose byte layouts are defined once in `C/INPUT.md` §7.5 to §7.10 and nowhere else, and written with the engine's encoders. The records are:
+Control records are teletext packets, as WELCOME is today: data channel 12, packet 4/31, records of the audio profile's frame, which a decoder that knows none of them skips, as EN 300 708 says. WELCOME is a kind of the control record, type 5 (`C/INPUT.md` section 7.2). The index, LOG, SET_COOKIE, LINKS and SUBPAGES records are record types of their own, 6, 7, 8, 9 and 10. **Each record's byte layout is defined once, in `C/INPUT.md` section 7, and nowhere else**: this section says only what each record is for and when it is sent. They are written with the engine's encoders and read with its readers.
 
-| Kind | Fields | Meaning |
+| Record | What it carries (layout) | When it is sent |
 |---|---|---|
-| WELCOME, PUSH_MODE, POP_MODE, PAGE_MODES | As INPUT.md | As today |
-| DENIED | `page`, `reason` code: not found, not allowed, unavailable, limit | A selection refused |
+| WELCOME, PUSH_MODE, POP_MODE, PAGE_MODES (the control record, type 5) | As `C/INPUT.md` section 7.2 | As today |
+| Index (type 6) | The channel's magazines with their names, and each page's number, title, section and sub-page count, split across as many records as it needs (`C/INPUT.md` section 7.5, with section 7.10 for records of several fragments). It is page-level: it never lists sub-pages (DEC-1500 item 5). It is built from the program's `reply` and `index` messages (DEC-1482), never from a `contents.txt`; a live channel has no `contents.txt` (DEC-1467) | At connection, from the program's `reply`, and whenever the program sends an `index` change (section 6.5) |
+| LOG (type 7) | `level` (`E`, `W` or `I`), the page it concerns or none, and UTF-8 `text` of 1 to 200 bytes (`C/INPUT.md` section 7.6): a log line for the channel's author, as a TTI `LG` line holds one (the engine's REQ-INP-026 and decision E.109 as amended for DEC-1459) | When the program sends an `author_log` |
+| SET_COOKIE (type 8) | One `Set-Cookie` header value, built by the server from the program's typed `cookie` message (`C/INPUT.md` section 7.7) | When the program sets or clears a cookie mid-connection (section 8.2). The browser stores it in the channel's one cookie jar, which every tab of the channel shares (DEC-1527 item 4) |
+| LINKS (type 9) | One sub-page's TTI Link Extension links: key links, page-number links and text links, with their targets and labels (`C/INPUT.md` section 7.8), so a sub-page sent as packets keeps the links packets cannot carry (DEC-1495, REQ-1494) | Straight after **every** page frame of a sub-page that has such links, whole or changed rows, whether or not they changed. A page frame not followed by one means the sub-page has none (DEC-1517, awaiting the owner's confirmation) |
+| SUBPAGES (type 10) | One page's list of sub-pages: the list's version, its count (1 to 8,190) and each sub-code with its title of at most 40 characters, in ascending sub-code order with 0000 first when the page has it (every sub-code is a peer, DEC-1526), split across as many records as it needs (`C/INPUT.md` section 7.9, with section 7.10) | When the connection selects the page or one of its sub-pages and does not already hold the list's current version, and whenever the program changes the list while the connection's selection is the page or one of its sub-pages (DEC-1500 item 3, REQ-1503). It is never sent with, or in place of, any sub-page's content |
+| DENIED | `page`, `reason` code: not found, not allowed, unavailable, limit | A selection refused, or a program that did not answer in time ("unavailable", REQ-1481) |
 | LIMITS | The standard's maxima and the budgets of section 11 | Advertised after WELCOME, revised at any time |
-| SET_COOKIE (type 8) | One `Set-Cookie` header value, built by the server from the program's typed `cookie` message; layout `C/INPUT.md` §7.7 | A cookie set mid-connection (section 8.2) |
-| INDEX (type 6) | The channel's magazines with their names, and each page's number, title, section and sub-page count, split across as many records as it needs; layout and reassembly `C/INPUT.md` §7.5. Built from the program's `reply` and `index` messages (DEC-1482), never from a `contents.txt` | The channel's index and contents (section 6.5), sent at connection and when they change; a live channel has no `contents.txt` (DEC-1467) |
 | CHANGED | Page numbers | The coalesced change digest (section 6.5) |
-| LINKS (type 9) | One sub-page's TTI Link Extension links: key links, page-number links and text links, with their targets and labels; layout `C/INPUT.md` §7.8 | Sent straight after each page frame of a sub-page that has such links, so pushed pages keep the links packets cannot carry (DEC-1495, REQ-1494) |
-| SUBPAGES (type 10) | One page's list of sub-pages: its version, its count and each sub-code with its title, split across as many records as it needs; layout `C/INPUT.md` §7.9 | Sent when a view selects the page and the connection lacks the list's current version, and when the list changes while a view shows the page (DEC-1500, REQ-1503) |
-| LOG (type 7) | `level` (`E`, `W` or `I`), the page it concerns or none, and UTF-8 `text` of 1 to 200 bytes; layout `C/INPUT.md` §7.6 | A log line for the channel's author, as a TTI `LG` line holds one (the engine's REQ-INP-026 and decision E.109 as amended for DEC-1459) |
 
-*Withdrawn on 29 October 2026, never built:* SUBPAGES (a tuned page's catalogue) and TITLES (titles by range). A selected page's sub-pages come whole (section 6.1), so the receiver has their titles from what it decodes; a channel served as files lists them in `NNN.sub` (section 4).
+The browser's sub-page list, its count and the selection's place ("3/12") come from a page's SUBPAGES record, never from the sub-pages its store happens to hold (the browser's REQ-1505). A channel served as files lists a page's sub-pages in `NNN.sub` instead (section 4).
 
-Reasons are codes; the words are the client's. A decoder that knows none of this skips the records, as EN 300 708 says. A record that breaks its layout is discarded and its packets counted as invalid (REQ-1462, `C/INPUT.md` §7.10). DENIED, LIMITS and CHANGED have no layout yet.
+*Withdrawn on 29 October 2026, never built:* a SUBPAGES record of 26 October 2026 (a tuned page's catalogue) and TITLES (titles by range). Today's SUBPAGES record (type 10) is a different record, made on 30 October 2026 because sub-pages no longer travel with their page.
+
+Reasons are codes; the words are the client's. A record that breaks its layout or a bound is discarded and its packets counted as invalid (REQ-1462, `C/INPUT.md` section 7.10). DENIED, LIMITS and CHANGED have no layout yet.
 
 ## 6. Tuning and delivery
 
-### 6.1 What a client selects, and what it is sent
+### 6.1 What a connection selects, and what it is sent
 
-The receiver says, with SELECT (section 5.4), which page and which sub-page each of its views has selected. **The owner decided (29 October 2026)** that a page's sub-pages are sent when the page is selected, and that a sub-page selected is said with the same event. This replaces the tuning of single sub-pages designed on 26 October (section 5.4's withdrawn TUNE). A connection whose receiver set SELECT is sent:
+**One connection per tab, one selection per connection** (the owner, 30 October 2026: "we should probably have a websocket connection per tab which is completely self contained and decoupled - and the server sees it that way too", DEC-1527). Each browser tab showing a live channel opens its own push WebSocket, with its own decoder and store; tabs never share one, even on the same channel. A connection therefore has exactly one **selection**, or none: one page and one sub-code. The receiver states it with SELECT (section 5.4), which carries `page` and `sub` and no view number; the server's events to the program carry no view number either, and there is no `MAX_VIEWS`. The channel's cookies stay shared by its tabs, so the server sees two tabs as two connections of one session, as a web server sees two tabs of one site.
 
-| When | What it is sent |
+**The words.** The **selection** is the page and sub-page a connection shows: what is selected, sent, kept and diffed. **Focus** is only the keyboard's: PAGE, and the `focus` and `blur` events. The selected page is never called the focused page (DEC-1526 item 5).
+
+**Every sub-code is a peer** (DEC-1526). Every sub-code 0000 to 3F7E a page has is one of its sub-pages, with content of its own, and all are equal (EN 300 706 section 3.1: a page address is a page number plus a sub-code). A page may have 0000 beside other sub-codes, and 0000 is then the page's own content; Annex A.1's 0000 for a page with no sub-pages and 0001 onward for a page with sub-pages are recommendations, not rules. A page's order is ascending sub-code, 0000 first when present: the order sub-pages are listed in, counted in and stepped through.
+
+**The two selections** (REQ-1502):
+
+| SELECT's `sub` | What the connection has selected | What it is sent |
+|---|---|---|
+| **3F7F**, "no particular page sub-code" (EN 300 706 clause 9.6.1): a page number keyed alone, a link, Fastext key or bookmark naming no sub-page, the page chosen from a list | The page | The page's **first sub-page in ascending order**, 0000 when the page has it, otherwise its lowest sub-code, and the page's SUBPAGES record if the connection lacks its current version. That sub-page then **is** the connection's selection, exactly as if its sub-code had been chosen: the server records it when it forwards the program's answer, the receiver records it from the frame and sends no second SELECT, and stepping goes on from it |
+| **A sub-code** 0000 to 3F7E: a step to the next or previous sub-page, a choice from the sub-page list, an address or link naming a sub-page | That sub-page | That sub-page alone, and the page's SUBPAGES record if the connection lacks its current version; then that sub-page's later versions, as changed rows (section 6.3) |
+
+| When | What the connection is sent |
 |---|---|
-| At connection, and as they change | Each shared page's first sub-page alone, the sub-page `NNN.t42` and `index.t42` hold (section 4): enough for the overview, the page lists and thumbnails |
-| A page is selected in one of its views | Every sub-page of the page it does not hold at its current version, at once, the one `sub` names first when it names one; then, while any of its views has the page selected, every sub-page of it as it is published, added or changed |
-| A sub-page of a page already selected | That sub-page, at once, even if it was sent before, so a receiver whose store let it go holds it again; the page's others are not sent again |
-| A page no view selects any longer | Its first sub-page alone again, as at connection |
-| A page that does not exist or is refused | DENIED |
-| A page the session owns (its own copy) | Every sub-page, as it is published, as before: one viewer, who has it open |
+| At connection | Nothing until the program answers `connected`; then the channel's index records (page-level), the one sub-page the connection's selection shows (the program's initial page with 3F7F when it named none), its LINKS record when it has links, and its page's SUBPAGES record |
+| The selection changes (SELECT, or the program's `goto`) | The one sub-page the new selection shows, whole, as the table above says, with its LINKS record and, if needed, its page's SUBPAGES record |
+| The program sends a new version of the selected sub-page | That sub-page as changed rows, followed by its LINKS record when it has links |
+| The program sends any other sub-page to the connection | Nothing: a sub-page reaches a connection only when it is that connection's selection |
+| The program changes the selected page's sub-page list | The new SUBPAGES record |
+| The selected page does not exist, is refused, or the program does not answer in time | DENIED (section 5.5) |
 
-- **Why whole pages:** the receiver steps through a selected page's sub-pages with nothing more to ask for and nothing to wait for, and has every sub-page to list and title. The cost is the page once per selection, and a page's changes while it is selected: page 602 of the demo site, 2,223 sub-pages, was 3.4 MB measured whole on 29 October 2026; a page of the standard's 8,190 is about 9 MB at the most a sub-page encodes to. A page selected again at the version it was sent costs nothing.
-- **Bounded per connection:** what a connection is sent grows with the pages its views select and their changes, never with the pages in the channel, and never with SELECTs: a SELECT costs at most the sub-pages the receiver lacks, or one sub-page. At most `MAX_VIEWS`, 16, selections a connection.
-- **Sub-pages are not rotated by the server**, since that traffic would scale with the audience. The receiver rotates or steps them (browser decision 67) from what it holds.
-- **What the channel learns:** which page and which sub-page each viewer reads, detail of the kind PAGE already gives of the page with the keys. **The consequence, accepted by the owner on 25 October 2026 for tuning, stands:** a compromised interface could signal what it saw on one channel through what it selects on another. The trusted core sends SELECT from what the views show and limits how fast it may change (section 11).
-- **Level 2.5 and 3.5 pages:** a selected page's object pages, DRCS pages and MOT come with it, as the server finds them from the MOT (not built).
-- *Withdrawn with TUNE on 29 October 2026:* `preview` tunes for the wall's thumbnails, which now show first sub-pages, as every connection is sent them.
+**No rotation on a live channel** (DEC-1526 item 4). The sub-page a connection shows never changes by itself. It changes only when the receiver selects another, or when the program moves the connection with `goto`, which is itself a selection the server records exactly as it would a SELECT. A program that sends another sub-page of the selected page does not change what is shown: it is not forwarded. A broadcast recording played back as a stream (section 5.3) keeps the broadcast's own rotation.
+
+**The program is the only source of content** (DEC-1482). The server answers nothing from a store: every sub-page a connection is sent is one the program sent for that connection, in answer to `connected` or `selected` (REQ-1471, REQ-1472) or as a change. The program answers a 3F7F selection with the page's first sub-page in ascending order; the TypeScript kit makes that answer for the program.
+
+- **Why one sub-page:** each selection, step and update costs one sub-page at most, about 1 to 3 KB, and the browser treats pages and sub-pages the same way. The cost is a round trip to the program for each step through a page's sub-pages (DEC-1500's cost accepted).
+- **Bounded per connection:** what a connection is sent grows with what its viewer selects, one sub-page at a time, never with the pages or sub-pages in the channel.
+- **What the channel learns:** which page and which sub-page each viewer reads, detail of the kind PAGE already gives of the page with the keys. **The consequence, accepted by the owner on 25 October 2026 for tuning, stands:** a compromised interface could signal what it saw on one channel through what it selects on another. The trusted core sends SELECT from what the tab shows and limits how fast it may change (section 11).
+- **Level 2.5 and 3.5 pages:** how a selected sub-page's object pages, DRCS pages and MOT reach the receiver, now that the program is the only source, is not yet designed (section 20 item 7).
+- *Withdrawn on 30 October 2026:* a page selection bringing every sub-page of the page (29 October, DEC-1089 as first written); each shared page's first sub-page sent to every connection; the receiver rotating sub-pages from what it holds; several views sharing one connection with a view number in SELECT and `MAX_VIEWS` (DEC-1527); a 3F7F selection showing "the page's current sub-page" with the program's later sub-pages of the page reaching it as rotation (DEC-1500 as first written, amended by DEC-1526).
 
 ### 6.2 The page store
 
-- **Each published sub-page is held once:** its rows as shared pointers, its encoded packets, its version and its title, made by the engine's title function when it is published. A row update replaces one pointer and never copies the sub-page. A page is its catalogue: its sub-codes and their versions.
-- **Static pages** are read and encoded at their first tune, and held while tuned.
-- **A session's pages** are held while the session's views tune them.
+*Withdrawn on 30 October 2026* (DEC-1482 item 2, REQ-1474): the server keeps no page store. It holds no page, sub-page, index or version between connections or across a restart. The program is the only source of a channel's content; a program that wants to share work between viewers does so itself. The one thing the server keeps of any page is each connection's last-sent sub-page, used only for changed rows (section 6.3).
 
 ### 6.3 The sender
 
-- **Per connection, per selected page, one pointer:** the version of the page this client was last sent, and of every other shared page the version of its first sub-page. A change to a selected page marks it dirty; a change to another page marks it dirty only when its first sub-page changed.
-- **At a flush,** the sender compares last-sent with current (25 pointer comparisons) and sends a page frame of the changed rows, or the whole page if the client holds nothing.
-- **The encoded delta is cached by (previous version, current version)**, so the usual case, every client one version behind, is encoded once. A session's page has one viewer and gains nothing from the cache; its shared base rows do.
-- **Slow clients:** they need no queue. A client behind gets, at its next flush, the difference from what it actually received. This is better than a fresh snapshot, never more bytes, and as correct.
+- **Per connection, one kept sub-page** (DEC-1499, as amended by DEC-1526 and DEC-1527; REQ-1474, REQ-1504). For each open connection the server keeps, in memory only, the last sub-page it sent that connection: its page number, its sub-code and its packets as sent. Because the connection has one selection, and a 3F7F selection becomes the concrete sub-page that answers it, this is the sub-page the connection's selection shows. It is at most one sub-page, 3,108 bytes, a connection, whatever the size of the channel; two tabs on one channel are two connections, each with its own.
+- **Changed rows only against the same sub-code.** When the program sends the connection a sub-page with the same page number and the same sub-code as the kept one, the server compares the two (25 row comparisons and the enhancement group) and sends a page frame of the header without the erase bit, the changed rows, the whole enhancement group if any of it changed, and then the LINKS record if the sub-page has links. Nothing is sent when nothing differs. It then keeps the new version.
+- **Any other sub-page goes whole and becomes the kept one.** A sub-page with a different page number or a different sub-code is never compared with the kept one: it goes whole, with the erase bit, followed by its LINKS record if it has links, and replaces the kept one. With no rotation, a different sub-code reaching a connection is always a new selection, never a change to the one shown. The first sub-page on a new connection and the first after the selection changes go whole for the same reason: the receiver's store may hold an older version.
+- **When it is dropped.** The kept sub-page is dropped when the connection's selection changes and when the connection closes. It is never written to storage, never kept across a restart, never shared between connections, and never served to anyone: it is only compared against. A reconnected receiver starts with a whole sub-page.
+- **Encoded once.** A sub-page the program sends to several connections is encoded once; each connection's changed rows are taken against its own kept version.
+
+**Why:** programs stay simple, sending whole sub-pages, while viewers receive only what changed: a clock or a score changes one row, about 84 bytes (a header and one row), instead of about 1,800. What is kept is exactly what that connection was last sent, so the diff is correct by construction, and there is nothing to invalidate.
 
 **Flush policy, per page, overridable per publication:**
 - `immediate`: every change becomes a frame;
@@ -284,6 +305,8 @@ The receiver says, with SELECT (section 5.4), which page and which sub-page each
 - `manual`: the application sends `flush`.
 
 A client may ask to be slower, never faster.
+
+*Not yet revisited for DEC-1482:* the program's closed set of messages (REQ-1476) has no publications and no `flush`, and the server sends each sub-page as the program sends it. Whether a flush policy, and with it the coalescing of a slow client's frames, is kept is open (section 20 item 10).
 
 ### 6.4 Queues for ordered data
 
@@ -458,7 +481,6 @@ Low latency is a requirement from the start, not a later optimisation. The criti
 **Maxima are not limits here** (`STANDARD-LIMITS.md` section 2): every page and sub-page the standard allows may exist, 2,022 page numbers a channel (shared by display and data pages) and 8,190 sub-pages a page, defined once in the engine (`neoteletext_core::limits`), every numbering rule being a requirement of the engine's area NUM (its decision E.130). What follows are budgets, which bound what is held and sent at once, never what may exist.
 
 About ten numbers, in the server's configuration, overridable per channel, advertised in LIMITS:
-- views a connection selects pages in (`MAX_VIEWS`, 16);
 - SELECTs a second, as other inbound events;
 - session pages per session;
 - connections per address and per session;
@@ -616,7 +638,7 @@ Each step is usable on its own.
 ## 20. Unsolved
 
 1. **Login:** how a viewer authenticates, with no password field, typed on a page or delegated to the web (section 8.3).
-2. **Selection's rate limit in the browser:** with the views deciding what is selected (section 6.1), the value that narrows a compromised interface's signal without making stepping through sub-pages slow.
+2. **Selection's rate limit in the browser:** with the tabs deciding what is selected (section 6.1), the value that narrows a compromised interface's signal without making stepping through sub-pages slow.
 3. **Routing:** every connection to a channel reaching its one actor, behind load balancers; fan-out over several servers.
 4. **A stalled application's sessions:** how long the server waits before DENIED, and what a viewer sees meanwhile.
 5. **The delta cache with overlays:** its hit rate when most viewers have overlays; measured on the weather application with a logged-in header.
@@ -624,3 +646,4 @@ Each step is usable on its own.
 7. **Enhanced pages' references:** how many object, DRCS and MOT pages a single tune may bring in. (The sub-page limit is settled: `STANDARD-LIMITS.md`.)
 8. **Cloudflare:** WebSocket hibernation, and whether Workers can host the actor; not needed for version 1.
 9. **Carousel bandwidth** at realistic rates, measured.
+10. **Flush policy:** whether the server keeps a per-page flush policy (`immediate`, `batch`, `manual`) and the coalescing of a slow client's frames, now that the program's closed set of messages has no publications and no `flush` (section 6.3).
