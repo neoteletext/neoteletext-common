@@ -230,7 +230,7 @@ Importers: `neoteletext-cli` `keyboard.rs:16-19` (`config::{Layout, ScreenConfig
 | `firmware/test-image/src/main.rs` (253) | The linked microcontroller image `cargo xtask size` measures: `no_std`, `no_main`, its own panic handler, one `#[used]` function pointer per entry point, feature-gated modules per area. Depends on core, formats and web with default features off; nothing in this document is linked into it. |
 | `tests/corpus-manifest.txt` | REQ-TST-022 pins read by `xtask corpus`. |
 | `tests/golden/` | `authored-level25.txt`, `raster-level25.txt`, `raster.txt`. |
-| `tests/oracles/` | zvbi comparison programs and scripts run against `neottx text --cells`. |
+| `tests/oracles/` | The Opus oracle: libopus built at test time and compared with `decode_bit`. |
 | `tests/pages/` | `level25/`, `testcard.tti`. |
 | `tests/web-server/` | `server.py`, `drive_viewer.py`, `drive_offline.py`, driven by `neoteletext-cli/tests/web.rs`. |
 
