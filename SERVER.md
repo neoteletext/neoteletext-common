@@ -376,7 +376,8 @@ An application may publish packets directly, for:
 
 As a page's content they are validated and then delivered as page frames. As a `stream` they are delivered as stream frames, in authentic mode (section 5.3). The server checks:
 - Hamming and parity where the standard requires them;
-- that each header addresses a page within the channel.
+- that each header addresses a page within the channel;
+- that each packet is of a kind the stream may carry (REQ-1462): a page's X/0 to X/28, M/29, 8/30, or 4/31 on data channel 12. A packet that fails any check is refused when it is published, and never sent.
 
 ### 7.5 Isolation and failure
 
