@@ -18,7 +18,15 @@ A record is read later by someone, or by a session, that never saw the conversat
 
 The owner: "always treat every interaction with RDM as a GRAPH database, be careful to put in place RELEVANT LINKS with EVERY interaction".
 
-A record is only as useful as the records it is linked to. With every create, revision or change of status:
+A record is only as useful as the records it is linked to.
+
+**Two phases, every time.** The owner, 30 October 2026: "AFTER CLAUDE HAS MADE ONE CHANGE OR A GROUP OF CHANGES, IT MUST - THIS IS REQUIRED - THEN DO A SECOND PHASE WHICH IS TO ESTABLISH LINKS OF THE CHANGED AND NEW INFORMATION … WE DO NOT EVER WANT LINKS THAT DO NOT ADD MEANINGFUL RELATIONSHIPS".
+1. **The change:** create, revise or change the status of the records.
+2. **The linking phase, always:** for every record just created or changed, establish its links as below, then report them. Making no link is the right choice when none would add meaning; say so rather than add a link for its own sake.
+
+A `PostToolUse` hook in `~/.claude/settings.json` (`~/.claude/hooks/rdm-link-reminder.sh`) reminds the session of the linking phase after every rdm write (`create_record`, `revise_record`, `set_status`, `import_record`).
+
+In the linking phase:
 
 - **Search first** for the records the new one concerns, in this repository and in every other neoteletext repository (`search` with `repository: "all"`), and link them.
 - **Use the right kind of link:**
