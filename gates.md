@@ -1,5 +1,9 @@
 # Gates and the work branch
 
+Every neoteletext repository also works with rdm by the two rules of `rdm.md` (every record fully detailed; every interaction putting the relevant links in place), imported here so that each repository that imports this file has them:
+
+@~/devel/neoteletext-common/rdm.md
+
 Every neoteletext repository works this way (the owner's instruction of 29 October 2026: every process "as fast as possible", and "I need to know when I am committing to a long integration step"). `DEVELOPMENT.md` section 9 holds the rest of the rules for gates.
 
 ## Day to day, nothing long starts
