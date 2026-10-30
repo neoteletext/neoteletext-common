@@ -327,8 +327,9 @@ Everything a channel says to a receiver beyond its pages is teletext: records of
 | 6 | Index | one or more | 7.5 |
 | 7 | LOG | one or more | 7.6 |
 | 8 | SET_COOKIE | one or more | 7.7 |
+| 9 | LINKS | one or more | 7.8 |
 
-Every record type has a type of its own in the frame rather than a kind of the control record (decided 30 October 2026, TODO-1491): the control record is one fragment, 26 bytes of body, and the index, LOG and SET_COOKIE records need more; and a receiver that reads only some of the types skips the others by the type byte alone, before reading any field. Section 7.8 says how a record of more than one fragment travels and what a receiver does with a record it cannot use.
+Every record type has a type of its own in the frame rather than a kind of the control record (decided 30 October 2026, TODO-1491): the control record is one fragment, 26 bytes of body, and the index, LOG, SET_COOKIE and LINKS records need more; and a receiver that reads only some of the types skips the others by the type byte alone, before reading any field. Section 7.9 says how a record of more than one fragment travels and what a receiver does with a record it cannot use.
 
 ### 7.1 The cursor record (type 4)
 
@@ -408,7 +409,7 @@ The body:
 |---|---|---|
 | 0–1 | `generation` | Any: the index's version. Every record of one sending of the index carries the same value; the next sending carries another (the sender counts it on by one, wrapping) |
 | 2–3 | `part` | 0 to `parts` − 1: this record's place in the sending |
-| 4–5 | `parts` | 1 to 2,022 (`USABLE_PAGE_NUMBERS`): the records of this sending |
+| 4–5 | `parts` | 1 to 2,030 (`USABLE_PAGE_NUMBERS` + `MAGAZINES`: a record for each page, and one for each magazine's name alone): the records of this sending |
 | 6 | `magazine` | 1 to 8 |
 | 7 on | `name` | text, 0 to 120 characters: the magazine's name; empty when it has none |
 | then | pages | zero or more, to the end of the body, in ascending page number |
@@ -455,10 +456,38 @@ A cookie set while the connection is open (`SERVER.md` section 8.2). The body is
 - **The receiver** applies the line to its cookie jar with the same parser and the same rules as a `Set-Cookie` header of the push connection's own upgrade response, for the push connection's address: host-only, scoped to the channel's folder, stricter than RFC 6265bis as the engine's REQ-WEB-006 is. A line the jar refuses is reported as a refused cookie, as a header's is.
 - **The sender** never writes the line by hand: the server builds it from the program's typed `cookie` message (its name, value, path, maximum age, same-site rule, and the secure and HTTP-only flags) with the engine's encoder, which refuses a name or value the parser would refuse.
 
-### 7.8 Records of several fragments, and records a receiver cannot use
+### 7.8 The LINKS record (type 9)
+
+A sub-page's TTI Link Extension links (the engine's Appendix E, `docs/spec/design/tti-link-extension.md`), which packets cannot carry (neoteletext-common's DEC-1495, REQ-1494): key links to other services, to addresses and to the web, page-number links (`LK`) and text links (`LT`). The record holds every Link Extension link of the sub-page, the key links to its own service too, so that the links a receiver holds are exactly the page's. The page's Fastext links and row 24 still travel in its own packets X/27/0 and X/24 (Appendix E rule 4).
+
+**Integers are big-endian. A target** is a `u16` byte length then 1 to 256 bytes (`LINK_ADDRESS_BYTES`) of printable ASCII with no space and no comma, in any form of Appendix E section E.1: `mpp`, `mpp:ssss`, `name:mpp`, `name:mpp:ssss`, an `http` or `https` address, or `web:` and such an address, read by the same parser as a TTI file's.
+
+The body:
+
+| Bytes | Field | Range |
+|---|---|---|
+| 0–1 | `page` | `0x100` to `0x8FF`: the sub-page's page |
+| 2–3 | `sub` | `0x0000` to `0x3F7E`: its sub-code |
+| 4 | `part` | 0 to `parts` − 1 |
+| 5 | `parts` | 1 to 21, the most links a sub-page has (5 + 8 + 8): the records that carry the sub-page's links this time |
+| 6 | `keys` | 0 to 5, then that many key links |
+| then | `numbers` | 0 to 8 (`NUMBER_LINKS`), then that many page-number links |
+| then | `texts` | 0 to 8 (`TEXT_LINKS`), then that many text links, and nothing after |
+
+| Link | Fields |
+|---|---|
+| Key link (`LN`) | `key` u8: `R`, `G`, `Y`, `C` or `I`; `target`; `label` u8 length then 0 to 9 bytes of printable ASCII (at most 8 for a target in another service or at an address; none for `I`) |
+| Page-number link (`LK`) | `number` u16, a page number `0x100` to `0x8FF` the page shows; `target`, never a `web:` one |
+| Text link (`LT`) | `row` u8, 1 to 23; `column` u8, 0 to 39; `length` u8, at least 1, with `column` + `length` at most 40; `target` |
+
+- **Bounds across the parts.** Over all the parts of one sending, a sub-page has at most five key links, each key once and at most four of them coloured, at most eight page-number links, each number once, and at most eight text links. A record that would break one is refused.
+- **Splitting.** The links go in order, key links first, then page-number links, then text links, as many in each record as fit in the frame's largest body (`MAX_BODY`, 1,016 bytes); a link is never split, and its largest, a key link, is 269 bytes. The most links a sub-page has, 5,513 bytes at their longest, take at most eight records; a typical page's take one.
+- **When it is sent, and what a receiver does.** The server sends a sub-page's LINKS records straight after that sub-page's page frame, every time it sends the sub-page, whenever the sub-page has any Link Extension link. Part 0 replaces every link the receiver held for that page and sub-code; later parts add to it. A sub-page sent without a LINKS record has no Link Extension links: a receiver drops those it held for it. A receiver reads the links exactly as it reads a TTI file's `LN`, `LK` and `LT` lines, by Appendix E's rules (E.2), and puts them in the same store.
+
+### 7.9 Records of several fragments, and records a receiver cannot use
 
 - **Fragments.** A record of more than 34 bytes is cut into fragments of 34 bytes, the last padded with zeros, at most 31 fragments (`MAX_RECORD`, 1,024 bytes), as the audio profile's records are (the engine's REQ-AUD-007): each fragment one 4/31 packet with the record id, its index, and the CRC-16. The record id counts every record of the service, whatever its type, so two records in flight on one service never share an id. A channel sends a record's fragments in order, fragment 0 first, in one binary message or in consecutive ones; a receiver reassembles them by record id, and knows the record's length, and so its fragments, from fragment 0's frame header.
-- **A record a receiver cannot use** (a frame whose CRC-32, version or length fails; a type it does not know; a field outside its range; text that breaks its rule; bytes after the last field) is discarded whole and nothing of it applied, and each of its packets is counted as an invalid packet (neoteletext-common's REQ-1462), without closing the connection. A record of a type the receiver does not read is skipped, not counted.
+- **A record a receiver cannot use** (a frame whose CRC-32, version or length fails; a type it does not know; a field outside its range; text that breaks its rule; bytes after the last field) is discarded whole and nothing of it applied, and each of its packets is counted as an invalid packet (neoteletext-common's REQ-1462), without closing the connection; a LINKS record refused leaves its sub-page shown with no Link Extension links. A record of a type the receiver does not read is skipped, not counted.
 
 ## 8. Behaviour
 
