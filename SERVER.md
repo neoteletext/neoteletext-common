@@ -131,11 +131,11 @@ The protocol of section 7 is the interface; a kit is a convenience. One referenc
 - `index.t42` is a bundle;
 - `contents.txt` lists and orders the pages.
 
-The server serves exactly this, with `ETag` and conditional requests, which the engine's agent already makes, plus the WebSocket that `push` names. A static channel is that folder on any web server, with no NeoTeletext server.
+**A static channel** is that folder on any web server, with no NeoTeletext server. **Our server serves no static channel and no channel's files** (DEC-1467, 30 October 2026): a live channel is served over its WebSocket alone, and the only HTTP the server answers on the viewers' address is each channel's generated `channel.json`, naming `push`, and the WebSocket's opening request at `push`. Pages, sub-pages and contents (the INDEX record) all come on the connection; a receiver that reads `channel.json` naming `push` asks for no other file (the engine's REQ-WEB-018). `/metrics`, `/healthz`, `/readyz` and `/stats.json` are on the administration address alone.
 
 **Why not new paths** (`/news/200/3`): every channel and client that exists already works with the layout, and a static host needs nothing new.
 
-**Sub-pages have files of their own** (decided 26 October 2026, `STANDARD-LIMITS.md` section 4), since a page may have 8,190 and a page response is bounded (the engine's REQ-WEB-008):
+**In a static channel, sub-pages have files of their own** (decided 26 October 2026, `STANDARD-LIMITS.md` section 4), since a page may have 8,190 and a page response is bounded (the engine's REQ-WEB-008). Our server serves none of them (DEC-1467); a live channel's sub-pages travel on its connection (section 6.1):
 - `NNN.t42` holds the page, or its first sub-page when it has several;
 - `NNN-SSSS.t42` holds sub-page SSSS, four hexadecimal digits;
 - `NNN.sub` lists the page's sub-codes with their validators and titles;
@@ -233,7 +233,7 @@ Control records are teletext packets, as WELCOME is today: data channel 12, pack
 | DENIED | `page`, `reason` code: not found, not allowed, unavailable, limit | A selection refused |
 | LIMITS | The standard's maxima and the budgets of section 11 | Advertised after WELCOME, revised at any time |
 | SET_COOKIE | One `Set-Cookie` header line | A cookie set mid-connection (section 8.2) |
-| INDEX | Page numbers and titles | The channel's index (section 6.5) |
+| INDEX | The channel's sections, pages, titles and linked channels: what a static channel's `contents.txt` holds | The channel's index and contents (section 6.5), sent at connection and when they change; a live channel has no `contents.txt` (DEC-1467) |
 | CHANGED | Page numbers | The coalesced change digest (section 6.5) |
 | LOG | `level` (`E`, `W` or `I`), UTF-8 `text` of 1 to 200 bytes, and the page it concerns, if any | A log line for the channel's author, as a TTI `LG` line holds one (the engine's REQ-INP-026 and decision E.109 as amended for DEC-1459) |
 
@@ -494,7 +494,7 @@ An optional module, not the normal path:
 - changed pages come forward;
 - private pages never appear.
 
-It can go to the WebSocket as stream frames, chunked HTTP, UDP multicast on a local network, or a `.t42` file. A client in this mode is a decoder joining mid-cycle, as a television did. A `.t42` recording plays back as a carousel, or splits into pages for tuning.
+It can go to the WebSocket as stream frames, UDP multicast on a local network, or a `.t42` file; never as chunked HTTP, since the server answers no HTTP but a channel's `channel.json` and its WebSocket (DEC-1467). A client in this mode is a decoder joining mid-cycle, as a television did. A `.t42` recording plays back as a carousel, or splits into pages for tuning.
 
 ## 14. Security
 
@@ -520,7 +520,7 @@ Lightstreamer is a commercial real-time streaming server, used for live financia
 | **COMMAND** mode: a keyed table of rows that clients add, update and delete | A list page whose rows change (guestbook, scores) | Nothing new: a page frame of the changed rows does it |
 | A maximum update frequency per subscription, and bandwidth allocated per session, lowered when a client falls behind | Flush policies per page (section 6.3); no limit per session yet | **Take:** a bandwidth ceiling per connection, so one viewer of a fast game cannot use what many viewers of shared pages need |
 | A snapshot sent on subscription | A tuned page sent whole first (section 6.1) | The same |
-| Stream-Sense: WebSocket, falling back to HTTP streaming and then polling where proxies block WebSocket | WebSocket only | **Consider:** an HTTP streaming fallback for networks that refuse the upgrade (hotels, some corporate proxies); the engine's client already reads server-sent events |
+| Stream-Sense: WebSocket, falling back to HTTP streaming and then polling where proxies block WebSocket | WebSocket only | **Decided:** WebSocket only, with no HTTP streaming or polling fallback (DEC-1467, 30 October 2026); a network that refuses the upgrade cannot reach a live channel |
 | Data adapters (sources) and metadata adapters (who may see what, limits) apart from the server | Applications (section 7) and the server's ownership and limits (sections 7.3 and 11) | The same split |
 | Clustering behind a load balancer with sticky sessions | One actor per channel; fan-out over several servers deferred (section 20 item 3) | Sticky routing by channel, as noted |
 
