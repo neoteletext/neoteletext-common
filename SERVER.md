@@ -153,7 +153,7 @@ The server serves exactly this, with `ETag` and conditional requests, which the 
 
 ### 5.2 Downstream: four kinds of binary frame
 
-Downstream is binary WebSocket messages, each a whole number of 42-byte packets (the engine's receiver already checks `len % 42 == 0`), of four kinds:
+**Downstream is a T42 stream, and nothing else** (DEC-1459, 30 October 2026): the binary messages, joined in the order sent, are a valid plain T42 file (the engine's REQ-INP-002), with nothing between packets and nothing added to them, and no text message is ever sent. Each message is a whole number of 42-byte packets (the engine's receiver already checks `len % 42 == 0`), of four kinds:
 
 | Frame | Contents | Delivery |
 |---|---|---|
@@ -178,7 +178,7 @@ Downstream is binary WebSocket messages, each a whole number of 42-byte packets 
   - X/26 to X/28.
 
   A Level 1 page with links is 26 packets, 1,092 bytes, one TCP segment.
-- **Over WebSocket, frames need no sequence numbers:** TCP is ordered and the server knows what each client was sent. A datagram binding adds a 16-bit sequence number per page, the one place versions would return.
+- **Over WebSocket, frames need no sequence numbers:** TCP is ordered and the server knows what each client was sent. The packets have no spare field for one: every header bit is defined (EN 300 706 clause 9.3.1). A transport that loses or reorders data, if one is ever built, carries its sequence number as a record on data channel 12, one per datagram, never outside the packets (DEC-1459, which withdrew the 16-bit sequence number per page planned here).
 
 ### 5.3 Receiver-compatible and authentic delivery
 
@@ -235,6 +235,7 @@ Control records are teletext packets, as WELCOME is today: data channel 12, pack
 | SET_COOKIE | One `Set-Cookie` header line | A cookie set mid-connection (section 8.2) |
 | INDEX | Page numbers and titles | The channel's index (section 6.5) |
 | CHANGED | Page numbers | The coalesced change digest (section 6.5) |
+| LOG | `level` (`E`, `W` or `I`), UTF-8 `text` of 1 to 200 bytes, and the page it concerns, if any | A log line for the channel's author, as a TTI `LG` line holds one (the engine's REQ-INP-026 and decision E.109 as amended for DEC-1459) |
 
 *Withdrawn on 29 October 2026, never built:* SUBPAGES (a tuned page's catalogue) and TITLES (titles by range). A selected page's sub-pages come whole (section 6.1), so the receiver has their titles from what it decodes; a channel served as files lists them in `NNN.sub` (section 4).
 
