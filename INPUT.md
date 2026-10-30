@@ -317,7 +317,18 @@ The token is a secret of the connection, as the keys are: it goes only on the se
 
 ## 7. The protocol: channel to receiver
 
-Everything a channel says about input is teletext: records of the audio profile's frame (the engine's REQ-AUD-003) on data channel 12, a user-defined service of EN 300 708 clause 6.7.3.2, each one fragment carried in one 4/31 packet, which the audio receiver steps over. A channel sends them as binary push messages (packets), and a page file may carry a cursor as a `CU` line.
+Everything a channel says to a receiver beyond its pages is teletext: records of the audio profile's frame (the engine's REQ-AUD-003: profile version 2, a type byte, a big-endian 16-bit body length, the body, and a CRC-32 over the header and body) on data channel 12, a user-defined service of EN 300 708 clause 6.7.3.2, carried in 4/31 packets, which the audio receiver steps over. A channel sends them as binary push messages (packets), and a page file may carry a cursor as a `CU` line.
+
+| Type | Record | Fragments | Section |
+|---|---|---|---|
+| 1, 2, 3 | The audio profile's OBJECT, DATA and CONTROL | any | the engine's `docs/spec/design/audio.md` |
+| 4 | Cursor | one | 7.1 |
+| 5 | Control (WELCOME) | one | 7.2 |
+| 6 | Index | one or more | 7.5 |
+| 7 | LOG | one or more | 7.6 |
+| 8 | SET_COOKIE | one or more | 7.7 |
+
+Every record type has a type of its own in the frame rather than a kind of the control record (decided 30 October 2026, TODO-1491): the control record is one fragment, 26 bytes of body, and the index, LOG and SET_COOKIE records need more; and a receiver that reads only some of the types skips the others by the type byte alone, before reading any field. Section 7.8 says how a record of more than one fragment travels and what a receiver does with a record it cannot use.
 
 ### 7.1 The cursor record (type 4)
 
@@ -384,6 +395,70 @@ A control is only where a click lands: the click still goes to the channel as MO
 ### 7.4 Pointer areas (withdrawn)
 
 Withdrawn on 28 October 2026 (`RETURN-CHANNEL.md` decision E, REQ-RCH-037; the engine's decision E.133): column mode 01010 declared where a move with no button went, and with every move over the page sent (section 9.8) it asks for nothing. Column mode 01010 is reserved again, as EN 300 706 Table 29 has it, skipped by every decoder; a page that still carries the triplet declares nothing by it. The engine's `MAX_POINTER_AREAS` and decision E.128 are withdrawn with it.
+
+### 7.5 The index record (type 6)
+
+The channel's magazines and pages, as a program gives them in its `reply` and `index` messages (neoteletext-app-server's DEC-1482, REQ-1477): what fills a receiver's magazines, overview and contents view, and what a static channel's `contents.txt` gives (the engine's REQ-WEB-025). A live channel has no `contents.txt` (DEC-1467); its index comes as these records, at connection and whenever it changes.
+
+**Integers are big-endian. Text** is a `u16` byte length then that many bytes of UTF-8, with no control character (U+0000 to U+001F, U+007F to U+009F) and at most 120 characters (`MAX_TITLE`, the engine's `contents::MAX_TITLE`), so at most 480 bytes.
+
+The body:
+
+| Bytes | Field | Range |
+|---|---|---|
+| 0–1 | `generation` | Any: the index's version. Every record of one sending of the index carries the same value; the next sending carries another (the sender counts it on by one, wrapping) |
+| 2–3 | `part` | 0 to `parts` − 1: this record's place in the sending |
+| 4–5 | `parts` | 1 to 2,022 (`USABLE_PAGE_NUMBERS`): the records of this sending |
+| 6 | `magazine` | 1 to 8 |
+| 7 on | `name` | text, 0 to 120 characters: the magazine's name; empty when it has none |
+| then | pages | zero or more, to the end of the body, in ascending page number |
+
+Each page:
+
+| Field | Range |
+|---|---|
+| `page`, `u16` | `0x100` to `0x8FF`, of the record's magazine (`page >> 8` is `magazine`, magazine 8 written as 8), never a reserved number (mFD, mFE, mFF, 1BE, 1F0; EN 300 706 Annex A.10) |
+| `subpages`, `u16` | 1 to 8,190 (`MAX_SUBPAGES`): how many sub-pages the page has |
+| `title`, text | 1 to 120 characters |
+| `section`, text | 0 to 120 characters: the heading the page is listed under; empty for none |
+
+**Splitting.** A record holds one magazine's pages, as many as fit in the frame's largest body (`MAX_BODY`, 1,016 bytes); a magazine with more goes on in the next record. The records of a sending are numbered 0 to `parts` − 1 in the order of their magazines and pages, so no page is in two records of one sending. The magazine's name is given in the first record of the magazine in a sending; the records after it in the same magazine and sending give an empty name, which keeps the name given. The largest page is 968 bytes (2 + 2 + 2 × (2 + 480)) and the fixed fields with the longest name are 489 (7 + 2 + 480), so a page may not fit beside a long name: a record may therefore hold no pages, and then carries only the magazine's name.
+
+**Reassembling.** A receiver keeps the index it has and the sending it is receiving:
+1. A record of the `generation` it is receiving, whose `parts` agrees with that sending's first record, adds its pages to the sending. A record of another `generation` begins a new sending, and the one in progress is abandoned.
+2. Each page a record lists is shown at once with what the record says of it, added to the index or replacing what was there, so a partial sending already shows what it has.
+3. When every `part` from 0 to `parts` − 1 of the sending has arrived, the sending is complete: it is the whole index, and every page and magazine it did not list is removed.
+4. A partial sending removes nothing: a page is removed only by a complete sending that leaves it out.
+
+**For a viewer,** a section begins wherever a page's `section` differs from the page before it, as `contents.txt`'s `s` lines do; the engine gives each record's pages to the port as `contents.txt`'s entries.
+
+### 7.6 The LOG record (type 7)
+
+A log line for the channel's author, as a TTI `LG` line holds one (the engine's REQ-INP-026 and decision E.109 as amended for DEC-1459): shown only in a developer's view, never on a page.
+
+| Bytes | Field | Range |
+|---|---|---|
+| 0 | `level` | `E` (0x45, an error), `W` (0x57, a warning) or `I` (0x49, information) |
+| 1–2 | `page`, big-endian | the page the line concerns, `0x100` to `0x8FF`, or 0 for none |
+| 3 to the end | `text` | UTF-8, 1 to 200 bytes (`MAX_LOG_TEXT_BYTES`), with no control character and no bidirectional formatting character (REQ-INP-026) |
+
+The record is at most 211 bytes of body and 219 with its frame, seven fragments; text is never split across records. A receiver passes on at most 16 LOG records (`MAX_LOG_LINES_PER_PAGE`) for each page frame it receives, and 16 before the first, and drops the rest, so that a channel cannot flood a console.
+
+### 7.7 The SET_COOKIE record (type 8)
+
+A cookie set while the connection is open (`SERVER.md` section 8.2). The body is one `Set-Cookie` header field's value, exactly as an HTTP response carries it after `Set-Cookie:` (RFC 6265bis section 4.1): `name=value` and its attributes (`Path`, `Max-Age`, `Expires`, `SameSite`, `Secure`, `HttpOnly`), separated by `; `.
+
+| Bytes | Field | Range |
+|---|---|---|
+| 0 to the end | the line | 1 to 1,016 bytes (`MAX_BODY`) of printable ASCII, 0x20 to 0x7E |
+
+- **The receiver** applies the line to its cookie jar with the same parser and the same rules as a `Set-Cookie` header of the push connection's own upgrade response, for the push connection's address: host-only, scoped to the channel's folder, stricter than RFC 6265bis as the engine's REQ-WEB-006 is. A line the jar refuses is reported as a refused cookie, as a header's is.
+- **The sender** never writes the line by hand: the server builds it from the program's typed `cookie` message (its name, value, path, maximum age, same-site rule, and the secure and HTTP-only flags) with the engine's encoder, which refuses a name or value the parser would refuse.
+
+### 7.8 Records of several fragments, and records a receiver cannot use
+
+- **Fragments.** A record of more than 34 bytes is cut into fragments of 34 bytes, the last padded with zeros, at most 31 fragments (`MAX_RECORD`, 1,024 bytes), as the audio profile's records are (the engine's REQ-AUD-007): each fragment one 4/31 packet with the record id, its index, and the CRC-16. The record id counts every record of the service, whatever its type, so two records in flight on one service never share an id. A channel sends a record's fragments in order, fragment 0 first, in one binary message or in consecutive ones; a receiver reassembles them by record id, and knows the record's length, and so its fragments, from fragment 0's frame header.
+- **A record a receiver cannot use** (a frame whose CRC-32, version or length fails; a type it does not know; a field outside its range; text that breaks its rule; bytes after the last field) is discarded whole and nothing of it applied, and each of its packets is counted as an invalid packet (neoteletext-common's REQ-1462), without closing the connection. A record of a type the receiver does not read is skipped, not counted.
 
 ## 8. Behaviour
 
