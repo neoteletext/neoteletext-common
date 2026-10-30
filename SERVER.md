@@ -225,7 +225,7 @@ JSON belongs to the application protocol (section 7), which people read and writ
 
 ### 5.5 Control records
 
-Control records are teletext packets, as WELCOME is today: data channel 12, packet 4/31, records of the audio profile's frame. WELCOME is a kind of the control record, type 5 (`C/INPUT.md` §7.2); the index, LOG, SET_COOKIE and LINKS records are record types of their own, 6, 7, 8 and 9, whose byte layouts are defined once in `C/INPUT.md` §7.5 to §7.9 and nowhere else, and written with the engine's encoders. The records are:
+Control records are teletext packets, as WELCOME is today: data channel 12, packet 4/31, records of the audio profile's frame. WELCOME is a kind of the control record, type 5 (`C/INPUT.md` §7.2); the index, LOG, SET_COOKIE, LINKS and SUBPAGES records are record types of their own, 6, 7, 8, 9 and 10, whose byte layouts are defined once in `C/INPUT.md` §7.5 to §7.10 and nowhere else, and written with the engine's encoders. The records are:
 
 | Kind | Fields | Meaning |
 |---|---|---|
@@ -236,11 +236,12 @@ Control records are teletext packets, as WELCOME is today: data channel 12, pack
 | INDEX (type 6) | The channel's magazines with their names, and each page's number, title, section and sub-page count, split across as many records as it needs; layout and reassembly `C/INPUT.md` §7.5. Built from the program's `reply` and `index` messages (DEC-1482), never from a `contents.txt` | The channel's index and contents (section 6.5), sent at connection and when they change; a live channel has no `contents.txt` (DEC-1467) |
 | CHANGED | Page numbers | The coalesced change digest (section 6.5) |
 | LINKS (type 9) | One sub-page's TTI Link Extension links: key links, page-number links and text links, with their targets and labels; layout `C/INPUT.md` §7.8 | Sent straight after each page frame of a sub-page that has such links, so pushed pages keep the links packets cannot carry (DEC-1495, REQ-1494) |
+| SUBPAGES (type 10) | One page's list of sub-pages: its version, its count and each sub-code with its title, split across as many records as it needs; layout `C/INPUT.md` §7.9 | Sent when a view selects the page and the connection lacks the list's current version, and when the list changes while a view shows the page (DEC-1500, REQ-1503) |
 | LOG (type 7) | `level` (`E`, `W` or `I`), the page it concerns or none, and UTF-8 `text` of 1 to 200 bytes; layout `C/INPUT.md` §7.6 | A log line for the channel's author, as a TTI `LG` line holds one (the engine's REQ-INP-026 and decision E.109 as amended for DEC-1459) |
 
 *Withdrawn on 29 October 2026, never built:* SUBPAGES (a tuned page's catalogue) and TITLES (titles by range). A selected page's sub-pages come whole (section 6.1), so the receiver has their titles from what it decodes; a channel served as files lists them in `NNN.sub` (section 4).
 
-Reasons are codes; the words are the client's. A decoder that knows none of this skips the records, as EN 300 708 says. A record that breaks its layout is discarded and its packets counted as invalid (REQ-1462, `C/INPUT.md` §7.9). DENIED, LIMITS and CHANGED have no layout yet.
+Reasons are codes; the words are the client's. A decoder that knows none of this skips the records, as EN 300 708 says. A record that breaks its layout is discarded and its packets counted as invalid (REQ-1462, `C/INPUT.md` §7.10). DENIED, LIMITS and CHANGED have no layout yet.
 
 ## 6. Tuning and delivery
 

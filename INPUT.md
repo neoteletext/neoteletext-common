@@ -161,6 +161,8 @@ An event is `0xFF`, a type byte, then its fields.
 - `page` is the page selected, `0x100` to `0x8FF` in teletext's hexadecimal page form, or 0 when the view no longer shows a page of the channel.
 - `sub` is the sub-page selected, a sub-code `0x0000` to `0x3F7F` (EN 300 706 clause 9.3.1.2): the sub-page the viewer chose, or `0x3F7F`, any sub-page (clause 9.6.1), when they chose the page and none of its sub-pages. A value with a bit outside the sub-code's thirteen is a protocol error; with `page` 0 it is `0x3F7F`.
 
+**What a view is then sent and shows** (neoteletext-common's DEC-1500, REQ-1502). With `sub` `0x3F7F` the view has selected the page: it is sent, and shows, the page's current sub-page, the one the channel's program sends for the page to that connection, first in answer and then whenever the program sends another, so a rotating page rotates at the program's own interval and the view's place in the sub-page list follows it. With a sub-code the view has selected that sub-page alone: it is sent only that sub-page and its changes, and keeps showing it while the page's other sub-pages change or rotate, until the view selects something else. Stepping to the next or previous sub-page, by the keys, the remote, the arrows or the sub-page list (section 7.9), is a sub-page selection of that sub-code; nothing else is sent. Sub-pages are never sent with their page.
+
 It is sent whenever the page or the sub-page selected in a view changes: a page keyed or followed by a link, a sub-page stepped to or chosen from the list, a tab of the channel opened. It is sent whether or not keys go to the channel, which is what tells it apart from PAGE: PAGE names the page that has the keys, SELECT the page each view shows. At the start of a session, after HELLO (and after RESUME), it is sent for each view showing a page of the channel, so a reconnection is sent its pages again. A sub-page that changes by itself, the latest of a rotating page shown as it arrives, is not a selection and sends nothing. It is sent only when both sides set SELECT (section 6.2), counts no input units, and is held to the rate as other events are (section 8). What the channel sends in answer is `SERVER.md` section 6.1's.
 
 **RESUME**, an extension (`0x45`): `uv` length, then the session's `token` (16 bytes, `TOKEN_BYTES`) and `acked` u16 big-endian, the last acknowledgement the receiver took; exactly 18 bytes of payload. It follows HELLO in a reconnection's first message, when the receiver asks to resume its session (section 6.4); a channel that does not know it skips it, and so begins a new session. It counts nothing.
@@ -328,8 +330,9 @@ Everything a channel says to a receiver beyond its pages is teletext: records of
 | 7 | LOG | one or more | 7.6 |
 | 8 | SET_COOKIE | one or more | 7.7 |
 | 9 | LINKS | one or more | 7.8 |
+| 10 | SUBPAGES | one or more | 7.9 |
 
-Every record type has a type of its own in the frame rather than a kind of the control record (decided 30 October 2026, TODO-1491): the control record is one fragment, 26 bytes of body, and the index, LOG, SET_COOKIE and LINKS records need more; and a receiver that reads only some of the types skips the others by the type byte alone, before reading any field. Section 7.9 says how a record of more than one fragment travels and what a receiver does with a record it cannot use.
+Every record type has a type of its own in the frame rather than a kind of the control record (decided 30 October 2026, TODO-1491): the control record is one fragment, 26 bytes of body, and the index, LOG, SET_COOKIE, LINKS and SUBPAGES records need more; and a receiver that reads only some of the types skips the others by the type byte alone, before reading any field. Section 7.10 says how a record of more than one fragment travels and what a receiver does with a record it cannot use.
 
 ### 7.1 The cursor record (type 4)
 
@@ -484,7 +487,27 @@ The body:
 - **Splitting.** The links go in order, key links first, then page-number links, then text links, as many in each record as fit in the frame's largest body (`MAX_BODY`, 1,016 bytes); a link is never split, and its largest, a key link, is 269 bytes. The most links a sub-page has, 5,513 bytes at their longest, take at most eight records; a typical page's take one.
 - **When it is sent, and what a receiver does.** The server sends a sub-page's LINKS records straight after that sub-page's page frame, every time it sends the sub-page, whenever the sub-page has any Link Extension link. Part 0 replaces every link the receiver held for that page and sub-code; later parts add to it. A sub-page sent without a LINKS record has no Link Extension links: a receiver drops those it held for it. A receiver reads the links exactly as it reads a TTI file's `LN`, `LK` and `LT` lines, by Appendix E's rules (E.2), and puts them in the same store.
 
-### 7.9 Records of several fragments, and records a receiver cannot use
+### 7.9 The SUBPAGES record (type 10)
+
+A page's list of sub-pages (neoteletext-common's DEC-1500, REQ-1503): sub-pages are never sent with their page, so a receiver learns a page's list from this record, for the list, the count, the view's place ("3/12") and stepping. It is never the sub-pages themselves. The server sends it when a view selects the page or one of its sub-pages and the connection does not hold the list's current version, and again whenever the list changes while a view shows the page.
+
+**Integers are big-endian.** The body:
+
+| Bytes | Field | Range |
+|---|---|---|
+| 0–1 | `page` | `0x100` to `0x8FF` |
+| 2–3 | `version` | Any: the list's version, the same in every record of one sending; it changes whenever the list changes |
+| 4–5 | `part` | 0 to `parts` − 1 |
+| 6–7 | `parts` | 1 to 8,190: the records of this sending |
+| 8–9 | `count` | 1 to 8,190 (`MAX_SUBPAGES`): the page's sub-pages, the same in every record of the sending |
+| then | entries | one or more, to the end of the body, in the page's order |
+
+Each entry: `sub` u16, a sub-code `0x0000` to `0x3F7E` with no bit outside the thirteen a sub-code has, each at most once in the list; then `title`, a `u8` byte length and 0 to 160 bytes of UTF-8, at most 40 characters (a teletext row), with no control character; empty for none.
+
+- **Splitting.** The entries go in the page's order, as many in each record as fit in the frame's largest body (`MAX_BODY`, 1,016 bytes), at least six, and an entry is never split; the records are numbered 0 to `parts` − 1 in that order.
+- **Reassembling,** as the index record (section 7.5): a record of another `version` of the page begins a new sending; a sending is complete when every part has arrived and its entries number `count`, and then it is the page's whole list. A partial sending shows what it has and removes nothing; a complete one replaces the list held.
+
+### 7.10 Records of several fragments, and records a receiver cannot use
 
 - **Fragments.** A record of more than 34 bytes is cut into fragments of 34 bytes, the last padded with zeros, at most 31 fragments (`MAX_RECORD`, 1,024 bytes), as the audio profile's records are (the engine's REQ-AUD-007): each fragment one 4/31 packet with the record id, its index, and the CRC-16. The record id counts every record of the service, whatever its type, so two records in flight on one service never share an id. A channel sends a record's fragments in order, fragment 0 first, in one binary message or in consecutive ones; a receiver reassembles them by record id, and knows the record's length, and so its fragments, from fragment 0's frame header.
 - **A record a receiver cannot use** (a frame whose CRC-32, version or length fails; a type it does not know; a field outside its range; text that breaks its rule; bytes after the last field) is discarded whole and nothing of it applied, and each of its packets is counted as an invalid packet (neoteletext-common's REQ-1462), without closing the connection; a LINKS record refused leaves its sub-page shown with no Link Extension links. A record of a type the receiver does not read is skipped, not counted.
