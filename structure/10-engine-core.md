@@ -21,7 +21,6 @@ The `no_std`, no-allocation teletext core of EN 300 706 at Levels 1.0, 1.5, 2.5 
 | `level25` | | `mod enhance` (`lib.rs:53`); the Levels 2.5 and 3.5 arm of `compose.rs:34,69`; `config.rs:46`; `EnhancementReport::new` (`acq.rs:487-492`). `objects`, `colour` and `acq::enhancement` are compiled in every build. |
 | `nonspacing-attributes` | `level25` | the constant `ATTRIBUTES` (`enhance.rs:112`) guarding four match arms of `column_triplet` (`enhance.rs:1090-1107`). |
 | `objects` | `level25` | `enhance.rs:887` (no default objects) and `enhance.rs:1005` (an invocation is ignored). |
-| `side-panels` | `level25` | `colour.rs:297` (no panel widths), `render.rs:595` (`panel_widths` is 0, 0); tests. |
 | `level25-32colors` | `level25` | `colour.rs:254` (CLUTs 2 and 3 copied from 0 and 1), `colour.rs:271` (X/28/0 and M/29/0 never redefine). |
 | `level35-32colors` | `level25-32colors` | `colour.rs:277` (X/28/4 and M/29/4 never redefine CLUTs 0 and 1). |
 | `additional-flash-functions` | `nonspacing-attributes` | `flash_of` returns `None` (`enhance.rs:206`); tests. |
@@ -55,7 +54,7 @@ src/
   service.rs                  195   L2: 8/30 interpretation
   charset/mod.rs              658   L3: set enums, CharRef, designation and Unicode facade, tests
   charset/tables.rs          2414   L3: Tables 32-48, own sets, Arabic shaping, Thai/Lao, marks, compositions, mosaics, tests
-  colour.rs                   514   L3: ColourMap, Remapping, SidePanels, resolve(), tests
+  colour.rs                   514   L3: ColourMap, Remapping, resolve(), tests
   compose.rs                   80   L3: compose_level(_traced)
   level1.rs                  1467   L3: Cell/Grid, DisplayOptions, designation resolution, Table 26 machine, build_grid, tests
   level15.rs                  519   L3: Level 1.5 walk (REQ-FSM-007), tests
@@ -92,7 +91,7 @@ Every importer names a top-level module path, so the layout below, which keeps e
 |---|---|
 | The browser (`native/`, 26 distinct paths) | `acq::{Decoder, EnhancementPacket, EnhancementStore, EnhancementSubPage, Event, StoredPage}`; `charset::{CharRef, CharSet, G2Set, to_unicode}`; `compose::compose_level`; `config::Config`; `consts::{COLUMNS, ROWS, DATA_BYTES, PACKET_BYTES, FLASH_CYCLE_US, FLASH_UNITS, G2_RIGHT_GUILLEMET, ENHANCEMENT_PACKETS_LEVEL_35, MAGAZINES, MOT_PACKETS, PAGE_COMPLETION_TIMEOUT_US}`; `ecc::{hamming84, hamming84_encode, with_odd_parity}`; `fsm::PageState`; `glyphs::GlyphSet`; `level1::{Cell, Glyph, Grid, Size, DisplayOptions, FlashRate, build_grid}`; `nav::{PageLinks, LinkTarget}`; `packet::{Packet, PacketMeta, Decoded, PageFormat, DisplayAttributes, decode, decode_address, encode}`; `policy::{ipv4_blocked, ipv6_blocked}`; `render::{ChangeTracker, FlashPhase, IndexBuffer, IndexFormat, RenderOptions, render_screen}`; `types::{ControlBits, DefaultColourFields, Designations, PageAddress, PresentationFields, Rgb12, SubCode, Instant}`; `viewer::MAX_LISTED_SUBPAGES` (asserted equal to `interface_core::controls::MAX_SUBPAGES`) |
 | `neoteletext-formats` | `consts` (57 sites), `packet` (46: `Packet`, `PacketMeta`, `Triplet`, `decode_address`, `decode`, `encode::*`, `ColourData`, `CompositionalLink`, `ObjectKind`, `ObjectPacket`, `PageEnhancement`, `PageFormat`), `types` (35), `ecc` (16), `acq`, `config`, `charset`, `render`, `nav`, `level1`, `glyphs`, `level15`, `fsm`, `compose`, `colour` |
-| `neoteletext-slicer`, `-web`, `-image`, `-audio`, `-input` | `consts`, `packet`, `types`, `ecc`, `trace`; web adds `policy`, `service`; image adds `colour::{colour_index, ColourMap, SidePanels}`, `render`, `level1`, `glyphs`, `config`, `charset` |
+| `neoteletext-slicer`, `-web`, `-image`, `-audio`, `-input` | `consts`, `packet`, `types`, `ecc`, `trace`; web adds `policy`, `service`; image adds `colour::{colour_index, ColourMap}`, `render`, `level1`, `glyphs`, `config`, `charset` |
 | `neoteletext-app`, `neoteletext-cli` | `consts`, `types`, `config`, `packet`, `level1`, `fsm::{PageState, PageKey}`, `charset`, `acq`, `policy`, `forms::FormModel`, `ecc`, `trace`, `service::{interpret, initial_page}`, `render`, `nav`, `glyphs::{GlyphSet, LoadedFont, conformance::*}`, `compose::{compose_level, compose_level_traced}`, `viewer::{Viewer, Key}`, `colour`, `objects::links`, `enhance::MAX_WALK_STEPS` |
 | Fuzz targets (`fuzz/fuzz_targets/*.rs`) | `acq::{Decoder, EnhancementPacket, EnhancementStore, EnhancementSubPage, StoredPage}`, `compose::compose_level`, `config::{CellMode, Config, PresentationLevel}`, `consts::{…}`, `ecc::hamming84_encode`, `enhance::MAX_WALK_STEPS`, `fsm::PageState`, `glyphs::GlyphSet`, `level1::{DisplayOptions, Grid, build_grid}`, `level15`, `packet::{Packet, PacketMeta, Triplet, encode, decode}`, `render::{ALL_ROWS, ColourMode, FlashPhase, IndexBuffer, IndexFormat, RenderOptions, render_screen, row_width}`, `types::{ControlBits, Instant, Magazine, PageAddress, PageNumber, SubCode, FontGlyph}` |
 | `firmware/test-image` | `acq::{Decoder, StoredPage, EnhancementPacket, EnhancementReport, EnhancementStore, EnhancementSubPage}`, `charset::G0`, `compose::compose_level`, `config::Config`, `forms::{FormKey, FormModel, FormSpec}`, `glyphs::GlyphSet`, `level1::{DisplayOptions, Grid, build_grid}`, `packet::{Packet, PacketMeta, ServicePacket}`, `render::{Field, IndexBuffer, RenderOptions, render_row}`, `service`, `types::{Instant, PageAddress, SubCode}`, `viewer::{ComposeContext, Key, KeyContext, Viewer, ViewerEvent}` |
@@ -117,7 +116,6 @@ Every importer names a top-level module path, so the layout below, which keeps e
 | 12.2 spacing attributes (Table 26) | `level1.rs:724-819`; again `enhance.rs:1417-1468,1659-1674`; `consts.rs:608-669` |
 | 12.3.2-12.3.4 the active position | `level15.rs:55-112`; `enhance.rs:675-753,1081-1149`; `objects::row_of` |
 | 12.4 Colour Map (Table 30) | `colour.rs`; `consts.rs:687-753` |
-| 12.5 side panels | `colour.rs:132-181`; `enhance.rs:360-389,1851-1863`; `render.rs:592-631,798-822`; `consts.rs:755-768` |
 | 13 objects, 13.2 display planes, Annex A.8 limits | `enhance.rs`; `objects.rs`; `consts.rs:896-946` |
 | 15 character sets (Tables 32-48) | `charset/tables.rs`; resolution in `level1.rs:503-638` |
 | Annex A.7.1, C.1, C.2, C.3, C.4 | `enhance.rs:117-198`; `render.rs:475-528`; `enhance.rs:187-198,1470-1486`; `enhance.rs:1717-1764`; `level1.rs:558-625` |
@@ -132,7 +130,7 @@ Every importer names a top-level module path, so the layout below, which keeps e
 | File | What it holds (line ranges) | Mixes |
 |---|---|---|
 | `lib.rs` 115 | deny list 26-35; `mod` tree 40-78; `error_trait!` 84-115 | one concept |
-| `consts.rs` 1026 | signal 10-63; packet numbers 65-98; audio 100-129; pages and control bits 131-203; coding 205-226; triplets 228-385; X/28, M/29, X/27/4 387-485; object pages 487-522; MOT 524-586; designations 589-606; Table 26 608-669; mosaics 671-685; colours 687-706; Colour Map 708-753 (tables `COLOUR_MAP_DEFAULTS`, `REMAPPING_CLUTS`); side panels 755-768; geometry 770-828; timing 830-864; service 866-879; "Phase I2b" 881-894; "Phase I2a" 896-980; tests 982-1026 | one clause per banner, but 881-980 are grouped by implementation phase and scatter flash (350-355, 845-864, 948-968), objects (487-522, 908-933), link functions (464-485, 934-946), G3 (886-889, 970-972) and side panels (755-768, 900-902) over two places each |
+| `consts.rs` 1026 | signal 10-63; packet numbers 65-98; audio 100-129; pages and control bits 131-203; coding 205-226; triplets 228-385; X/28, M/29, X/27/4 387-485; object pages 487-522; MOT 524-586; designations 589-606; Table 26 608-669; mosaics 671-685; colours 687-706; Colour Map 708-753 (tables `COLOUR_MAP_DEFAULTS`, `REMAPPING_CLUTS`); geometry 770-828; timing 830-864; service 866-879; "Phase I2b" 881-894; "Phase I2a" 896-980; tests 982-1026 | one clause per banner, but 881-980 are grouped by implementation phase and scatter flash (350-355, 845-864, 948-968), objects (487-522, 908-933), link functions (464-485, 934-946) and G3 (886-889, 970-972) over two places each |
 | `ecc.rs` 451 | `Status` 9-26; parity 28-46; Hamming 8/4 48-131 (table built at compile time, narrow `#[allow]` at 105); Hamming 24/18 133-220; `reverse_bits` 222-227; `PageChecksum` 229-267; tests 269-451 | four sub-clauses, each self-contained; 268 lines of code |
 | `types.rs` 471 | `Magazine` 8-43; `PageNumber` 45-74; `PageAddress` 76-108; `hex_digit`; `SubCode` 117-142; `ControlBits` 144-163; `Rgb12` 165-204; `ColourWords`, `Designations`, `SidePanelFields`, `DefaultColourFields`, `PresentationFields`, `FallbackFields` 206-277; `FontGlyph` 279-317; `Instant` 319-330; `FixedVec` 332-426; tests 428-471 | addressing, the Table 4/10/21 field groups, the loaded-font glyph, a collection |
 | `packet.rs` 1365 | `Packet` 45-68; `PacketMeta`, `SliceQuality` 70-97; `PacketError`, `PacketAddress`, `decode_address` 99-124; `Header` 126-155; `Row` 157-166; `Triplet`, `Triplets`, `Enhancement` 168-217; `Link`, `Links` 219-243; `PagePacket`, `MagazinePacket` 245-265; `ServicePacket` 267-284; `Decoded` 286-337; `decode` 339-396; `designation_code`, `nibble` 398-407; header indices and `decode_header` 409-458; triplet helpers 460-488; `compositional_links` 490-501; `page_reference` 503-519; link indices and `decode_links` 521-549; service indices, `copy_bytes`, `decode_service` 551-587; `pub mod encode` 589-830; tests 832-1365 | six packet kinds (9.3.1, 9.4.1, 9.6.1, 9.6.2, 9.4.2/9.5, 9.8.1), every encoder, the boundary type |
@@ -146,7 +144,7 @@ Every importer names a top-level module path, so the layout below, which keeps e
 | `service.rs` 195 | `DateTime`, `ServiceInfo` 9-45; `interpret` 47-69; `initial_page` 71-77; offset and digits 79-109; `date_time`, `civil_from_mjd` 111-163; tests 165-195 | one concept plus a calendar |
 | `charset/mod.rs` 658 | `G0Set` 13-98; `JoiningType`, `JoinForm`, joining API 100-162; `G2Set` 164-187; `NationalOption` 189-254; `G0`, `CharSet`, `CharRef`, `Designation`, `Unicode` 256-318; designation lookups 320-372; Unicode conversion 374-402; mosaics 404-423; `compose`, `latin_text` 425-439; tests 441-658 | vocabulary, designation resolution, the Unicode facade; the joining API sits between the set enums |
 | `charset/tables.rs` 2414 | header 12-39; Tables 32-34 41-245 (`cfg` twins 114-168); Latin and national options 247-355; standard G0 sets 357-467; own G0 sets 469-590; `g0_unicode` 592-630; G2 sets 632-741; G3 743-787; Arabic-script sets and shaping 789-1211 (generated block 798-1196); Thai and Lao 1213-1342; marks 1344-1373; mosaics 1375-1420; compositions 1422-1819; tests 1821-2414 | nine spec tables and decisions and one generated block; 1,800 lines of data |
-| `colour.rs` 514 | `ColourIndex`, `colour_index` 21-27; `ColourMap` 30-94; `Remapping` 96-130; `SidePanels` 132-181; `PresentationSources`, `PagePresentation` 183-237; `resolve` 239-303 (four `cfg!` tests inside); `colour_words` 305-315; tests 317-514 | the Colour Map, the re-mapping, side panels (clause 12.5, not a colour), decision E.44 precedence |
+| `colour.rs` 514 | `ColourIndex`, `colour_index` 21-27; `ColourMap` 30-94; `Remapping` 96-130; `PresentationSources`, `PagePresentation` 183-237; `resolve` 239-303 (four `cfg!` tests inside); `colour_words` 305-315; tests 317-514 | the Colour Map, the re-mapping, decision E.44 precedence |
 | `compose.rs` 80 | `compose_level` 18-46; `compose_level_traced` 52-80 | one concept; the two functions differ only by the trace argument |
 | `level1.rs` 1467 | `Glyph`, `Size`, `Width`, `FlashMode`, `FlashRate`, `CharSource`, `CellAttributes`, `Cell` 31-329; `Grid`, `DEFAULT_DESIGNATION`, `Zoom`, `DisplayOptions` 331-501; `DesignationSource`, `NationalSource`, `DesignationReport`, `designation_report`, `resolve_designation` 503-638; `RowState`, `RowContext`, `decode_row`, `set_at`, `cell_glyph`, `set_after` 640-819; `stored_row`, `build_grid`, receiver columns, `row_codes`, `row_24_shown`, `hide_header`, `fill_lower_row` 821-1015; tests 1017-1467 | the cell and grid model (E.42), Annex C.4 designations, the Table 26 row machine (REQ-FSM-006), page assembly (E.10, E.15, E.23) |
 | `level15.rs` 519 | `WalkState`, `WalkAction`, `WalkContext` 18-51; `walk_transition` 53-112; names 114-145; `character` 147-165; `apply`, `apply_traced`, `walk`, `write` 167-282; tests 284-519 | one concept; 283 lines of code |
@@ -188,7 +186,6 @@ Files over 500 and under 800: `charset/mod.rs` 658, `objects.rs` 643, `packet/fu
 | 8 | Page-visibility rules: `boxed_mode` from C5 or C6; `inhibit` from C10 or a non-text page; row 0 hidden by C7 | `level1.rs:861` and `enhance.rs:1980`; `level1.rs:865` and `enhance.rs:2007`; `level1.rs:991-1001` and `enhance.rs:2015` |
 | 9 | Active, Adaptive, Passive to 0, 1, 2 | `enhance.rs:352-358` (`type_index`); `objects.rs:431-437` (`type_offset`); `tests/common/mod.rs:171-177` |
 | 10 | Bit-doubling folds | `render.rs:275-282` (`widen`), `431-433` (`double_half`); `render/font_tests.rs:159-160`; `render/level25_tests.rs:552-554` |
-| 11 | Side-panel width clamping to 16 | `colour.rs:160`; `render.rs:598` |
 | 12 | Page-function classification | `acq.rs:122-126` (`is_text_page`); `acq.rs:900-903`; `enhance.rs:1772-1784` (`is_enhancement_page`); `level1.rs:575,579` |
 | 13 | Walk machinery under the same names in two modules | `level15::{WalkState, WalkAction, walk_transition, walk_*_name}` and `enhance::{the same, plus WalkEvent}` |
 | 14 | A function and its `_traced` twin | `compose.rs:18-46` and `52-80`; `level15.rs:177-198`; `enhance.rs:1877-1902` |
@@ -205,7 +202,6 @@ Files over 500 and under 800: `charset/mod.rs` 658, `objects.rs` 643, `packet/fu
 | `RowState`, `RowContext` | `level1.rs:644,676` and `enhance.rs:1342,1360` | two different records under one name each |
 | `WalkState`, `WalkAction`, `walk_transition` | `level15.rs` and `enhance.rs` | two machines (REQ-FSM-007 and REQ-FSM-011) under one vocabulary |
 | `consts.rs` sections "Phase I2a", "Phase I2b" | `consts.rs:881-980` | grouped by when they were written, not by clause |
-| `SidePanels` in `colour.rs` | `colour.rs:132-181` | clause 12.5 is layout, not colour |
 | `mod.rs` in two places, file-plus-directory in three | `charset/`, `glyphs/` against `acq/`, `packet/`, `render/` | two module styles |
 | `packet::encode` beside `packet::decode` and `ecc::hamming84_encode` | | a module and two functions share one verb |
 
@@ -235,7 +231,7 @@ src/
   consts/object_pages.rs              130  10.5.1, 10.6, Annex E.8 capacities, Annex A.8 limits
   consts/character_sets.rs             25  NATIONAL_POSITIONS, G2_RIGHT_GUILLEMET, G3 codes, undefined positions
   consts/spacing_attributes.rs         80  Table 26, TTI aliases, Table 47 mosaics
-  consts/colour.rs                     90  Table 30, Colour Map, re-mapping, side-panel columns, ADJACENT_CLUT_FLIP, SCREEN_COLUMNS
+  consts/colour.rs                     90  Table 30, Colour Map, re-mapping, ADJACENT_CLUT_FLIP, ADDRESS_COLUMNS
   consts/geometry.rs                   70  cell and page geometry, fonts, aspect, palette indices, double-height rows
   consts/timing.rs                     40  E.12, E.19, REQ-NAV-007, E.48 units
   consts/tests.rs                      45
@@ -289,7 +285,6 @@ src/
   charset/composition.rs              400  COMPOSITIONS, EXTENDED_COMPOSITIONS, search, compose
   charset/tests.rs                    815  the former mod.rs and tables.rs tests
   colour.rs                           130  ColourIndex, colour_index, ColourMap, Remapping; mod lines; pub use
-  colour/side_panels.rs                50  clause 12.5, E.49
   colour/presentation.rs              135  PresentationSources, PagePresentation, resolve, colour_words
   colour/tests.rs                     200
   compose.rs                           80  unchanged
@@ -368,11 +363,10 @@ Where capability features move to gated files and where they stay:
 | `extended-sets` | `charset/extended_designations.rs` holds `EXTENDED_TABLE_32` and `EXTENDED_SECOND` (`tables.rs:114-163`), declared with one gated `mod`; the empty twins (`164-168`) stay in `designation.rs` under `#[cfg(not(…))]` | the joined-form block of `conformance` (`glyphs/conformance.rs:245-258`); the joining call in `compose.rs` (already item-form) |
 | `nonspacing-attributes` | | `ATTRIBUTES` and the four guarded arms of `column_triplet` (`enhance/walk/placement.rs`): one `match` in two forms |
 | `objects` | | `cfg!(feature = "objects")` in `Walker::run` and `Walker::act` (`enhance/walk.rs`): two arms of one loop and one `match`; `invocation.rs` itself is ungated because the finder module `objects` is ungated |
-| `side-panels` | | `resolve` (`colour/presentation.rs`) and `panel_widths` (`render/row.rs`): one function, two forms; `SidePanels` is used ungated by `level1::Grid` |
 | `level25-32colors`, `level35-32colors` | | `resolve` (`colour/presentation.rs`): three branches of one function |
 | `level15`, `level25` | | `compose.rs` match arms and `config::available`: already on items |
 
-Every item used by two features stays in an ungated file (`SidePanels`, `FlashMode`, `FlashRate`, `objects::*`, `acq::statistics`); nothing is duplicated.
+Every item used by two features stays in an ungated file (`FlashMode`, `FlashRate`, `objects::*`, `acq::statistics`); nothing is duplicated.
 
 ## 4. The moves
 
@@ -396,7 +390,7 @@ Pure moves of inline test modules to `tests.rs`, each file becoming `name.rs` be
 
 ### Step 4: `consts` by clause
 
-`consts.rs` becomes the parent of fourteen children named in section 3, each taking its banner's lines verbatim with the doc comments (the mapping of lines to files is: signal 10-63; packets 65-98 and 866-879; audio 100-129; pages 131-203; coding 205-226; triplets 228-385, 948-968, 976-980; enhancement_packets 387-485, 934-946, 589-601; object_pages 487-586, 908-933; character_sets 602-606, 886-889, 970-975; spacing_attributes 608-685; colour 687-768, 890-892, 900-902; geometry 770-828, 893-894, 903-907; timing 830-864). Items that derive from another file's constant (`IDL_AUDIO_SERVICE_BYTE` from `DATA_START`, `OBJECT_TRIPLETS_IN_ROWS` from `PACKET_ROW_25` and `TRIPLETS_PER_PACKET`, `SCREEN_COLUMNS` from `COLUMNS`, `ENHANCEMENT_SUBPAGE_PACKETS`, `SIDE_PANEL_AREA_COLUMNS`, `PAGE_WIDTH`, `LOCAL_TRIPLETS`, `WALK_DEPTH`) take `use super::<child>::NAME;` lines. The parent's `pub use signal::*;` … lines keep `crate::consts::X` and `neoteletext_core::consts::X`. No visibility changes. Departure: the parent is a ~60-line file of docs and re-exports; it is kept because `consts` is the one home REQ-GEN-014 and `check-constants` name.
+`consts.rs` becomes the parent of fourteen children named in section 3, each taking its banner's lines verbatim with the doc comments (the mapping of lines to files is: signal 10-63; packets 65-98 and 866-879; audio 100-129; pages 131-203; coding 205-226; triplets 228-385, 948-968, 976-980; enhancement_packets 387-485, 934-946, 589-601; object_pages 487-586, 908-933; character_sets 602-606, 886-889, 970-975; spacing_attributes 608-685; colour 687-768, 890-892, 900-902; geometry 770-828, 893-894, 903-907; timing 830-864). Items that derive from another file's constant (`IDL_AUDIO_SERVICE_BYTE` from `DATA_START`, `OBJECT_TRIPLETS_IN_ROWS` from `PACKET_ROW_25` and `TRIPLETS_PER_PACKET`, `ENHANCEMENT_SUBPAGE_PACKETS`, `PAGE_WIDTH`, `LOCAL_TRIPLETS`, `WALK_DEPTH`) take `use super::<child>::NAME;` lines. The parent's `pub use signal::*;` … lines keep `crate::consts::X` and `neoteletext_core::consts::X`. No visibility changes. Departure: the parent is a ~60-line file of docs and re-exports; it is kept because `consts` is the one home REQ-GEN-014 and `check-constants` name.
 
 ### Step 5: `types` by concept (optional)
 
@@ -434,7 +428,7 @@ After each sub-step: `cargo build -p neoteletext-formats --all-features` and `ca
 
 ### Step 9: `colour` and `objects`
 
-`colour/side_panels.rs` (132-181), `colour/presentation.rs` (183-315 with the four `cfg!` lines in `resolve`, which stay because they are branches of one function), `colour/tests.rs` (317-514 with its `cfg_attr`). `objects/links.rs` (103-259), `objects/body.rs` (261-346), `objects/definition.rs` (348-548), `objects/tests.rs` (550-643); `ROLES`, `usable`, `compositional`, `table_link`, `TableLinks`, `table` stay private to `links.rs`; `type_offset`, `usage_includes`, `check_definition` private to `definition.rs`. `SidePanels` stays in `colour` because a new top-level module would change the layer table.
+`colour/presentation.rs` (183-315 with the four `cfg!` lines in `resolve`, which stay because they are branches of one function), `colour/tests.rs` (317-514 with its `cfg_attr`). `objects/links.rs` (103-259), `objects/body.rs` (261-346), `objects/definition.rs` (348-548), `objects/tests.rs` (550-643); `ROLES`, `usable`, `compositional`, `table_link`, `TableLinks`, `table` stay private to `links.rs`; `type_offset`, `usage_includes`, `check_definition` private to `definition.rs`.
 
 ### Step 10: `enhance`
 

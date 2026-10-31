@@ -39,7 +39,7 @@ Public paths and importers. Everything in every module is `pub`; the only narrow
 
 The `neottx` program: arguments, terminal output, the terminal viewer, and the authoring commands. A binary only (`[[bin]] neottx = src/main.rs`): nothing imports it, and its public surface is the command line, pinned by the integration tests.
 
-Features: `default = ["view", "live", "slice", "write-text", "sound", "keyboard"]`. `view` brings `crossterm` and `unicode-normalization`; `live`, `slice`, `write-text` forward to `neoteletext-app`; `sound` brings `neoteletext-audio` with `encode`; `keyboard` brings `neoteletext-qrkeyboard` and `unicode-normalization`; `objects`, `side-panels`, `additional-flash-functions` forward to the core.
+Features: `default = ["view", "live", "slice", "write-text", "sound", "keyboard"]`. `view` brings `crossterm` and `unicode-normalization`; `live`, `slice`, `write-text` forward to `neoteletext-app`; `sound` brings `neoteletext-audio` with `encode`; `keyboard` brings `neoteletext-qrkeyboard` and `unicode-normalization`; `objects`, `additional-flash-functions` forward to the core.
 
 | File | Lines | Gate |
 |---|---|---|
@@ -250,7 +250,7 @@ Line ranges are those of the files at `fb2dd8a`. "Mixes" lists the distinct resp
 | `slice.rs` | `slice` 14-48: preset-name strings 15-22, slicer loop and T42 writer | preset names belong with arguments; the loop is the command | — |
 | `interact.rs` | `ActiveForm` 10-22; `message_row` 24-33; `origin_of` 35-42; `submission` 44-65 | one | 12 inline |
 | `sandbox.rs` | `Policy` 11-21; `apply` 23-30; Linux `mod platform` 32-139 (`landlock` 47-69, `seccomp` 91-131); other `mod platform` 141-158; `self_test` 160-174 | policy and dispatch; the Linux mechanism; the self-test | — |
-| `present.rs` | `MosaicStyle` 21-28; `visible`, `cell_text`, `row_cells`, `plain` 30-95; `Raster`, `Scale`, `raster` 97-153; `receiver_grid` 155-188 | text output; raster output; a receiver-drawn page built through acquisition types | 18 inline |
+| `present.rs` | `MosaicStyle` 21-28; `visible`, `cell_text`, `plain` 30-95; `Raster`, `Scale`, `raster` 97-153; `receiver_grid` 155-188 | text output; raster output; a receiver-drawn page built through acquisition types | 18 inline |
 | `session.rs` | consts 18-51; `Session` 30-42; `impl` 53-238 (`new`, `keep`/`take_kept`/`maybe_keep` 74-92, `push` 111-126, `push_at` 128-140, `tick` 142-153, `finish` 155-165, `pages`, `service`, `page`, `grid` 188-218, `print_trace` 220-226, `rolling_header`) | the session; the kept-packet sidecar; trace printing | — |
 | `input.rs` | `Options` 18-57; `config` 62-83; `is_live` 85-92; `live_source` ×2 94-104; `load_live` 106-143; `open` 145-156; `pump` 158-170; `reader` 172-182; `load`, `load_for` 184-251; `region_for_language` 253-268; `open_live` 270-279 | options; configuration; file reading and pumping; live collection; the language table | — |
 | `extras.rs` | `PageExtras` 15-37; consts 39-42; `Destination`, `TextLinkExtras` 44-64; `impl` 66-84; `destination` 86-97; `from_page` 99-158; `draw_marks` 160-167; `fixed`, `number`, `form_spec` 169-254; `key` 256-260 | link extras; drawing marks on a grid; form specification conversion | 27 inline |
@@ -441,10 +441,10 @@ src/
   sandbox.rs             ~60   Policy, apply, self_test; mod linux / mod unsupported
   sandbox/linux.rs      ~110   Landlock and seccomp (today's Linux mod platform)
   sandbox/unsupported.rs ~20   the note-and-continue platform (today's other mod platform)
-  present.rs             ~95   MosaicStyle, visible, cell_text, row_cells, plain; mod raster; mod receiver_page
+  present.rs             ~95   MosaicStyle, visible, cell_text, plain; mod raster; mod receiver_page
   present/raster.rs      ~60   Raster, Scale, raster
   present/receiver_page.rs ~40 ALL_COLUMNS_GOOD, ALL_ROWS_RECEIVED, receiver_grid
-  present/tests.rs       ~75   the receiver test, and the four tests of plain now in the CLI
+  present/tests.rs       ~75   the receiver test, and the tests of plain now in the CLI
   input.rs              ~210   Options, CHUNK, config, open, pump, reader, load, load_for, region_for_language; mod feed
   input/feed.rs          ~75   is_live, live_source (both forms), load_live, open_live
   extras.rs             ~200   PageExtras, Destination, TextLinkExtras, destination, from_page, draw_marks, key; mod forms
@@ -708,7 +708,7 @@ Gate for every A step: `scripts/check.sh fast`; `cargo xtask features` rows `neo
 
 **A1. `sandbox` by platform.** `git mv` nothing; create `sandbox/linux.rs` from the Linux `mod platform` body (`sandbox.rs:34-138`: the `use` lines, `LANDLOCK_ABI`, `landlock`, `target_arch`, `number` with its allow, `seccomp`, `apply`) and `sandbox/unsupported.rs` from the other (`143-157`, with its `#[allow(clippy::unnecessary_wraps)]`). In `sandbox.rs`: `#[cfg(target_os = "linux")] mod linux; #[cfg(target_os = "linux")] use linux as platform; #[cfg(not(target_os = "linux"))] mod unsupported; #[cfg(not(target_os = "linux"))] use unsupported as platform;`. Visibility: the two `pub(super) fn apply` stay as they are. No tests move. Importers: none.
 
-**A2. `present` into text, raster and the receiver's page.** `present/raster.rs` takes `Raster` 97-108, `Scale` 110-119, `raster` 121-153; `present/receiver_page.rs` takes `ALL_COLUMNS_GOOD`, `ALL_ROWS_RECEIVED` 155-158 and `receiver_grid` 160-188 (its five inline `use` lines become file-level `use`s); `present/tests.rs` takes `receiver_tests` 190-207 (no allow attribute) **and** the four tests of `plain` from `neoteletext-cli/src/output/text.rs:148-163, 182-196, 200-217` with their `grid_with` helper 139-146 (their `#[cfg(feature = "side-panels")]` on `plain_text_composes_side_panels` travels; `neoteletext-app` has no such feature, so that test needs the core's: add `#[cfg(feature = "side-panels")]` as it is and note that the app crate does not forward the feature — the test compiles out in every app build until the CLI's `side-panels` pass-through reaches the app; alternatively keep that one test in the CLI. The plan keeps it in the CLI and moves the other three.) `present.rs` keeps `MosaicStyle`, `visible`, `cell_text`, `row_cells`, `plain` and adds `mod raster; mod receiver_page; pub use raster::{Raster, Scale, raster}; pub use receiver_page::receiver_grid; #[cfg(test)] mod tests;`. Visibility: none change (`visible` stays private to `present.rs`). Importers: none (`cli/output/text.rs:9-10` and `output/image.rs:10-11` keep their paths).
+**A2. `present` into text, raster and the receiver's page.** `present/raster.rs` takes `Raster` 97-108, `Scale` 110-119, `raster` 121-153; `present/receiver_page.rs` takes `ALL_COLUMNS_GOOD`, `ALL_ROWS_RECEIVED` 155-158 and `receiver_grid` 160-188 (its five inline `use` lines become file-level `use`s); `present/tests.rs` takes `receiver_tests` 190-207 (no allow attribute) **and** the tests of `plain` from `neoteletext-cli/src/output/text.rs:148-163, 182-196, 200-217` with their `grid_with` helper 139-146. `present.rs` keeps `MosaicStyle`, `visible`, `cell_text`, `plain` and adds `mod raster; mod receiver_page; pub use raster::{Raster, Scale, raster}; pub use receiver_page::receiver_grid; #[cfg(test)] mod tests;`. Visibility: none change (`visible` stays private to `present.rs`). Importers: none (`cli/output/text.rs:9-10` and `output/image.rs:10-11` keep their paths).
 
 **A3. `input` and its live feed.** `input/feed.rs` takes `is_live` 85-92, both `live_source` forms 94-104 with their `cfg` lines, `load_live` 106-143, `open_live` 270-279. `input.rs` adds `mod feed; pub use feed::{is_live, open_live};`. Visibility: `load_live` becomes `pub(super)` (called by `load_for` 192-194). Importers: none.
 
