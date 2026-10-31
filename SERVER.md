@@ -127,6 +127,7 @@ The protocol of section 7 is the interface; a kit is a convenience. One referenc
 **The engine's channel layout, unchanged** (decision E.70, `requirements/web.md`):
 - a channel is a folder on an `https` origin;
 - `channel.json` describes it, including `push: {address, method, input}`;
+- a viewer's address may have a query, which is no part of the channel's folder: the receiver sends it, as written, on the upgrade request to the push address, and the program is given it in `connected` (DEC-1665, REQ-1674);
 - pages are `NNN.tti` or `NNN.t42`;
 - `index.t42` is a bundle;
 - `contents.txt` lists and orders the pages.
