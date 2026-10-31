@@ -58,7 +58,7 @@ The receiver decides only whether a key goes; the channel decides only what it m
 | Step | Process | Does |
 |---|---|---|
 | 1 | Interface | Takes the window's key, mouse, wheel, paste and composition events. Sends an *intent* to the trusted core only when the active tab's open page takes input and the browser's own modifier (Command on macOS, Control-Shift elsewhere) is not held. Draws the cursor the trusted core allows. |
-| 2 | Trusted core | Checks every condition again (requirement REQ-INT-130), applies the rate limit, paces the pointer's moves and numbers the contacts of a touch screen (section 9.8), tracks held keys and the input count, keeps what is not yet acknowledged for a resumption (section 6.4), **encodes the protocol**, and alone sends HELLO, RESUME, RESIZE, PAGE, FOCUS and the releases. |
+| 2 | Trusted core | Checks every condition again (requirement REQ-INT-130), applies the rate limit, paces the pointer's moves and numbers the contacts of a touch screen (section 9.8), tracks held keys and the input count, keeps what is not yet acknowledged for a resumption (section 6.4), **encodes the protocol**, and alone sends HELLO, RESUME, RESIZE, SELECT, FOCUS and the releases, stamping every input event with the page on screen (section 5.4). |
 | 3 | Fetcher | Writes each message it is given to the channel's push WebSocket at once, those given at one moment together; holds a move while the socket's unsent bytes are over a bound (section 9.8); measures the round trip by WebSocket ping and pong (section 9.2). It takes nothing else and opens nothing (requirement REQ-INT-133). |
 | 4 | Decoder | Finds cursor and control records in pushed packets and `CU` lines, untrusted, and passes them on. |
 | 5 | Trusted core | Checks each cursor and control record; applies WELCOME; passes the interface only what it may draw. |
@@ -67,7 +67,7 @@ The interface never encodes the wire format: it sends intents, so a compromised 
 
 ### 3.4 In `neottx`
 
-`neottx view` is a terminal receiver: crossterm's key, paste, focus and resize events become the protocol's events in the fetcher process, as in the browser. Control-] leaves and returns to the channel, as telnet's escape character does; it is the one key that never goes. `neottx keyboard` bridges a phone to a channel's push WebSocket: a channel gets a phone keyboard without implementing qrkeyboard.
+`neottx view` is a terminal receiver: crossterm's key, paste, focus and resize events become the protocol's events in the fetcher process, as in the browser. Control-] leaves and returns to the channel, as telnet's escape character does; it is the one key that never goes. `neottx keyboard` bridges a phone to a channel's push WebSocket: a channel gets a phone keyboard without implementing qrkeyboard. It draws no page, so it sends no SELECT: the connection takes the channel's initial page, and the bridge stamps the phone's keys with the page and sub-code the channel last sent it, sending none before the first.
 
 ### 3.5 Microcontroller receivers and channels
 
@@ -142,21 +142,35 @@ An event is `0xFF`, a type byte, then its fields.
 | Type | Name | Fields | When |
 |---|---|---|---|
 | `0x01` | KEY | section 5.5 | every press, repeat and release |
-| `0x02` | MOUSE | `flags` u8, `button` u8, `col` uv, `row` uv, `px`? uv, `py`? uv, `mods`? u8 | every press and release over the page; every move that changes the dot, at most 60 a second (section 9.8); gone when the pointer leaves the page or a contact is cancelled |
-| `0x03` | WHEEL | `flags` u8, `dx` sv, `dy` sv, `col` uv, `row` uv, `px`? uv, `py`? uv, `mods`? u8 | while the pointer is over the page |
-| `0x04` | PASTE | `str`, at most `MAX_PASTE` (4000) bytes | always |
+| `0x02` | MOUSE | the stamp, `flags` u8, `button` u8, `col` uv, `row` uv, `px`? uv, `py`? uv, `mods`? u8 | every press and release over the page; every move that changes the dot, at most 60 a second (section 9.8); gone when the pointer leaves the page or a contact is cancelled |
+| `0x03` | WHEEL | the stamp, `flags` u8, `dx` sv, `dy` sv, `col` uv, `row` uv, `px`? uv, `py`? uv, `mods`? u8 | while the pointer is over the page |
+| `0x04` | PASTE | the stamp, `str`, at most `MAX_PASTE` (4000) bytes | while the page has the keyboard focus |
 | `0x05` | FOCUS_IN | none | always |
 | `0x06` | FOCUS_OUT | none | always |
 | `0x07` | RESIZE | `cols` uv, `rows` uv, `pw` uv, `ph` uv | always |
-| `0x08` | COMPOSE | `cursor` uv, `str` at most `MAX_COMPOSE` (256) bytes; an empty string ends composition | while an input method composes |
+| `0x08` | COMPOSE | the stamp, `cursor` uv, `str` at most `MAX_COMPOSE` (256) bytes; an empty string ends composition | while an input method composes |
 | `0x09` | HELLO | `version` uv, `caps` uv, `agent`? str (at most 64 bytes) | first, once |
-| `0x0A` | PAGE | `page` uv: `0x100` to `0x8FF` in teletext's hexadecimal page form, or 0 for none | when the receiver has the PAGE capability |
 
-**HOVER**, an extension (`0x43`, so a channel that does not know it skips it): `uv` length, then `flags` u8 (bit 0: 1 when the pointer left the control, 0 when it entered; others a protocol error), `col` uv and `row` uv, the control's first cell, its top left (section 7.3). It goes as the pointer enters and leaves a control of the open page while keys go to the channel: leaving one control for another sends the leave, then the enter. It lets a channel show something as the pointer passes, a row's summary or a help line, without working out from the moves which control the pointer is over (`RETURN-CHANNEL.md` decision F, REQ-RCH-040). Like a move, it counts no input units (section 7.1) and is not held to the rate (section 8 rule 4). It goes only for a mouse or a pen that hovers, never for a finger (REQ-RCH-049).
+Type `0x0A` was PAGE until 31 October 2026 (DEC-1538, REQ-1556). It is unused, so it is a protocol error like any unknown core type.
 
-**TOUCH**, an extension (`0x44`, so a channel that does not know it skips it, REQ-RCH-043): `uv` length, then `flags` u8 (bits 0 and 1 the action, as MOUSE's: 0 down, 1 up, 2 move, 3 gone; bit 2 `px`, `py` present; bits 3 to 7 a protocol error), `id` u8, `col` uv, `row` uv, `px`? uv, `py`? uv, and nothing after. It is every contact on a touch screen after the first, which goes as MOUSE (section 9.8): `id` is 1 to 9, the contact's number from its beginning to its end, the lowest free when it begins; an `id` of 0 or above 9 is a protocol error. At most `MAX_CONTACTS` (10) contacts are on the page at once, ten fingers. TOUCH is sent only when both sides set TOUCH (section 6.2). Its down and up count one input unit each, as a click's press and release do; a move and gone count none (REQ-RCH-054).
+**HOVER**, an extension (`0x43`, so a channel that does not know it skips it): `uv` length, then the stamp, `flags` u8 (bit 0: 1 when the pointer left the control, 0 when it entered; others a protocol error), `col` uv and `row` uv, the control's first cell, its top left (section 7.3). It goes as the pointer enters and leaves a control of the open page while keys go to the channel: leaving one control for another sends the leave, then the enter. It lets a channel show something as the pointer passes, a row's summary or a help line, without working out from the moves which control the pointer is over (`RETURN-CHANNEL.md` decision F, REQ-RCH-040). Like a move, it counts no input units (section 7.1) and is not held to the rate (section 8 rule 4). It goes only for a mouse or a pen that hovers, never for a finger (REQ-RCH-049).
 
-**Selection and focus,** two words defined once (neoteletext-common's DEC-1526 item 5). A connection's **selection** is the page or sub-page its tab shows: what SELECT says, and what the channel sends, keeps and compares. **Focus** is only the keyboard's: FOCUS_IN and FOCUS_OUT, and PAGE, the page that has the keys. Nothing here calls a selection "focused".
+**TOUCH**, an extension (`0x44`, so a channel that does not know it skips it, REQ-RCH-043): `uv` length, then the stamp, `flags` u8 (bits 0 and 1 the action, as MOUSE's: 0 down, 1 up, 2 move, 3 gone; bit 2 `px`, `py` present; bits 3 to 7 a protocol error), `id` u8, `col` uv, `row` uv, `px`? uv, `py`? uv, and nothing after. It is every contact on a touch screen after the first, which goes as MOUSE (section 9.8): `id` is 1 to 9, the contact's number from its beginning to its end, the lowest free when it begins; an `id` of 0 or above 9 is a protocol error. At most `MAX_CONTACTS` (10) contacts are on the page at once, ten fingers. TOUCH is sent only when both sides set TOUCH (section 6.2). Its down and up count one input unit each, as a click's press and release do; a move and gone count none (REQ-RCH-054).
+
+**Selected, active and focused,** three words defined once (neoteletext-common's DEC-1538, amending DEC-1526 item 5).
+- **Selected:** the page and sub-page a tab shows, named by SELECT. A connection has at most one selection, which is what the channel sends, keeps and compares.
+- **Active:** what a selected page is to the back end. An active page receives the back end's updates, whatever the viewer's input is doing (REQ-1553). Only a new selection, SELECT page 0 included, ends them.
+- **Focused:** what a selected page is for the viewer's input, and only for input. A page has the **keyboard focus** while keys go to it, which FOCUS_IN and FOCUS_OUT tell the channel, and the **pointer focus** while the pointer or a touch is over its page area, which MOUSE gone ends (REQ-1554).
+
+So a page can be active without being focused: in a tab behind another, in a window behind another application, while the viewer types an address, or with the pointer outside it. Losing either focus never changes the selection and never stops updates. "Keys go" in this document means the selected page has the keyboard focus.
+
+**The stamp** (REQ-1555, the owner's "belt and braces"). KEY, PASTE, COMPOSE, MOUSE, WHEEL, TOUCH and HOVER each begin with `page` uv and `sub` uv, before their other fields: the page and sub-code on screen in the tab when the event happened, which is what the viewer was looking at, not merely what was selected. Between a new selection and the arrival of its page the old page is still on screen, and a click or key aimed at it carries the old page.
+- `page` is `0x100` to `0x8FF`. `sub` is a sub-code `0x0000` to `0x3F7E`. It is never `0x3F7F`, because a page on screen is always a particular sub-page. Anything else is a protocol error, and so is a page of 0.
+- The stamp costs three bytes on a page of sub-code 0000, and four at most.
+- **No other event has one.** FOCUS_IN and FOCUS_OUT carry none and are always acted on, since FOCUS_OUT releases held keys and must never be dropped. Nor do HELLO, RESUME, RESIZE and SELECT. Raw text (section 5.3) cannot carry one: a channel takes it for the selection as it stands.
+- **The channel's check.** A channel compares each stamp with the connection's selection as last recorded. When the page and sub-code are the same, the event is acted on. When they differ the event is dropped and nothing of it applied, the drop is counted, at most one log line an interval names the count, as for invalid packets (REQ-1462), and the connection is kept.
+- **A release is never dropped.** A release whose stamp does not match is still applied, as a release of what the connection holds, so that nothing stays held; so is a pointer's gone. A press with a stamp that does not match is dropped.
+- **One truth.** The selection stays the only truth: a stamp can only cause a drop, never send input to a page other than the selection.
 
 **SELECT**, an extension (`0x40`, so a channel that does not know it skips it; REQ-INT-140), decided by the owner on 29 October 2026: "we send an event saying which page the user has selected and if there are subpages then the server transmits them at that time. also the same event should send if the user has selected a subpage", and revised on 30 October 2026 by DEC-1527 (each browser tab has its own self-contained connection and decoder, so a connection has one selection and SELECT carries no view number) and DEC-1526 (every sub-code is a peer). `uv` length, then `page` uv and `sub` uv, and nothing after:
 - `page` is the page selected, `0x100` to `0x8FF` in teletext's hexadecimal page form, or 0 when the tab no longer shows a page of the channel.
@@ -164,7 +178,7 @@ An event is `0xFF`, a type byte, then its fields.
 
 **What the tab is then sent and shows** (DEC-1500, DEC-1526, REQ-1502). Every sub-code a page has is one of its sub-pages, all of them peers; sub-code 0000 beside others is the page's own content, and the page's order is ascending sub-code, 0000 first when present. With `sub` `0x3F7F` the tab shows the page's **first** sub-page in that order, and that sub-page then is the selection, exactly as if the viewer had chosen it: the channel answers with it, and stepping goes on from it. With a sub-code the tab shows that sub-page alone and is sent only it and its changes, while the page's other sub-pages change, until the tab selects something else. Stepping to the next or previous sub-page, by the keys, the remote, the arrows or the sub-page list (section 7.9), is a selection of that sub-code; nothing else is sent. Sub-pages are never sent with their page, and **nothing rotates on a live channel:** the sub-page shown changes only when the viewer selects another, or when the channel's program moves the tab, which is itself a selection. A broadcast recording played back keeps the broadcast's own behaviour.
 
-It is sent whenever the connection's selection changes: a page keyed or followed by a link, a sub-page stepped to or chosen from the list; at the start of each session, after HELLO (and after RESUME), when the tab shows a page of the channel, so a reconnection is sent its page again; and with page 0 when the tab leaves the channel's pages. It is sent whether or not keys go to the channel, which is what tells it apart from PAGE: PAGE names the page that has the keys, SELECT the page the tab shows. It is sent only when both sides set SELECT (section 6.2), counts no input units, and is held to the rate as other events are (section 8).
+It is sent whenever the connection's selection changes: a page keyed or followed by a link, a sub-page stepped to or chosen from the list; at the start of each session, after HELLO (and after RESUME), when the tab shows a page of the channel, so a reconnection is sent its page again; and with page 0 when the tab leaves the channel's pages. It is sent whatever the focus, and focus never changes it. It is the only message that names a selection: a receiver that does not set SELECT has no selection, and is sent no page. It is sent only when both sides set SELECT (section 6.2), counts no input units, and is held to the rate as other events are (section 8).
 
 **RESUME**, an extension (`0x45`): `uv` length, then the session's `token` (16 bytes, `TOKEN_BYTES`) and `acked` u16 big-endian, the last acknowledgement the receiver took; exactly 18 bytes of payload. It follows HELLO in a reconnection's first message, when the receiver asks to resume its session (section 6.4); a channel that does not know it skips it, and so begins a new session. It counts nothing.
 
@@ -172,22 +186,20 @@ It is sent whenever the connection's selection changes: a page keyed or followed
 - `flags` bits 0–1: MOUSE action, 0 press, 1 release, 2 move, 3 gone (unused in WHEEL); bit 2: `px`, `py` present; bit 3: `mods` present; MOUSE's bits 4–5: the device, 0 a mouse or trackpad, 1 touch, 2 a pen, 3 reserved and a protocol error, set only when both sides set TOUCH and otherwise 0 (REQ-RCH-042); bits 6–7 (4–7 in WHEEL) a protocol error.
 - `button`: on press and release, 0 left, 1 middle, 2 right, 3 back, 4 forward, 5 and up others; on move and gone, a bit mask of the buttons held.
 - **Gone** (action 3, `RETURN-CHANNEL.md` decisions D and J, REQ-RCH-034, REQ-RCH-046): the pointer has gone and nothing it held was pressed. It goes when the pointer leaves the open page or keys stop going to the channel, after the waiting move (section 9.8), and when the system or the receiver cancels a contact (a gesture from the screen's edge, a call, a palm rejected, the receiver's own gesture taking it). `button` is the mask held, `col` and `row` the last position sent; what it held is released **without a click**, and a channel must not act on it as on a release. It counts no input units.
-- `col`, `row`: the character cell, from the top left of the page: columns 0 to 39 (to 71 with side panels), rows 0 to 24. `px`, `py`: the dot of the page image from the same origin, 12 to a cell across and 20 down; sent whenever the receiver knows them. Units (REQ-RCH-054): a cell and a dot are counted from 0 at the top left; a dot is the page image's own pixel at the size the receiver draws it, 12 by 20 to a cell whatever the screen's scaling, so a channel never needs the display's; a wheel's delta is in 1/120ths of a line.
+- `col`, `row`: the character cell, from the top left of the page: columns 0 to 39, rows 0 to 24, and a value beyond them is a protocol error (a page is always 40 by 25, DEC-1636, REQ-1643). `px`, `py`: the dot of the page image from the same origin, 12 to a cell across and 20 down; sent whenever the receiver knows them. Units (REQ-RCH-054): a cell and a dot are counted from 0 at the top left; a dot is the page image's own pixel at the size the receiver draws it, 12 by 20 to a cell whatever the screen's scaling, so a channel never needs the display's; a wheel's delta is in 1/120ths of a line.
 - `dx`, `dy`: scroll in 1/120ths of a line, positive right and down. A wheel that moves in notches sends at least a whole line (120) a notch: macOS reports a slow notch as a tenth of a line, and a channel that moves a line at a time would need ten. A faster notch keeps the system's acceleration; a trackpad's continuous scrolling is sent as it comes.
 
 **PASTE** is the whole paste as one event. It may contain control characters: the channel treats it as data, never as keystrokes. A paste longer than `MAX_PASTE` is cut at a character boundary.
 
 **COMPOSE**: `cursor` is a code-point offset into the preedit string.
 
-**RESIZE** gives the page's text area in cells and the page image in pixels as the receiver draws it: a teletext page is 40 by 25 cells (72 with both side panels), so RESIZE changes only when the side panels or the drawn size do. Pixels are 0 when unknown.
+**RESIZE** gives the page's text area in cells and the page image in pixels as the receiver draws it: a teletext page is always 40 by 25 cells (DEC-1636), and a larger size is a protocol error, so RESIZE changes only when the drawn size does. Pixels are 0 when unknown.
 
 **HELLO**'s `agent` is the receiver's user agent string, as the engine's REQ-WEB-031 defines it (`NeoTeletext/0.1 (macOS)`, or `product/version (platform) neoteletext/version` for another program on the engine). It is present when `caps` has the AGENT bit (section 6.2), and is sent only over a transport without HTTP, a serial line for instance: over the push WebSocket the channel already has it from the upgrade's `User-Agent` header, so it is not sent twice.
 
-**PAGE** says which page the viewer has open, so the channel knows what to push: sent after RESIZE at the start of a session and whenever the open page changes while keys go to the channel, and with 0 when the viewer leaves the channel's pages.
-
 ### 5.5 KEY
 
-`flags` u8, `key` uv, `mods`? u8, `text`? str (at most `MAX_KEY_TEXT`, 32 bytes), `base`? uv
+The stamp, `flags` u8, `key` uv, `mods`? u8, `text`? str (at most `MAX_KEY_TEXT`, 32 bytes), `base`? uv
 
 | `flags` bit | Meaning |
 |---|---|
@@ -196,7 +208,8 @@ It is sent whenever the connection's selection changes: a page keyed or followed
 | 3 | M: `mods` present (omitted when 0) |
 | 4 | T: `text` present: the key produced text |
 | 5 | B: `base` present: it differs from `key` |
-| 6–7 | Reserved: a protocol error when set |
+| 6 | L: lost, on a release only: the key did not come up, the page lost the input (section 8 rule 3). A protocol error with any other action |
+| 7 | Reserved: a protocol error when set |
 
 - **`key`**: for a character key, the Unicode code point of the key without Shift (Control-Shift-A sends `a` with Shift and Control); otherwise a functional code.
 - **`mods`**: 1 Shift, 2 Alt (Option on macOS), 4 Control, 8 Super (Command, Windows), 16 Hyper, 32 Meta, 64 Caps Lock, 128 Num Lock, as the Kitty keyboard protocol.
@@ -240,25 +253,28 @@ Every key goes as KEY, with its text, since decision E.125 (REQ-RCH-029); raw te
 
 | Input | Bytes | Size |
 |---|---|---|
-| `a` pressed | `FF 01 10 61 01 61` | 6 |
-| `a` released | `FF 01 02 61` | 4 |
+| `a` pressed | `FF 01 80 02 00 10 61 01 61` | 9 |
+| `a` released | `FF 01 80 02 00 02 61` | 7 |
+| `a` released because the page lost the input | `FF 01 80 02 00 42 61` | 7 |
 | `é` committed by an input method | `C3 A9` | 2 |
 | Focus lost | `FF 06` | 2 |
-| Enter pressed | `FF 01 04 02` | 4 |
-| Up pressed | `FF 01 04 09` | 4 |
-| Red (Fastext) pressed | `FF 01 04 5C` | 4 |
-| Control-C pressed | `FF 01 08 63 04` | 5 |
-| Page 100 opened | `FF 0A 80 02` | 4 |
-| Click at column 10, row 5 | `FF 02 00 00 0A 05` | 6 |
-| The same, with its dot (120, 100) | `FF 02 04 00 0A 05 78 64` | 8 |
-| A move to the dot (121, 100), no button | `FF 02 06 00 0A 05 79 64` | 8 |
-| The pointer gone, from column 10, row 5 | `FF 02 03 00 0A 05` | 6 |
-| Wheel one line down at column 10, row 5 | `FF 03 00 00 F0 01 0A 05` | 8 |
-| HOVER, entering the control at column 2, row 20 | `FF 43 03 00 02 14` | 6 |
-| A tap: the first finger down, at column 10, row 5 (RCH-055) | `FF 02 10 00 0A 05` | 6 |
-| A second finger down, at column 11, row 5 | `FF 44 04 00 01 0B 05` | 7 |
-| Two fingers moving, in one write: the first (dot 121, 100) and the second (dot 133, 100) | `FF 02 16 01 0A 05 79 64`, `FF 44 07 06 01 0B 05 85 01 64` | 8 + 10 |
+| Enter pressed | `FF 01 80 02 00 04 02` | 7 |
+| Up pressed | `FF 01 80 02 00 04 09` | 7 |
+| Red (Fastext) pressed | `FF 01 80 02 00 04 5C` | 7 |
+| Control-C pressed | `FF 01 80 02 00 08 63 04` | 8 |
+| Page 100 selected | `FF 40 04 80 02 FF 7E` | 7 |
+| Click at column 10, row 5 | `FF 02 80 02 00 00 00 0A 05` | 9 |
+| The same, with its dot (120, 100) | `FF 02 80 02 00 04 00 0A 05 78 64` | 11 |
+| A move to the dot (121, 100), no button | `FF 02 80 02 00 06 00 0A 05 79 64` | 11 |
+| The pointer gone, from column 10, row 5 | `FF 02 80 02 00 03 00 0A 05` | 9 |
+| Wheel one line down at column 10, row 5 | `FF 03 80 02 00 00 00 F0 01 0A 05` | 11 |
+| HOVER, entering the control at column 2, row 20 | `FF 43 06 80 02 00 00 02 14` | 9 |
+| A tap: the first finger down, at column 10, row 5 (RCH-055) | `FF 02 80 02 00 10 00 0A 05` | 9 |
+| A second finger down, at column 11, row 5 | `FF 44 07 80 02 00 00 01 0B 05` | 10 |
+| Two fingers moving, in one write: the first (dot 121, 100) and the second (dot 133, 100) | `FF 02 80 02 00 16 01 0A 05 79 64`, `FF 44 0A 80 02 00 06 01 0B 05 85 01 64` | 11 + 13 |
 | RESUME, after HELLO | `FF 45 12`, the token, the acknowledgement | 21 |
+
+Each example is on page 100, sub-code 0000, whose stamp is `80 02 00`. On a sub-code of 128 or more the stamp is a byte longer.
 
 The version-1 key record took 14 bytes for every key.
 
@@ -266,11 +282,11 @@ The version-1 key record took 14 bytes for every key.
 
 ### 6.1 The session
 
-1. When the push WebSocket of a channel that declares input opens, the receiver sends HELLO with version 2 and the capabilities it has.
+1. When the push WebSocket of a channel that declares input opens, the receiver sends HELLO with version 3 and the capabilities it has. Version 3 (31 October 2026, DEC-1538) adds the stamp to the input events, so an event's layout differs from version 2: both sides speak 3, and there is no compatibility path.
 2. The channel answers with WELCOME (section 7.2): the version it speaks and the subset of the capabilities it will use. A channel that cannot speak the version closes the connection.
-3. Then the receiver sends RESIZE, FOCUS_IN or FOCUS_OUT, and PAGE if it has that capability; and from then on the viewer's input.
+3. Then the receiver sends RESIZE, FOCUS_IN or FOCUS_OUT, and SELECT when it shows a page of the channel; and from then on the viewer's input.
 4. The receiver sends no input before WELCOME. A channel that has not answered within `WELCOME_TIMEOUT` (10 s) is taken not to take input, and the receiver says so.
-5. **A reconnection is a new session,** unless both sides set RESUME and the channel still holds the session (section 6.4): HELLO again, nothing held, the input count from zero. The channel pushes the open page again when it receives PAGE. A resumed session goes on as section 6.4 says.
+5. **A reconnection is a new session,** unless both sides set RESUME and the channel still holds the session (section 6.4): HELLO again, nothing held, the input count from zero. The channel pushes the selected page again when it receives SELECT. A resumed session goes on as section 6.4 says.
 
 ### 6.2 Capabilities
 
@@ -278,13 +294,13 @@ The version-1 key record took 14 bytes for every key.
 
 | Value | Capability | Meaning |
 |---|---|---|
-| 65 536 | PAGE | The receiver shows teletext pages and sends PAGE. |
+| 65 536 | — | Retired: PAGE, until 31 October 2026 (DEC-1538). Never set, and a protocol error when set in HELLO or WELCOME. |
 | 131 072 | CURSOR | The receiver draws the channel's cursor record. |
 | 262 144 | — | Retired: ECHO, provisional echo, until 28 October 2026 (the engine's decision E.134). Never set; a peer that still sets it is not refused, and the bit is ignored. |
 | 524 288 | AGENT | HELLO carries the receiver's user agent string (section 5.4); in HELLO only, never in WELCOME. |
 | 1 048 576 | TOUCH | The receiver sends touch: MOUSE's device bits and TOUCH (section 5.4, REQ-RCH-041 to REQ-RCH-043). Without it touch goes as the mouse, the first contact alone. |
 | 2 097 152 | RESUME | A lost connection's session may be resumed (section 6.4, REQ-RCH-013): WELCOME carries the session's token, and a reconnection's first message carries RESUME after HELLO. |
-| 4 194 304 | SELECT | The receiver sends SELECT, the connection's selection (section 5.4); a channel that sets it sends the one sub-page selected, never a page's sub-pages together (DEC-1500). |
+| 4 194 304 | SELECT | The receiver shows teletext pages and sends SELECT, the connection's selection (section 5.4); a channel that sets it sends the one sub-page selected, never a page's sub-pages together (DEC-1500). |
 
 A sender uses a new flag bit, field, core type or extension type only when both sides set its capability bit in HELLO and WELCOME. A receiver of the stream that sees an unknown flag bit set treats it as a protocol error.
 
@@ -309,10 +325,10 @@ A WebSocket cannot resume: what was in flight when TCP died is lost silently. Wh
 1. **The token.** A channel that sets RESUME in WELCOME gives the session a token, 16 bytes from its cryptographic generator, new in every WELCOME (section 7.2).
 2. **The receiver keeps** every message of input units it sends, as sent, until an acknowledgement covers it (section 7.1), at most `RESEND_BYTES` (16,384) bytes and 256 messages. A message of no input units, a move, gone, HOVER or COMPOSE, is never acknowledged and never kept. When what is kept would pass either bound the session can no longer be resumed, and the next connection is a new session.
 3. **The channel holds** a session whose connection was lost for at least `RESUME_HOLD_MS` (32 seconds, past the push connection's first five retries), with its input count taken: everything it has read of the session, which it passes to the channel program in order. It may drop it sooner, under load, and must drop it after it gives the session to another connection.
-4. **On a lost connection** the channel treats every held key, button and contact as released (section 8 rule 3), resumed or not.
+4. **On a lost connection** the channel releases every held key, button and contact (section 8 rule 3), resumed or not: a resumed session starts with nothing held.
 5. **A reconnection's first message** is HELLO, with RESUME after it: the token and the last acknowledgement the receiver took. In a resumed session HELLO counts nothing, and the count goes on.
 6. **The channel answers** with WELCOME (section 7.2): *resumed*, with the input count it had taken, when it holds a session of that token with no connection of its own, and the count taken is at or after the acknowledgement; otherwise *new*, and the session begins again from HELLO, as section 6.1 says, nothing of the old resent.
-7. **The receiver sends again**, before anything else and in the order first sent, every message it keeps that came after the count taken, whole messages only; the count taken is always the end of a message it sent, and one that is not is a protocol error. Then RESIZE, the focus and PAGE as at the start of a session, so the channel pushes the open page again, since pages pushed while the connection was down were lost.
+7. **The receiver sends again**, before anything else and in the order first sent, every message it keeps that came after the count taken, whole messages only; the count taken is always the end of a message it sent, and one that is not is a protocol error. Then RESIZE, the focus and SELECT as at the start of a session, so the channel pushes the selected page again, since pages pushed while the connection was down were lost.
 8. **The channel drops** what it has already taken, so a message that reaches it twice is acted on once.
 9. **The bounds.** The count is 16 bits and wraps, compared by RFC 1982 serial arithmetic, as the acknowledgement is; what may be kept, 256 messages, is far below half its range. A channel that does not set RESUME, or that answers *new*, keeps the rule of section 6.1: a reconnection is a new session.
 
@@ -517,25 +533,31 @@ Each entry: `sub` u16, a sub-code `0x0000` to `0x3F7E` with no bit outside the t
 
 1. **One message per event, never held back** (REQ-RCH-010). Each event is its own message, written as it happens; messages already waiting at the same moment are written together, in one write and one TLS record where the transport allows. The receiver keeps only the latest of a contact's unsent moves (section 9.8) and sums unsent wheel deltas; nothing else is merged or dropped.
 2. **Order** is the stream's order.
-3. **Held input.** On FOCUS_OUT or a lost connection the channel treats every held key, button and contact as released, and on gone the buttons and the contact the pointer held; the receiver sends no release for them.
+3. **Held input** (REQ-207). A key or button is held when it went down and has not come up. It is released whenever the page loses the input, and releasing never deselects the page: it stays selected and active.
+   - **The signals.** FOCUS_OUT releases every held key, button and contact. A pointer's gone releases the buttons and the contact it held, without a click. A change of selection, SELECT page 0 included, or the program moving the tab, releases everything. A connection closing or dropping, or a session ending without resumption, releases everything.
+   - **The receiver's part.** Before the FOCUS_OUT or SELECT that ends the input, a receiver that knows what is held sends a KEY release for each held key with the L flag set (section 5.5), stamped with the page that held it, and gone for the pointer and each contact (section 5.4). Gone is a lost release by its own action, so MOUSE and TOUCH have no L flag.
+   - **The channel's part.** A channel keeps what each connection holds. On a signal it treats whatever is still held as released, itself, and acts on nothing else. A receiver may have sent nothing: a dropped connection cannot, and a terminal that reports no releases never does.
+   - **The mark.** Every such release, the receiver's or the channel's, is marked as lost input, and reaches a channel's program marked so (`lost: true`), so a game can tell "the player let go" from "the player left". A real key-up or button-up carries no mark.
 4. **The rate.** A receiver sends at most `MAX_PER_SECOND` (120) input units in any second, counted as the input count counts them, and never drops a release, a key's, a button's or a contact's up, to keep to it. 120 is qrkeyboard's relay limit. A move, gone and HOVER count nothing: a move goes at most 60 a second and only when the dot changes (section 9.8); a HOVER only as a control is crossed. So the pointer can never cost a key. COMPOSE counts nothing in the input count, since it is never acknowledged, but is held to the rate as one unit, since nothing else bounds it.
 5. **Protocol errors** close the connection, on either side.
 6. **Bounds.** A message over `MAX_MESSAGE`, a field over its maximum, a varint over 5 bytes or not minimal: a protocol error.
 7. **Nothing waits on a timer** but the pointer's moves (section 9.8). A receiver sends an event when it happens and draws what comes back when it arrives (decision E.97, REQ-INT-008, REQ-RCH-011); the heartbeat (a ping after 25 s of silence, a pong within 10 s) and the round trip's ping (section 9.2) are the push connection's own.
-8. **A host goes to a page by sending it.** A cursor record naming another page of the same channel, while keys go to that channel, opens that page in the receiver, as a terminal shows what its host sends. It is the only thing a channel's record can make a receiver do, within the channel, and never a fetch; the viewer choosing a page overrides it.
+8. **A host goes to a page by sending it.** A cursor record naming another page of the same channel, while keys go to that channel, opens that page in the receiver, as a terminal shows what its host sends. The receiver then sends SELECT for it, since the move is a selection. It is the only thing a channel's record can make a receiver do, within the channel, and never a fetch; the viewer choosing a page overrides it.
 9. **Terminal programs.** A channel that feeds an ordinary terminal program translates events into whatever encoding that program asked for.
 
 ## 9. The receiver's side
 
-### 9.1 When keys go (NeoTeletext)
+### 9.1 When input goes (NeoTeletext)
 
-Keys go to a channel only while all of these hold: the tab is the active one; the page open in it is the channel's; the channel declares input over a WebSocket whose session has been welcomed; the window has the focus; and the viewer is not editing the address. Then every key goes except the browser's own: those with the browser's modifier (Command on macOS, Control-Shift elsewhere), and the strip, the overview and a background tab, which never take keys, and the magazines and the page list, which take the arrows from a click on them until a click elsewhere (the browser's decision 105). Command-Escape (Control-Shift-Escape elsewhere) leaves the page; plain Escape is the channel's.
+The receiver sends the viewer's input only for the connection's selected page, and only while that page is focused (REQ-1554). While the tab shows "Loading", "Connecting" or nothing of the selected page, no input is sent. Losing either focus never sends SELECT and never stops the page's updates (REQ-1553).
+
+**The keyboard focus.** Keys go to a channel only while all of these hold: the tab is the one in front; the page selected in it is the channel's; the channel declares input over a WebSocket whose session has been welcomed; the window has the focus; and the viewer is not editing the address. Then every key goes except the browser's own: those with the browser's modifier (Command on macOS, Control-Shift elsewhere), and the strip, the overview and a background tab, which never take keys, and the magazines and the page list, which take the arrows from a click on them until a click elsewhere (the browser's decision 105). Command-Escape (Control-Shift-Escape elsewhere) leaves the page; plain Escape is the channel's.
 
 Whatever the keys do, the trusted core sends SELECT on a tab's own connection whenever the tab's page or sub-page changes, and SELECT with page 0 when the tab leaves the channel's pages (section 5.4); each tab has its own connection (DEC-1527).
 
-When keys start going, the trusted core sends PAGE and FOCUS_IN; when they stop (another tab, another page, the page closed), FOCUS_OUT and PAGE 0, so the channel lets go of a key held as the viewer left (REQ-INT-108); when the window loses the focus or the address is being edited, FOCUS_OUT, and FOCUS_IN when it comes back.
+When keys start going, the trusted core sends FOCUS_IN. When they stop, whether another tab came to the front, the window lost the focus, the address is being edited or another part of the browser took the keys, it sends FOCUS_OUT, so the channel lets go of a key held as the viewer left (section 8 rule 3), and FOCUS_IN when they come back. The page stays selected and active through all of it.
 
-**The mouse.** Every press, release and move over the page goes to the channel while keys go to it (section 6.3), moves paced as section 9.8 says; a click with the browser's modifier is the browser's. A link the page declares is the browser's on every page: a click on it follows it, and nothing pressed on it goes to the channel (section 6.3). When the pointer leaves the page, or keys stop going, the waiting move and then gone (section 5.4). The wheel goes to the channel while the pointer is over the page; over the rest of the window it scrolls the browser.
+**The pointer focus.** Every press, release and move over the page goes to the channel while keys go to it (section 6.3), moves paced as section 9.8 says; a click with the browser's modifier is the browser's. A link the page declares is the browser's on every page: a click on it follows it, and nothing pressed on it goes to the channel (section 6.3). When the pointer leaves the page, or keys stop going, the waiting move and then gone (section 5.4). The wheel goes to the channel while the pointer is over the page. Outside the page the browser's own actions apply and nothing goes to the channel: the wheel steps to the next or previous page, which is a new selection, sent with SELECT.
 
 **Touch** (REQ-RCH-047, REQ-RCH-048). While keys go to the channel every contact on its page is the channel's, two fingers and a pinch included; the browser's gestures, a pinch to zoom and a swipe to step sub-pages, act on pages that do not take input and outside the page, and the system's gestures from the screen's edges are the system's. The browser zooms a page that takes input with its own controls. A link is the browser's on every page: a contact that begins on a link the page declares follows it when it lifts there, and goes to the channel not at all (section 6.3).
 
@@ -555,13 +577,15 @@ The trusted strip says "Keys go to *host*" while keys go, with "Not secure" on a
 
 A channel that takes input selects pages by videotex's convention, which it implements: `*nnn#` goes to a page, `#` to the next, `*#` to the one before, `*00` shows the page again; three plain digits where the channel has no other use for them. The receiver interprets none of it: it sends the keys.
 
+A receiver's own selections are ordinary SELECTs (section 5.4). The wall of pages selects nothing while it is shown, drawing from the tab's cache of page source; it fills a missing visible tile by an ordinary page load, one at a time in screen order, and then sends SELECT with page 0 (DEC-1552).
+
 ### 9.5 Characters a page cannot show
 
 The receiver sends the viewer's character whatever its script, and draws nothing of it (section 9.3). What the channel draws is the channel's choice: the nearest character of the page's sets, a placeholder, or a page in another set (the engine's area CHR).
 
 ### 9.6 `neottx view`
 
-Every key goes while the channel takes input, Control-C included; Control-] leaves and returns. With a terminal that reports releases (the Kitty keyboard protocol), it sends releases too; otherwise a press only. It sends PASTE from bracketed paste, FOCUS from the terminal's focus events, and PAGE when the viewer opens a page.
+Every key goes while the channel takes input, Control-C included; Control-] leaves and returns. With a terminal that reports releases (the Kitty keyboard protocol), it sends releases too; otherwise a press only. It sends PASTE from bracketed paste, FOCUS from the terminal's focus events, and SELECT when the viewer opens a page, the page with `0x3F7F`, or a sub-page with its sub-code. It stamps every input event with the page and sub-code it is drawing, and sends none while it draws nothing of the page. Keys stop going when the terminal loses the focus or after Control-], and it sends FOCUS_OUT then, with a lost release of each held key where the terminal reports releases.
 
 ### 9.7 Controls and links under the pointer
 
@@ -586,7 +610,7 @@ The receiver draws both itself, at once, and sends nothing for them: the looks n
 
 A receiver draws a page at whatever size its window, screen or full-screen view allows: smaller than the page image, the same, or many times larger, and on a display whose own scaling (a high-density screen, a system zoom) the receiver may not even choose. Every position it sends is in the page's own units, never the screen's, so a channel answers the pointer the same way at every size and never needs to know the size (section 5.4: RESIZE carries the drawn size as 0, unknown, in NeoTeletext).
 
-- **The units.** `col`, `row` is the character cell, columns 0 to 39 (71 with both side panels) and rows 0 to 24. `px`, `py` is the dot of the page image, 12 dots to a cell across and 20 down, 480 by 500 for a page without side panels, from the page's top left. The dot is always inside the cell: `px` / 12 = `col` and `py` / 20 = `row`, rounded down.
+- **The units.** `col`, `row` is the character cell, columns 0 to 39 and rows 0 to 24. `px`, `py` is the dot of the page image, 12 dots to a cell across and 20 down, 480 by 500, from the page's top left. The dot is always inside the cell: `px` / 12 = `col` and `py` / 20 = `row`, rounded down.
 - **The conversion is the receiver's.** It takes the pointer's position in the units its window system gives (in NeoTeletext the window's logical pixels, the system's scaling already divided out), subtracts the top left of the rectangle where the open page's image was last drawn, and scales by the image's size in dots over the rectangle's size, rounding down: `px` = ⌊(*x* − *left*) × 480 / *width*⌋, and the same down. The rectangle is the page image alone, at the image's own proportions; the border of the screen colour around it, the space beside it and the receiver's own controls are not the page.
 - **Only the open page, at rest.** Positions go only for the page keys go to, while it is drawn where the receiver will keep it: not over a page still zooming, sliding to the next or shown as one of many, where a cell under the pointer would be a cell of a moving picture. A pointer that leaves the page, onto the border, the receiver's controls or another window, or a page that stops being the one at rest, gives the waiting move and then gone (section 5.4).
 - **Drawn larger.** Several screen pixels show each dot. A move within one dot changes nothing and is not sent (section 9.8), so a page drawn larger costs no more moves; moves stay at most 60 a second at every size.

@@ -41,7 +41,7 @@ Rules from the start, since retrofitting them is a rewrite:
 | **Channel** | A teletext service: a folder on a web origin (engine decision E.70). Where a client connects, whose cookies it holds, what sessions belong to. | Web origin and path |
 | **Page and sub-page** | A teletext page, `100` to `8FF`, and its sub-codes. Addressable, cacheable, tunable. | Web resource |
 | **Session** | A viewer's relationship with a channel's application across connections. | tmux session |
-| **View** | One place in a client showing a page. Each browser tab of a live channel has its own connection (DEC-1527), so to the server a view is a connection: it knows only the one page and sub-page that connection has selected, its **selection** (SELECT, section 5.4), and which page has the keys (PAGE). "Focus" is only the keyboard's (section 6.1). Elsewhere in this document a page a view has selected is called **tuned**, the word used before 29 October 2026. | Terminal window |
+| **View** | One place in a client showing a page. Each browser tab of a live channel has its own connection (DEC-1527), so to the server a view is a connection: it knows only the one page and sub-page that connection has selected, its **selection** (SELECT, section 5.4), and whether that page is focused for input. **Selected**, **active** and **focused** are defined once, in `INPUT.md` section 5.4: the selected page is active, so it is updated whatever its focus (REQ-1553). Elsewhere in this document a page a view has selected is called **tuned**, the word used before 29 October 2026. | Terminal window |
 | **Application** | A program behind live or interactive pages, outside the server, serving every viewer at once. | Terminal program |
 
 Deliberately not concepts for application developers:
@@ -201,8 +201,9 @@ Upstream is the input protocol already built on both sides and fuzzed (`C/INPUT.
 - HELLO and WELCOME;
 - KEY, MOUSE, WHEEL, PASTE and COMPOSE;
 - FOCUS_IN and FOCUS_OUT;
-- RESIZE;
-- **PAGE**, which says which page has the keys.
+- RESIZE.
+
+PAGE (`0x0A`) and its capability were withdrawn on 31 October 2026 (DEC-1538, REQ-1556): a PAGE from any receiver is a protocol error, never read as a selection, and input protocol version 3 stamps each input event with the page on screen (REQ-1555).
 
 **The receiver says what its connection has selected** (the owner's decision of 29 October 2026: "we send an event saying which page the user has selected and if there are subpages then the server transmits them at that time. also the same event should send if the user has selected a subpage"). One event, an extension, which a channel that does not know it skips (`INPUT.md` section 5.4, REQ-INT-140):
 
@@ -214,9 +215,11 @@ It is sent whenever the page or sub-page the tab has selected changes, whether o
 
 *Withdrawn on 29 October 2026, never built:* TUNE (`0x40`, a list of sub-pages tuned, with a `preview` flag), UNTUNE (`0x41`) and TITLES (`0x42`, titles by range), designed on 26 October 2026 for a receiver to tune single sub-pages and their neighbours. SELECT takes `0x40`; `0x41` and `0x42` are reserved.
 
-A receiver that does not set SELECT has no selection: its connection is shown the program's answer to `connected` with no selection, the channel's initial page (REQ-1471).
+A receiver that does not set SELECT has no selection of its own: its connection is shown the program's answer to `connected` with no selection, the channel's initial page (REQ-1471).
 
-- **Focus** is the existing PAGE event, with FOCUS_IN and FOCUS_OUT: one page per connection has the keys.
+- **Focus** is FOCUS_IN and FOCUS_OUT, for the keyboard, and the pointer being over the page: it decides only where input goes, never what is sent (REQ-1554). A selected page stays active, and is updated, without it (REQ-1553).
+- **The stamp.** Each input event carries the page and sub-code on screen when it happened. The server compares it with the connection's selection: a match goes to the program, with the page and sub-code; a press that differs is dropped, counted as `stale_input` in `/stats.json` and logged at most once an interval; a release is never dropped (REQ-1555, REQ-1557).
+- **Held input.** The server keeps what each connection holds, and on a change of selection, FOCUS_OUT, a pointer's gone or a lost connection gives the program the releases still owed, marked `lost: true` (REQ-207, `INPUT.md` section 8 rule 3).
 - **Keys are never batched or queued** in either direction.
 - **No JSON on this wire.** A second protocol on one socket would mean two parsers in the browser's trusted core, and INPUT.md's KEY already carries everything the draft's `key {key}` would have to grow:
   - code;
@@ -255,7 +258,7 @@ Reasons are codes; the words are the client's. A record that breaks its layout o
 
 **One connection per tab, one selection per connection** (the owner, 30 October 2026: "we should probably have a websocket connection per tab which is completely self contained and decoupled - and the server sees it that way too", DEC-1527). Each browser tab showing a live channel opens its own push WebSocket, with its own decoder and store; tabs never share one, even on the same channel. A connection therefore has exactly one **selection**, or none: one page and one sub-code. The receiver states it with SELECT (section 5.4), which carries `page` and `sub` and no view number; the server's events to the program carry no view number either, and there is no `MAX_VIEWS`. The channel's cookies stay shared by its tabs, so the server sees two tabs as two connections of one session, as a web server sees two tabs of one site.
 
-**The words.** The **selection** is the page and sub-page a connection shows: what is selected, sent, kept and diffed. **Focus** is only the keyboard's: PAGE, and the `focus` and `blur` events. The selected page is never called the focused page (DEC-1526 item 5).
+**The words** are `INPUT.md` section 5.4's, defined once (DEC-1538). The **selection** is the page and sub-page a connection shows: what is selected, sent, kept and diffed. A selected page is **active**: the server sends it and every change to it, whatever the focus. **Focused** is for input only, the `focus` and `blur` events among it. Only a new selection ends a page's updates.
 
 **Every sub-code is a peer** (DEC-1526). Every sub-code 0000 to 3F7E a page has is one of its sub-pages, with content of its own, and all are equal (EN 300 706 section 3.1: a page address is a page number plus a sub-code). A page may have 0000 beside other sub-codes, and 0000 is then the page's own content; Annex A.1's 0000 for a page with no sub-pages and 0001 onward for a page with sub-pages are recommendations, not rules. A page's order is ascending sub-code, 0000 first when present: the order sub-pages are listed in, counted in and stepped through.
 
@@ -281,7 +284,7 @@ Reasons are codes; the words are the client's. A record that breaks its layout o
 
 - **Why one sub-page:** each selection, step and update costs one sub-page at most, about 1 to 3 KB, and the browser treats pages and sub-pages the same way. The cost is a round trip to the program for each step through a page's sub-pages (DEC-1500's cost accepted).
 - **Bounded per connection:** what a connection is sent grows with what its viewer selects, one sub-page at a time, never with the pages or sub-pages in the channel.
-- **What the channel learns:** which page and which sub-page each viewer reads, detail of the kind PAGE already gives of the page with the keys. **The consequence, accepted by the owner on 25 October 2026 for tuning, stands:** a compromised interface could signal what it saw on one channel through what it selects on another. The trusted core sends SELECT from what the tab shows and limits how fast it may change (section 11).
+- **What the channel learns:** which page and which sub-page each viewer reads, detail a channel already has of the page a viewer types into. **The consequence, accepted by the owner on 25 October 2026 for tuning, stands:** a compromised interface could signal what it saw on one channel through what it selects on another. The trusted core sends SELECT from what the tab shows and limits how fast it may change (section 11).
 - **Level 2.5 and 3.5 pages:** how a selected sub-page's object pages, DRCS pages and MOT reach the receiver, now that the program is the only source, is not yet designed (section 20 item 7).
 - *Withdrawn on 30 October 2026:* a page selection bringing every sub-page of the page (29 October, DEC-1089 as first written); each shared page's first sub-page sent to every connection; the receiver rotating sub-pages from what it holds; several views sharing one connection with a view number in SELECT and `MAX_VIEWS` (DEC-1527); a 3F7F selection showing "the page's current sub-page" with the program's later sub-pages of the page reaching it as rotation (DEC-1500 as first written, amended by DEC-1526).
 
@@ -340,8 +343,8 @@ It costs bytes in proportion to the audience, but only numbers, and only for cli
 | Direction | Message | Meaning |
 |---|---|---|
 | Server → app | `open {session, page, identity, cookies}` | A viewer tuned a page the application personalises; `identity` is the verified one, if any (section 8.3) |
-| Server → app | `input {session, page, event}` | An INPUT.md event for the page with focus, as the decoder gives it |
-| Server → app | `focus` / `blur {session, page}` | Keys moved to or from the page |
+| Server → app | `input {session, page, sub, event}` | An INPUT.md event for the selected page, with the page and sub-code of its stamp, as the decoder gives it; a release the page lost carries `lost: true` |
+| Server → app | `focus` / `blur {session, page}` | The page gained or lost the keyboard focus (FOCUS_IN, FOCUS_OUT) |
 | Server → app | `first_viewer` / `last_viewer {page}` | A channel page gained its first or lost its last viewer, so the application may idle; it publishes at once on the next |
 | Server → app | `close {session}` | The session ended; discard its state |
 | Server → app | `tick {timer}` | A timer the application asked for (for WebAssembly applications, which have no clock) |
@@ -592,7 +595,7 @@ Each step is usable on its own.
 
    Each imports the engine's page model, encoder and codes.
 2. **The server repository:** the static layout over HTTPS with `ETag`; the runtime actor with the page store, tune tables and last-sent pointers.
-3. **The WebSocket:** HELLO, WELCOME, SELECT, PAGE; page frames; flush policies; conflation.
+3. **The WebSocket:** HELLO, WELCOME, SELECT; page frames; flush policies; conflation.
 4. **Applications over stdio:** TTI content, ownership, overlays, `open`, `input`, cookies, validation, isolation.
 5. **`B/site` ported to applications;** the browser's tests and latency test against the server.
 6. **The browser:** the trusted core's tuning (decision 104), INDEX and CHANGED, sub-pages, enhanced pages' references.
