@@ -446,7 +446,7 @@ Each page:
 | `title`, text | 1 to 120 characters |
 | `section`, text | 0 to 120 characters: the heading the page is listed under; empty for none |
 
-**Splitting.** A record holds one magazine's pages, as many as fit in the frame's largest body (`MAX_BODY`, 1,016 bytes); a magazine with more goes on in the next record. The records of a sending are numbered 0 to `parts` − 1 in the order of their magazines and pages, so no page is in two records of one sending. The magazine's name is given in the first record of the magazine in a sending; the records after it in the same magazine and sending give an empty name, which keeps the name given. The largest page is 968 bytes (2 + 2 + 2 × (2 + 480)) and the fixed fields with the longest name are 489 (7 + 2 + 480), so a page may not fit beside a long name: a record may therefore hold no pages, and then carries only the magazine's name.
+**Splitting.** A record holds one magazine's pages, as many as fit in 1,016 bytes of body (`MAX_BODY`, the audio profile's largest); a magazine with more goes on in the next record. The records of a sending are numbered 0 to `parts` − 1 in the order of their magazines and pages, so no page is in two records of one sending. The magazine's name is given in the first record of the magazine in a sending; the records after it in the same magazine and sending give an empty name, which keeps the name given. The largest page is 968 bytes (2 + 2 + 2 × (2 + 480)) and the fixed fields with the longest name are 489 (7 + 2 + 480), so a page may not fit beside a long name: a record may therefore hold no pages, and then carries only the magazine's name.
 
 **Reassembling.** A receiver keeps the index it has and the sending it is receiving:
 1. A record of the `generation` it is receiving, whose `parts` agrees with that sending's first record, adds its pages to the sending. A record of another `generation` begins a new sending, and the one in progress is abandoned.
@@ -483,7 +483,7 @@ A cookie set while the connection is open (`SERVER.md` section 8.2). The body is
 
 A sub-page's TTI Link Extension links (the engine's Appendix E, `docs/spec/design/tti-link-extension.md`), which packets cannot carry (neoteletext-common's DEC-1495, REQ-1494): key links to other services, to addresses and to the web, page-number links (`LK`) and text links (`LT`). The record holds every Link Extension link of the sub-page, the key links to its own service too, so that the links a receiver holds are exactly the page's. The page's Fastext links and row 24 still travel in its own packets X/27/0 and X/24 (Appendix E rule 4).
 
-**Integers are big-endian. A target** is a `u16` byte length then 1 to 256 bytes (`LINK_ADDRESS_BYTES`) of printable ASCII with no space and no comma, in any form of Appendix E section E.1: `mpp`, `mpp:ssss`, `name:mpp`, `name:mpp:ssss`, an `http` or `https` address, or `web:` and such an address, read by the same parser as a TTI file's.
+**Integers are big-endian. A target** is a `u16` byte length then 1 to 8,004 bytes (`LINK_TARGET_BYTES`: the longest address, 8,000 octets by REQ-1661 and DEC-1668, and a `web:` mark) of printable ASCII with no space and no comma, in any form of Appendix E section E.1: `mpp`, `mpp:ssss`, `name:mpp`, `name:mpp:ssss`, an `http` or `https` address, or `web:` and such an address, read by the same parser as a TTI file's.
 
 The body:
 
@@ -504,7 +504,7 @@ The body:
 | Text link (`LT`) | `row` u8, 1 to 23; `column` u8, 0 to 39; `length` u8, at least 1, with `column` + `length` at most 40; `target` |
 
 - **Bounds across the parts.** Over all the parts of one sending, a sub-page has at most five key links, each key once and at most four of them coloured, at most eight page-number links, each number once, and at most eight text links. A record that would break one is refused.
-- **Splitting.** The links go in order, key links first, then page-number links, then text links, as many in each record as fit in the frame's largest body (`MAX_BODY`, 1,016 bytes); a link is never split, and its largest, a key link, is 269 bytes. The most links a sub-page has, 5,513 bytes at their longest, take at most eight records; a typical page's take one.
+- **Splitting.** The links go in order, key links first, then page-number links, then text links, as many in each record as fit in the frame's largest body (`MAX_FRAMED_BODY`, 8,184 bytes); a link is never split, and its largest, a key link, is 8,016 bytes. The most links a sub-page has, about 168 KB at their longest, take at most 21 records of up to 237 packets each, and cost that much every time the sub-page is sent; a typical page's take one record.
 - **When it is sent, and what a receiver does.** The server sends a sub-page's LINKS records straight after that sub-page's page frame, every time it sends the sub-page, whenever the sub-page has any Link Extension link. Part 0 replaces every link the receiver held for that page and sub-code; later parts add to it. A sub-page sent without a LINKS record has no Link Extension links: a receiver drops those it held for it. A receiver reads the links exactly as it reads a TTI file's `LN`, `LK` and `LT` lines, by Appendix E's rules (E.2), and puts them in the same store.
 
 ### 7.9 The SUBPAGES record (type 10)
@@ -524,12 +524,12 @@ A page's list of sub-pages (neoteletext-common's DEC-1500, REQ-1503): sub-pages 
 
 Each entry: `sub` u16, a sub-code `0x0000` to `0x3F7E` with no bit outside the thirteen a sub-code has, each at most once in the list; then `title`, a `u8` byte length and 0 to 160 bytes of UTF-8, at most 40 characters (a teletext row), with no control character; empty for none.
 
-- **Splitting.** The entries go in the page's order, as many in each record as fit in the frame's largest body (`MAX_BODY`, 1,016 bytes), at least six, and an entry is never split; the records are numbered 0 to `parts` − 1 in that order.
+- **Splitting.** The entries go in the page's order, as many in each record as fit in 1,016 bytes of body (`MAX_BODY`, the audio profile's largest), at least six, and an entry is never split; the records are numbered 0 to `parts` − 1 in that order.
 - **Reassembling,** as the index record (section 7.5): a record of another `version` of the page begins a new sending; a sending is complete when every part has arrived and its entries number `count`, and then it is the page's whole list. A partial sending shows what it has and removes nothing; a complete one replaces the list held.
 
 ### 7.10 Records of several fragments, and records a receiver cannot use
 
-- **Fragments.** A record of more than 34 bytes is cut into fragments of 34 bytes, the last padded with zeros, at most 31 fragments (`MAX_RECORD`, 1,024 bytes), as the audio profile's records are (the engine's REQ-AUD-007): each fragment one 4/31 packet with the record id, its index, and the CRC-16. The record id counts every record of the service, whatever its type, so two records in flight on one service never share an id. A channel sends a record's fragments in order, fragment 0 first, in one binary message or in consecutive ones; a receiver reassembles them by record id, and knows the record's length, and so its fragments, from fragment 0's frame header.
+- **Fragments.** A record of more than 34 bytes is cut into fragments of 34 bytes, the last padded with zeros, at most 241 fragments (`MAX_FRAMED_RECORD`, 8,192 bytes, so that a record can hold an address of 8,000 octets with the fields around it; the audio profile's own records stay within 1,024 bytes, `MAX_RECORD`), as the audio profile's records are (the engine's REQ-AUD-007): each fragment one 4/31 packet with the record id, its index, and the CRC-16. The record id counts every record of the service, whatever its type, so two records in flight on one service never share an id. A channel sends a record's fragments in order, fragment 0 first, in one binary message or in consecutive ones; a receiver reassembles them by record id, and knows the record's length, and so its fragments, from fragment 0's frame header.
 - **A record a receiver cannot use** (a frame whose CRC-32, version or length fails; a type it does not know; a field outside its range; text that breaks its rule; bytes after the last field) is discarded whole and nothing of it applied, and each of its packets is counted as an invalid packet (neoteletext-common's REQ-1462), without closing the connection; a LINKS record refused leaves its sub-page shown with no Link Extension links. A record of a type the receiver does not read is skipped, not counted.
 
 ### 7.11 The REDIRECT record (type 11)
@@ -553,9 +553,7 @@ The address form:
 
 | Bytes | Field | Range |
 |---|---|---|
-| 1 to the end | `address` | 1 to 1,015 bytes (`MAX_ADDRESS`: the frame's largest body, `MAX_BODY`, less the `form` byte) of printable ASCII with no space: an `http` or `https` address the engine's strict address parser accepts, and after it, optionally, `#` and what follows it, which the receiver's address rules judge (REQ-505) |
-
-Addresses are at most 2,048 bytes elsewhere; one too long for this record cannot be sent, and the server refuses it (TODO-1662 raises the limit).
+| 1 to the end | `address` | 1 to 8,000 bytes (`MAX_ADDRESS`: the longest address of REQ-1661, its fragment included) of printable ASCII with no space: an `http` or `https` address the engine's strict address parser accepts, and after it, optionally, `#` and what follows it, which the receiver's address rules judge (REQ-505) |
 
 - **The page form.** The server sends the record and records the page as the connection's selection, exactly as it would a SELECT, and the program is then sent `selected` for it. The receiver opens that page and sub-page, whether or not its page has the focus, since a selected page is active whatever its focus (REQ-1553), and sends SELECT for it.
 - **The address form.** The server sends the record and changes nothing else: the connection's selection stands until the receiver leaves. A receiver that opens channels puts the address through its own address rules, which alone decide: a redirect leads only to an `http` or `https` address, never a local file, a `web:` hand-off or the browser's own pages. It shows the redirect notice (REQ-1686) and then opens the address as another channel. A receiver that cannot open channels says that the channel redirected and to where, and stays.
