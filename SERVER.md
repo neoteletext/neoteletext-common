@@ -196,9 +196,9 @@ There are two delivery modes, kept apart:
 
 A receiver-compatible stream is not the original broadcast, and the server never claims it is. An authentic stream is never given current-state semantics: nothing in it is coalesced.
 
-### 5.4 Upstream: INPUT.md version 4
+### 5.4 Upstream: INPUT.md version 5
 
-Upstream is the input protocol already built on both sides and fuzzed (`C/INPUT.md`). It is binary events framed by `0xFF`, at most 4,096 bytes a message, and has:
+Upstream is the input protocol already built on both sides and fuzzed (`C/INPUT.md`). It is binary events framed by `0xFF`, at most 8,192 bytes a message, and has:
 - HELLO and WELCOME;
 - KEY, MOUSE, WHEEL, PASTE and COMPOSE;
 - FOCUS_IN and FOCUS_OUT;

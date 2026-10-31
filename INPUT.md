@@ -106,7 +106,7 @@ A channel takes input when its descriptor says so inside its push object:
 
 - **Transport:** the channel's push WebSocket. Each **binary** message the receiver sends is a piece of one ordered input stream, the concatenation of all binary messages on that connection. The only other message a receiver sends is the push subscription (text).
 - **Whole events per message.** A message MUST hold whole events and whole UTF-8 characters, so a channel can parse each message alone; text may be split between messages anywhere between characters.
-- **At most `MAX_MESSAGE` (4096) bytes a message.**
+- **At most `MAX_MESSAGE` (8192) bytes a message,** room for a SELECT carrying the longest page parameters (DEC-1715).
 - The stream is defined so it also works over any reliable ordered byte stream (a microcontroller's serial line, a TCP socket); over TCP, `TCP_NODELAY` is set.
 
 ### 5.2 Encoding primitives
@@ -172,9 +172,10 @@ So a page can be active without being focused: in a tab behind another, in a win
 - **A release is never dropped.** A release whose stamp does not match is still applied, as a release of what the connection holds, so that nothing stays held; so is a pointer's gone. A press with a stamp that does not match is dropped.
 - **One truth.** The selection stays the only truth: a stamp can only cause a drop, never send input to a page other than the selection.
 
-**SELECT**, an extension (`0x40`, so a channel that does not know it skips it; REQ-INT-140), decided by the owner on 29 October 2026: "we send an event saying which page the user has selected and if there are subpages then the server transmits them at that time. also the same event should send if the user has selected a subpage", and revised on 30 October 2026 by DEC-1527 (each browser tab has its own self-contained connection and decoder, so a connection has one selection and SELECT carries no view number) and DEC-1526 (every sub-code is a peer). `uv` length, then `page` uv and `sub` uv, and nothing after:
+**SELECT**, an extension (`0x40`, so a channel that does not know it skips it; REQ-INT-140), decided by the owner on 29 October 2026: "we send an event saying which page the user has selected and if there are subpages then the server transmits them at that time. also the same event should send if the user has selected a subpage", and revised on 30 October 2026 by DEC-1527 (each browser tab has its own self-contained connection and decoder, so a connection has one selection and SELECT carries no view number) and DEC-1526 (every sub-code is a peer). `uv` length, then `page` uv and `sub` uv, then the page parameters to the end of the payload:
 - `page` is the page selected, `0x100` to `0x8FF` in teletext's hexadecimal page form, or 0 when the tab no longer shows a page of the channel.
 - `sub` is the sub-page selected, a sub-code `0x0000` to `0x3F7E` (EN 300 706 clause 9.3.1.2), or `0x3F7F`, "no particular page sub-code" (clause 9.6.1), when the viewer keyed the page's number alone or followed a link or bookmark that names no sub-page. A value with a bit outside the sub-code's thirteen is a protocol error; with `page` 0 it is `0x3F7F`.
+- The **page parameters** are what follows `?` in the fragment of the address selected (`SERVER.md` section 4), as written and without the `?`: printable ASCII with no `#`, at most `MAX_PAGE_PARAMETERS` (8,000) bytes, and none when the address has none. With `page` 0 there are none. Anything else is a protocol error. They belong to this one selection: the program receives them with it, and a SELECT that does not carry them leaves them behind (REQ-1693 item 6, DEC-1715).
 
 **What the tab is then sent and shows** (DEC-1500, DEC-1526, REQ-1502). Every sub-code a page has is one of its sub-pages, all of them peers; sub-code 0000 beside others is the page's own content, and the page's order is ascending sub-code, 0000 first when present. With `sub` `0x3F7F` the tab shows the page's **first** sub-page in that order, and that sub-page then is the selection, exactly as if the viewer had chosen it: the channel answers with it, and stepping goes on from it. With a sub-code the tab shows that sub-page alone and is sent only it and its changes, while the page's other sub-pages change, until the tab selects something else. Stepping to the next or previous sub-page, by the keys, the remote, the arrows or the sub-page list (section 7.9), is a selection of that sub-code; nothing else is sent. Sub-pages are never sent with their page, and **nothing rotates on a live channel:** the sub-page shown changes only when the viewer selects another, or when the channel's program moves the tab, which is itself a selection. A broadcast recording played back keeps the broadcast's own behaviour.
 
@@ -263,6 +264,7 @@ Every key goes as KEY, with its text, since decision E.125 (REQ-RCH-029); raw te
 | Red (Fastext) pressed | `FF 01 80 02 00 04 5C` | 7 |
 | Control-C pressed | `FF 01 80 02 00 08 63 04` | 8 |
 | Page 100 selected | `FF 40 04 80 02 FF 7E` | 7 |
+| Page 302, sub-page 0002, selected with the page parameters `a=1` | `FF 40 06 82 06 02 61 3D 31` | 9 |
 | Click at column 10, row 5 | `FF 02 80 02 00 00 00 0A 05` | 9 |
 | The same, with its dot (120, 100) | `FF 02 80 02 00 04 00 0A 05 78 64` | 11 |
 | A move to the dot (121, 100), no button | `FF 02 80 02 00 06 00 0A 05 79 64` | 11 |
@@ -282,7 +284,7 @@ The version-1 key record took 14 bytes for every key.
 
 ### 6.1 The session
 
-1. When the push WebSocket of a channel that declares input opens, the receiver sends HELLO with version 4 and the capabilities it has. Version 3 (31 October 2026, DEC-1538) added the stamp to the input events. Version 4 (31 October 2026, DEC-1689) adds the REDIRECT record and ends a cursor record's moving a viewer, so a channel and a receiver of different versions would disagree on what page is selected: both sides speak 4, and there is no compatibility path.
+1. When the push WebSocket of a channel that declares input opens, the receiver sends HELLO with version 5 and the capabilities it has. Version 3 (31 October 2026, DEC-1538) added the stamp to the input events. Version 4 (31 October 2026, DEC-1689) added the REDIRECT record and ended a cursor record's moving a viewer. Version 5 (1 November 2026, DEC-1715) adds page parameters to SELECT, so a channel and a receiver of different versions would disagree on what SELECT holds: both sides speak 5, and there is no compatibility path.
 2. The channel answers with WELCOME (section 7.2): the version it speaks and the subset of the capabilities it will use. A channel that cannot speak the version closes the connection.
 3. Then the receiver sends RESIZE, FOCUS_IN or FOCUS_OUT, and SELECT when it shows a page of the channel; and from then on the viewer's input.
 4. The receiver sends no input before WELCOME. A channel that has not answered within `WELCOME_TIMEOUT` (10 s) is taken not to take input, and the receiver says so.
@@ -713,7 +715,7 @@ Adopted by the owner on 21 October 2026, as the engine's decision E.100 and the 
 
 1. **The engine:**
    - `neoteletext-input`: the version-2 encoder and streaming decoder, the functional codes, the control record; the version-1 record removed.
-   - `neoteletext-web`: `INPUT_MESSAGE_MAX` to 4096.
+   - `neoteletext-web`: `INPUT_MESSAGE_MAX` to 4096, and to 8192 on 1 November 2026 (DEC-1715).
    - `neoteletext-audio`: record type 5 stepped over.
    - `neottx view`, `neottx keyboard`: version 2.
    - Area INT: REQ-INT-001 to REQ-INT-004 withdrawn, REQ-INT-101 to REQ-INT-116 added; `docs/spec/design/input.md` replaced by a pointer here; `int.md` keeps each number and title, so the traceability table covers them.
