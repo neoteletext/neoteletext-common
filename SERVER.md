@@ -195,7 +195,7 @@ There are two delivery modes, kept apart:
 
 A receiver-compatible stream is not the original broadcast, and the server never claims it is. An authentic stream is never given current-state semantics: nothing in it is coalesced.
 
-### 5.4 Upstream: INPUT.md version 3
+### 5.4 Upstream: INPUT.md version 4
 
 Upstream is the input protocol already built on both sides and fuzzed (`C/INPUT.md`). It is binary events framed by `0xFF`, at most 4,096 bytes a message, and has:
 - HELLO and WELCOME;
@@ -203,7 +203,7 @@ Upstream is the input protocol already built on both sides and fuzzed (`C/INPUT.
 - FOCUS_IN and FOCUS_OUT;
 - RESIZE.
 
-PAGE (`0x0A`) and its capability were withdrawn on 31 October 2026 (DEC-1538, REQ-1556): a PAGE from any receiver is a protocol error, never read as a selection, and input protocol version 3 stamps each input event with the page on screen (REQ-1555).
+PAGE (`0x0A`) and its capability were withdrawn on 31 October 2026 (DEC-1538, REQ-1556): a PAGE from any receiver is a protocol error, never read as a selection, and input protocol version 3 stamped each input event with the page on screen (REQ-1555). Version 4 adds the REDIRECT record, and a cursor record no longer moves a viewer (DEC-1689).
 
 **The receiver says what its connection has selected** (the owner's decision of 29 October 2026: "we send an event saying which page the user has selected and if there are subpages then the server transmits them at that time. also the same event should send if the user has selected a subpage"). One event, an extension, which a channel that does not know it skips (`INPUT.md` section 5.4, REQ-INT-140):
 
@@ -232,7 +232,7 @@ JSON belongs to the application protocol (section 7), which people read and writ
 
 ### 5.5 Control records
 
-Control records are teletext packets, as WELCOME is today: data channel 12, packet 4/31, records of the audio profile's frame, which a decoder that knows none of them skips, as EN 300 708 says. WELCOME is a kind of the control record, type 5 (`C/INPUT.md` section 7.2). The index, LOG, SET_COOKIE, LINKS and SUBPAGES records are record types of their own, 6, 7, 8, 9 and 10. **Each record's byte layout is defined once, in `C/INPUT.md` section 7, and nowhere else**: this section says only what each record is for and when it is sent. They are written with the engine's encoders and read with its readers.
+Control records are teletext packets, as WELCOME is today: data channel 12, packet 4/31, records of the audio profile's frame, which a decoder that knows none of them skips, as EN 300 708 says. WELCOME is a kind of the control record, type 5 (`C/INPUT.md` section 7.2). The index, LOG, SET_COOKIE, LINKS, SUBPAGES and REDIRECT records are record types of their own, 6, 7, 8, 9, 10 and 11. **Each record's byte layout is defined once, in `C/INPUT.md` section 7, and nowhere else**: this section says only what each record is for and when it is sent. They are written with the engine's encoders and read with its readers.
 
 | Record | What it carries (layout) | When it is sent |
 |---|---|---|
@@ -242,6 +242,7 @@ Control records are teletext packets, as WELCOME is today: data channel 12, pack
 | SET_COOKIE (type 8) | One `Set-Cookie` header value, built by the server from the program's typed `cookie` message (`C/INPUT.md` section 7.7) | When the program sets or clears a cookie mid-connection (section 8.2). The browser stores it in the channel's one cookie jar, which every tab of the channel shares (DEC-1527 item 4) |
 | LINKS (type 9) | One sub-page's TTI Link Extension links: key links, page-number links and text links, with their targets and labels (`C/INPUT.md` section 7.8), so a sub-page sent as packets keeps the links packets cannot carry (DEC-1495, REQ-1494) | Straight after **every** page frame of a sub-page that has such links, whole or changed rows, whether or not they changed. A page frame not followed by one means the sub-page has none (DEC-1517, awaiting the owner's confirmation) |
 | SUBPAGES (type 10) | One page's list of sub-pages: the list's version, its count (1 to 8,190) and each sub-code with its title of at most 40 characters, in ascending sub-code order with 0000 first when the page has it (every sub-code is a peer, DEC-1526), split across as many records as it needs (`C/INPUT.md` section 7.9, with section 7.10) | When the connection selects the page or one of its sub-pages and does not already hold the list's current version, and whenever the program changes the list while the connection's selection is the page or one of its sub-pages (DEC-1500 item 3, REQ-1503). It is never sent with, or in place of, any sub-page's content |
+| REDIRECT (type 11) | A page and sub-code of this channel, or another channel's address (`C/INPUT.md` section 7.11) | When the program sends `redirect` (REQ-1688). It is the only thing that moves a viewer |
 | DENIED | `page`, `reason` code: not found, not allowed, unavailable, limit | A selection refused, or a program that did not answer in time ("unavailable", REQ-1481) |
 | LIMITS | The standard's maxima and the budgets of section 11 | Advertised after WELCOME, revised at any time |
 | CHANGED | Page numbers | The coalesced change digest (section 6.5) |
@@ -272,13 +273,13 @@ Reasons are codes; the words are the client's. A record that breaks its layout o
 | When | What the connection is sent |
 |---|---|
 | At connection | Nothing until the program answers `connected`; then the channel's index records (page-level), the one sub-page the connection's selection shows (the program's initial page with 3F7F when it named none), its LINKS record when it has links, and its page's SUBPAGES record |
-| The selection changes (SELECT, or the program's `goto`) | The one sub-page the new selection shows, whole, as the table above says, with its LINKS record and, if needed, its page's SUBPAGES record |
+| The selection changes (SELECT, or the program's page redirect) | The one sub-page the new selection shows, whole, as the table above says, with its LINKS record and, if needed, its page's SUBPAGES record |
 | The program sends a new version of the selected sub-page | That sub-page as changed rows, followed by its LINKS record when it has links |
 | The program sends any other sub-page to the connection | Nothing: a sub-page reaches a connection only when it is that connection's selection |
 | The program changes the selected page's sub-page list | The new SUBPAGES record |
 | The selected page does not exist, is refused, or the program does not answer in time | DENIED (section 5.5) |
 
-**No rotation on a live channel** (DEC-1526 item 4). The sub-page a connection shows never changes by itself. It changes only when the receiver selects another, or when the program moves the connection with `goto`, which is itself a selection the server records exactly as it would a SELECT. A program that sends another sub-page of the selected page does not change what is shown: it is not forwarded. A broadcast recording played back as a stream (section 5.3) keeps the broadcast's own rotation.
+**No rotation on a live channel** (DEC-1526 item 4). The sub-page a connection shows never changes by itself. It changes only when the receiver selects another, or when the program moves the connection with a page redirect (the `redirect` message naming a page, `C/INPUT.md` section 7.11), which is itself a selection the server records exactly as it would a SELECT. A `redirect` naming another channel's address changes no selection: the receiver leaves (REQ-1688). Neither is an HTTP redirect from a web server (REQ-701). A program that sends another sub-page of the selected page does not change what is shown: it is not forwarded. A broadcast recording played back as a stream (section 5.3) keeps the broadcast's own rotation.
 
 **The program is the only source of content** (DEC-1482). The server answers nothing from a store: every sub-page a connection is sent is one the program sent for that connection, in answer to `connected` or `selected` (REQ-1471, REQ-1472) or as a change. The program answers a 3F7F selection with the page's first sub-page in ascending order; the TypeScript kit makes that answer for the program.
 

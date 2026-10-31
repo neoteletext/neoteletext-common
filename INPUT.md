@@ -282,7 +282,7 @@ The version-1 key record took 14 bytes for every key.
 
 ### 6.1 The session
 
-1. When the push WebSocket of a channel that declares input opens, the receiver sends HELLO with version 3 and the capabilities it has. Version 3 (31 October 2026, DEC-1538) adds the stamp to the input events, so an event's layout differs from version 2: both sides speak 3, and there is no compatibility path.
+1. When the push WebSocket of a channel that declares input opens, the receiver sends HELLO with version 4 and the capabilities it has. Version 3 (31 October 2026, DEC-1538) added the stamp to the input events. Version 4 (31 October 2026, DEC-1689) adds the REDIRECT record and ends a cursor record's moving a viewer, so a channel and a receiver of different versions would disagree on what page is selected: both sides speak 4, and there is no compatibility path.
 2. The channel answers with WELCOME (section 7.2): the version it speaks and the subset of the capabilities it will use. A channel that cannot speak the version closes the connection.
 3. Then the receiver sends RESIZE, FOCUS_IN or FOCUS_OUT, and SELECT when it shows a page of the channel; and from then on the viewer's input.
 4. The receiver sends no input before WELCOME. A channel that has not answered within `WELCOME_TIMEOUT` (10 s) is taken not to take input, and the receiver says so.
@@ -348,8 +348,9 @@ Everything a channel says to a receiver beyond its pages is teletext: records of
 | 8 | SET_COOKIE | one or more | 7.7 |
 | 9 | LINKS | one or more | 7.8 |
 | 10 | SUBPAGES | one or more | 7.9 |
+| 11 | REDIRECT | one or more | 7.11 |
 
-Every record type has a type of its own in the frame rather than a kind of the control record (decided 30 October 2026, TODO-1491): the control record is one fragment, 26 bytes of body, and the index, LOG, SET_COOKIE, LINKS and SUBPAGES records need more; and a receiver that reads only some of the types skips the others by the type byte alone, before reading any field. Section 7.10 says how a record of more than one fragment travels and what a receiver does with a record it cannot use.
+Every record type has a type of its own in the frame rather than a kind of the control record (decided 30 October 2026, TODO-1491): the control record is one fragment, 26 bytes of body, and the index, LOG, SET_COOKIE, LINKS, SUBPAGES and REDIRECT records need more; and a receiver that reads only some of the types skips the others by the type byte alone, before reading any field. Section 7.10 says how a record of more than one fragment travels and what a receiver does with a record it cannot use.
 
 ### 7.1 The cursor record (type 4)
 
@@ -365,6 +366,8 @@ A record of 16 bytes: profile version 2, type 4, body length 8 (big-endian), the
 | 7 | flags | 4 BLOCK (a block rather than a bar); 1 and 2 reserved, written 0 and ignored when read (ECHO and MASKED until decision E.134); others refused |
 
 No cursor requires column and flags 0. A record that breaks any rule is refused whole. The cursor is optional, as a cursor is: a game sends none, or one with no cursor only to acknowledge.
+
+A cursor record never moves a viewer, whatever page it names: the record says where the cursor is and what has been acknowledged, and it travels with every page frame, so one still in flight when a viewer selects another page names the page they left. A channel moves a viewer with a REDIRECT record (section 7.11).
 
 **The input count** is how much input of the session the channel has acted on: each event counts one, each character of raw text counts one, and a PASTE counts one; but what is never acknowledged counts none (REQ-RCH-012, REQ-RCH-054): a move and gone, MOUSE's and TOUCH's, HOVER, COMPOSE and RESUME. HELLO counts one in a new session. The receiver counts what it sends the same way, and so knows which messages a resumed session sends again (section 6.4). The count wraps at 65 536 and is compared by RFC 1982 serial arithmetic: an older acknowledgement changes nothing, and one beyond what was sent is ignored.
 
@@ -529,6 +532,35 @@ Each entry: `sub` u16, a sub-code `0x0000` to `0x3F7E` with no bit outside the t
 - **Fragments.** A record of more than 34 bytes is cut into fragments of 34 bytes, the last padded with zeros, at most 31 fragments (`MAX_RECORD`, 1,024 bytes), as the audio profile's records are (the engine's REQ-AUD-007): each fragment one 4/31 packet with the record id, its index, and the CRC-16. The record id counts every record of the service, whatever its type, so two records in flight on one service never share an id. A channel sends a record's fragments in order, fragment 0 first, in one binary message or in consecutive ones; a receiver reassembles them by record id, and knows the record's length, and so its fragments, from fragment 0's frame header.
 - **A record a receiver cannot use** (a frame whose CRC-32, version or length fails; a type it does not know; a field outside its range; text that breaks its rule; bytes after the last field) is discarded whole and nothing of it applied, and each of its packets is counted as an invalid packet (neoteletext-common's REQ-1462), without closing the connection; a LINKS record refused leaves its sub-page shown with no Link Extension links. A record of a type the receiver does not read is skipped, not counted.
 
+### 7.11 The REDIRECT record (type 11)
+
+A channel's redirect (DEC-1683, DEC-1689, REQ-1688): what a channel's program sends to move a connection's viewer to another page of the channel, or to another channel. It is the only thing that moves a viewer (section 8 rule 8). An HTTP redirect from a web server (REQ-701) is another thing, and is not carried here; where the two are near, "page redirect" means this record's page form.
+
+**Integers are big-endian.** The body begins with one byte:
+
+| Bytes | Field | Range |
+|---|---|---|
+| 0 | `form` | 0, a page of this channel; 1, an address |
+
+The page form, 5 bytes of body and one fragment:
+
+| Bytes | Field | Range |
+|---|---|---|
+| 1–2 | `page` | `0x100` to `0x8FF`, never a reserved number |
+| 3–4 | `sub` | `0x0000` to `0x3F7E`, a sub-code with no bit outside the thirteen a sub-code has, or `0x3F7F` for the page |
+
+The address form:
+
+| Bytes | Field | Range |
+|---|---|---|
+| 1 to the end | `address` | 1 to 1,015 bytes (`MAX_ADDRESS`: the frame's largest body, `MAX_BODY`, less the `form` byte) of printable ASCII with no space: an `http` or `https` address the engine's strict address parser accepts, and after it, optionally, `#` and what follows it, which the receiver's address rules judge (REQ-505) |
+
+Addresses are at most 2,048 bytes elsewhere; one too long for this record cannot be sent, and the server refuses it (TODO-1662 raises the limit).
+
+- **The page form.** The server sends the record and records the page as the connection's selection, exactly as it would a SELECT, and the program is then sent `selected` for it. The receiver opens that page and sub-page, whether or not its page has the focus, since a selected page is active whatever its focus (REQ-1553), and sends SELECT for it.
+- **The address form.** The server sends the record and changes nothing else: the connection's selection stands until the receiver leaves. A receiver that opens channels puts the address through its own address rules, which alone decide: a redirect leads only to an `http` or `https` address, never a local file, a `web:` hand-off or the browser's own pages. It shows the redirect notice (REQ-1686) and then opens the address as another channel. A receiver that cannot open channels says that the channel redirected and to where, and stays.
+- **What a channel cannot do with it.** The record moves a viewer and nothing else. The viewer's own choice overrides it, and a receiver bounds how many redirects it follows in a row with no input from the viewer (REQ-1688 item 6).
+
 ## 8. Behaviour
 
 1. **One message per event, never held back** (REQ-RCH-010). Each event is its own message, written as it happens; messages already waiting at the same moment are written together, in one write and one TLS record where the transport allows. The receiver keeps only the latest of a contact's unsent moves (section 9.8) and sums unsent wheel deltas; nothing else is merged or dropped.
@@ -542,7 +574,7 @@ Each entry: `sub` u16, a sub-code `0x0000` to `0x3F7E` with no bit outside the t
 5. **Protocol errors** close the connection, on either side.
 6. **Bounds.** A message over `MAX_MESSAGE`, a field over its maximum, a varint over 5 bytes or not minimal: a protocol error.
 7. **Nothing waits on a timer** but the pointer's moves (section 9.8). A receiver sends an event when it happens and draws what comes back when it arrives (decision E.97, REQ-INT-008, REQ-RCH-011); the heartbeat (a ping after 25 s of silence, a pong within 10 s) and the round trip's ping (section 9.2) are the push connection's own.
-8. **A host goes to a page by sending it.** A cursor record naming another page of the same channel, while keys go to that channel, opens that page in the receiver, as a terminal shows what its host sends. The receiver then sends SELECT for it, since the move is a selection. It is the only thing a channel's record can make a receiver do, within the channel, and never a fetch; the viewer choosing a page overrides it.
+8. **A channel moves a viewer with a REDIRECT record** (section 7.11), and nothing else moves one: a cursor record never does, whatever page it names. A redirect to a page of the channel opens that page in the receiver, as a terminal shows what its host sends, and the receiver then sends SELECT for it, since the move is a selection. A redirect to another channel's address is followed after the redirect notice (REQ-1686). It needs no action from the viewer (DEC-1683), and the viewer choosing a page overrides it.
 9. **Terminal programs.** A channel that feeds an ordinary terminal program translates events into whatever encoding that program asked for.
 
 ## 9. The receiver's side
