@@ -91,11 +91,11 @@ Everything in the protocol is fixed-size or length-prefixed and decodable byte b
 A channel takes input when its descriptor says so inside its push object:
 
 ```json
-"push": { "address": "wss://news.example/push", "method": "websocket", "input": true }
+"push": { "method": "websocket", "input": true }
 ```
 
 - `input` MUST be a JSON boolean; it defaults to false. It is refused with `"method": "sse"`: input goes back only on the push WebSocket.
-- The push address MUST be on the channel's own origin, and a descriptor fetched over `https` may not name a `ws://` push address.
+- The push WebSocket is always `<channel>push` (`SERVER.md` section 4.2), and a descriptor naming another address is refused. Over `https` it is `wss`, and over `http`, `ws`.
 - Plain `ws://` is allowed, and the receiver says "Not secure" wherever it says where keys go.
 - A page cannot declare input; only the channel's descriptor can.
 - The protocol version is not in the descriptor: it is negotiated on the socket (section 6).
@@ -175,7 +175,7 @@ So a page can be active without being focused: in a tab behind another, in a win
 **SELECT**, an extension (`0x40`, so a channel that does not know it skips it; REQ-INT-140), decided by the owner on 29 October 2026: "we send an event saying which page the user has selected and if there are subpages then the server transmits them at that time. also the same event should send if the user has selected a subpage", and revised on 30 October 2026 by DEC-1527 (each browser tab has its own self-contained connection and decoder, so a connection has one selection and SELECT carries no view number) and DEC-1526 (every sub-code is a peer). `uv` length, then `page` uv and `sub` uv, then the page parameters to the end of the payload:
 - `page` is the page selected, `0x100` to `0x8FF` in teletext's hexadecimal page form, or 0 when the tab no longer shows a page of the channel.
 - `sub` is the sub-page selected, a sub-code `0x0000` to `0x3F7E` (EN 300 706 clause 9.3.1.2), or `0x3F7F`, "no particular page sub-code" (clause 9.6.1), when the viewer keyed the page's number alone or followed a link or bookmark that names no sub-page. A value with a bit outside the sub-code's thirteen is a protocol error; with `page` 0 it is `0x3F7F`.
-- The **page parameters** are what follows `?` in the fragment of the address selected (`SERVER.md` section 4), as written and without the `?`: printable ASCII with no `#`, at most `MAX_PAGE_PARAMETERS` (8,000) bytes, and none when the address has none. With `page` 0 there are none. Anything else is a protocol error. They belong to this one selection: the program receives them with it, and a SELECT that does not carry them leaves them behind (REQ-1693 item 6, DEC-1715).
+- The **page parameters** are what follows `?` in the fragment of the address selected (`SERVER.md` section 4.6), as written and without the `?`: printable ASCII with no `#`, at most `MAX_PAGE_PARAMETERS` (8,000) bytes, and none when the address has none. With `page` 0 there are none. Anything else is a protocol error. They belong to this one selection: the program receives them with it, and a SELECT that does not carry them leaves them behind (REQ-1693 item 6, DEC-1715).
 
 **What the tab is then sent and shows** (DEC-1500, DEC-1526, REQ-1502). Every sub-code a page has is one of its sub-pages, all of them peers; sub-code 0000 beside others is the page's own content, and the page's order is ascending sub-code, 0000 first when present. With `sub` `0x3F7F` the tab shows the page's **first** sub-page in that order, and that sub-page then is the selection, exactly as if the viewer had chosen it: the channel answers with it, and stepping goes on from it. With a sub-code the tab shows that sub-page alone and is sent only it and its changes, while the page's other sub-pages change, until the tab selects something else. Stepping to the next or previous sub-page, by the keys, the remote, the arrows or the sub-page list (section 7.9), is a selection of that sub-code; nothing else is sent. Sub-pages are never sent with their page, and **nothing rotates on a live channel:** the sub-page shown changes only when the viewer selects another, or when the channel's program moves the tab, which is itself a selection. A broadcast recording played back keeps the broadcast's own behaviour.
 
@@ -676,7 +676,7 @@ A channel's author; a network attacker; a compromised interface, fetcher, decode
 | Threat | Answer |
 |---|---|
 | A page or channel starts taking keys unasked | Only a descriptor declares input; the strip says "Keys go to"; keys go only to the open page of the active tab. |
-| Keys go somewhere else | The push address is on the channel's origin; the fetcher takes no address; nothing in the protocol names one. |
+| Keys go somewhere else | The push address is fixed by the channel's own address; the fetcher takes no address; nothing in the protocol names one. |
 | A keylogger on a plain connection | `ws://` is "Not secure" in the strip; `wss` is the default for any channel worth typing into. |
 | The channel tracks the pointer | It learns the pointer's position over its own open page, its clicks, drags and moves at most 60 a second, and the contacts on it, while keys go to it (REQ-RCH-038): the reading behaviour of that page. Nothing of the pointer anywhere else: not over another tab, the browser's own controls or the strip, or another window, and nothing while keys do not go to it (section 6.3). |
 | Fingerprinting by keyboard layout | `base` names a key position, not a layout's name; lock states only in `mods`, as any terminal sends them. There is no clock: the channel learns typing rhythm only from arrival times, which the network blurs, and no physical key code. |

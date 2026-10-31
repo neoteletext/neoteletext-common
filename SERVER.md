@@ -124,23 +124,85 @@ The protocol of section 7 is the interface; a kit is a convenience. One referenc
 
 ## 4. Channels and addressing
 
-**The engine's channel layout, unchanged** (decision E.70, `requirements/web.md`):
-- a channel is a folder on an `https` origin;
-- `channel.json` describes it, including `push: {address, method, input}`;
-- a viewer's address may have a query, which is no part of the channel's folder: the receiver sends it, as written, on the upgrade request to the push address, and the program is given it in `connected` (DEC-1665, REQ-1674);
-- pages are `NNN.tti` or `NNN.t42`;
-- `index.t42` is a bundle;
-- `contents.txt` lists and orders the pages.
+**This section is the one written URL map** (REQ-1693, decided by DEC-1694). Every other document points here. A channel has one map: it is complete, so nothing is reachable by an address it does not list; it is fixed, so it is the same for every channel, and a channel cannot rename, move or add to it; and it is defined, so each thing has one spelling, and every other spelling is normalised to it or refused. `<channel>` means an `http` or `https` origin and folder, ending in `/`, optionally followed by a query, such as `https://app.neottx.com/home/`. The conformance table, every address below with what it opens, why it is refused or what a server answers, is the engine's `crates/neoteletext-web/src/map/conformance.tsv`, which the engine, the server and the browser each run at their pin of the engine (`neoteletext_web::map::CONFORMANCE`).
 
-**A static channel** is that folder on any web server, with no NeoTeletext server. **Our server serves no static channel and no channel's files** (DEC-1467, 30 October 2026): a live channel is served over its WebSocket alone, and the only HTTP the server answers on the viewers' address is each channel's generated `channel.json`, naming `push`, and the WebSocket's opening request at `push`. Pages, sub-pages and contents (the INDEX record) all come on the connection; a receiver that reads `channel.json` naming `push` asks for no other file (the engine's REQ-WEB-018). `/metrics`, `/healthz`, `/readyz` and `/stats.json` are on the administration address alone.
+### 4.1 What viewers see
 
-**Why not new paths** (`/news/200/3`): every channel and client that exists already works with the layout, and a static host needs nothing new.
+A channel's identity is its address up to `#`. Everything after `#` is inside the channel, and is never sent to a server (RFC 9110 section 4.2.5 and RFC 3986 section 3.5).
 
-**In a static channel, sub-pages have files of their own** (decided 26 October 2026, `STANDARD-LIMITS.md` section 4), since a page may have 8,190 and a page response is bounded (the engine's REQ-WEB-008). Our server serves none of them (DEC-1467); a live channel's sub-pages travel on its connection (section 6.1):
-- `NNN.t42` holds the page, or its first sub-page when it has several;
-- `NNN-SSSS.t42` holds sub-page SSSS, four hexadecimal digits;
-- `NNN.sub` lists the page's sub-codes with their validators and titles;
-- `index.t42` carries first sub-pages only.
+| Address | Opens |
+|---|---|
+| `<channel>` | The channel, arriving at its initial page (section 4.3) |
+| `<channel>#302` | Page 302 |
+| `<channel>#302/0002` | Sub-page 0002 of page 302 |
+| `<channel>#302?name=value` | Page 302, with page parameters for the channel's program |
+| `<channel>#302/0002?name=value` | Sub-page 0002 of page 302, with page parameters |
+| `<channel>#contents` | The channel's contents |
+| `<channel>#wall` | The wall of pages, with no page selected |
+| `<channel>?name=value#302` | Any of these, with channel parameters, which are part of the channel's address and reach its program when it connects |
+
+### 4.2 What receivers use
+
+These are fixed names in the channel's folder (decision E.70). Viewers never see them in the address field, and a viewer's address naming a live or static channel's own file is refused, as section 4.4 says, except that a command-line reader told to open `channel.json` opens its channel (DEC-1710).
+
+| Name | Channel | Holds |
+|---|---|---|
+| `channel.json` | Live and static | The channel's settings |
+| `push` | Live | The WebSocket. It is always `<channel>push`, and `channel.json` has no member naming another address (`push: {method, input}`) |
+| `contents.txt` | Static | The contents |
+| `index.t42` | Static | A bundle of pages, first sub-pages only |
+| `NNN.tti`, `NNN.t42` | Static | A page, or its first sub-page when it has several |
+| `NNN-SSSS.t42` | Static | A sub-page, SSSS being four hexadecimal digits (`STANDARD-LIMITS.md` section 4) |
+| `NNN.sub` | Static | A page's list of sub-pages, with their validators and titles |
+
+### 4.3 Normalising
+
+Each of these is changed to its one spelling when it is typed, linked, redirected to or opened from outside, and the address field, history and bookmarks hold only that spelling.
+
+- **Arriving at `<channel>`.** Once the channel has given its initial page, the address becomes `<channel>#NNN` for that page, replacing the entry and adding no Back entry: `https://app.neottx.com/home/` becomes `https://app.neottx.com/home/#100`.
+- **Digits.** Hexadecimal digits are capitals: `#1fe` becomes `#1FE`, and `#302/3f7e` becomes `#302/3F7E`.
+- **File names.** `<channel>302.tti` and `<channel>302.t42` become `<channel>#302`, and `<channel>302-0002.t42` becomes `<channel>#302/0002`.
+- **Parameters are not normalised.** They stay in the order given, percent-encoded as they came.
+
+### 4.4 Refused
+
+Any other fragment is refused, never ignored or repaired: the address is not opened, and a link carrying it is not a link. That includes `#`, `#30`, `#3021`, `#G02`, `#902` and any page the standard does not define, `#302/2`, `#302/3F7F` (which means no particular sub-page, and so cannot name one), `#302:0002`, `#WALL`, `#contents/1`, `#wall?name=value` and `#?name=value`. A page's file name with a fragment, such as `<channel>302.tti#303`, says where to go twice and is refused too, as are the receivers' names of section 4.2 that are not pages.
+
+### 4.5 Spellings
+
+- **Page:** three hexadecimal digits, magazine first.
+- **Sub-page:** four hexadecimal digits, `0000` to `3F7E`.
+- **Parameters:** `name=value` pairs joined by `&`, percent-encoded as a query is, following `?` inside the fragment. A name may not be empty, and a value may. RFC 3986 section 3.5 allows `/` and `?` in a fragment, so neither is escaped.
+- **Length:** the whole address obeys the general limit of 8,000 octets (REQ-1661).
+- **The words `contents` and `wall`** are in small letters and are the only words a fragment holds.
+
+### 4.6 Parameters
+
+**Channel parameters,** the query of `<channel>`, are no part of the channel's folder. The receiver sends them, as written, on the upgrade request to `push`, and the program is given them in `connected` (DEC-1665, REQ-1674).
+
+**Page parameters** go with the selection. The receiver sends them in SELECT (`INPUT.md` section 5.4, DEC-1715), and the program receives them with that selection, in `selected`. They belong to that one selection: choosing another page, by any path, leaves them behind. They stay in the address, so a copied address, a bookmark or Reload sends them again. A static channel has no program, so they are kept in the address and do nothing, as a static host ignores a query.
+
+### 4.7 What each address answers on the server
+
+A live channel on the NeoTeletext server, on the native server and on Cloudflare alike, answers exactly this, and nothing else (DEC-1467, as amended by DEC-1669). The server serves no static channel and no channel's files: a live channel's pages, its contents and its sub-pages travel on its connection (section 6.1).
+
+| Request | Answer |
+|---|---|
+| `<channel>` | 200, a small page in an ordinary web browser, naming the channel and offering a `neoteletext://` link and a link to get NeoTeletext. One line of script carries the address's query and any fragment of section 4.1 into that link, and leaves out any other fragment. It changes nothing else: no timer, no automatic launch and no redirect, so the page cannot lead anyone elsewhere |
+| The folder without its final `/` | 308, a redirect to `<channel>`, on the same origin, keeping its query. A fragment stays with the web browser (RFC 9110 section 10.2.2) |
+| `<channel>channel.json` | 200, the settings, generated |
+| `<channel>push` | The WebSocket; 426 without an upgrade |
+| Anything else under the channel, and `/` | 404 |
+
+Only a `GET` or a `HEAD` reaches the small page or the redirect. A static channel answers whatever its host answers, and a receiver asks it only for the names in section 4.2.
+
+### 4.8 Redirects, local files and what is outside the map
+
+- **Redirects.** An HTTP redirect follows RFC 9110 section 10.2.2: a `Location` with no fragment inherits the original one, so `<old>#302` redirected to `<new>` opens `<new>#302`. A program's redirect names an address of this map, or a page of its own channel.
+- **Local files.** A file or folder of page files takes the fragments of section 4.1, on its `file:` address. Arriving normalises to its initial page, as in section 4.3. A `file:` address is never split by the file-name rule: each local file is its own channel (REQ-722).
+- **Outside the map.** The browser's built-in page `neoteletext:home` is not in a channel. A `neoteletext://` link wraps a whole address of this map and adds nothing to it (REQ-1672).
+
+**Why not paths** (`/news/200/3`): every channel and client that exists already works with the layout, and a static host needs nothing new.
 
 ## 5. The wire
 
