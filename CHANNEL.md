@@ -135,7 +135,7 @@ The channel's settings, read by the engine's strict, bounded reader of at most 1
 |---|---|---|
 | `name` | The channel's own name for itself, at most 120 characters. A reader may show it outside the page, never in row 0. | The channel's address |
 | `initial_page` | The page a channel opens at: three decimal digits, the magazine 1 to 8 first | `"100"` |
-| `push` | The live connection: `method`, `"websocket"`; and `input`, `true` when the channel takes the viewer's keys back. The connection is always at the channel's `push` (section 8). | No live connection |
+| `push` | An object, whose presence makes the channel live. Its one member is `input`, `true` when the channel takes the viewer's keys back. The connection is always a WebSocket at the channel's `push` (section 8). | No live connection |
 | `region` | The default character set region (decision E.4) | The reader's configured region |
 | `services` | Linked channels: each a `name` (short, for `name:mpp` links), a `display_name`, and `channel`, the linked channel's folder address in canonical form | None |
 | `aliases` | At most 16 members, each mapping one page number to a target, `name:mpp` or a channel address (REQ-WEB-020) | None |
@@ -143,6 +143,8 @@ The channel's settings, read by the engine's strict, bounded reader of at most 1
 | `presentation` | `"teletext"` or `"site"` (section 11) | `"teletext"` |
 
 **Withdrawn on 30 October 2026:** `page_template`, and with it descriptor services, a descriptor at any other address with a template mapping page numbers to URLs (REQ-WEB-002), because a template maps a channel's files to names of its own and the structure is fixed; `push.address`, because the live connection's address is fixed (section 8); `services`' `descriptor`, for the same reason. Each is an unknown member, and refused.
+
+**Withdrawn on 1 November 2026:** `push.method`, because a WebSocket is the only live connection (DEC-1738), so the member could say nothing. It is an unknown member, and refused, whatever its value.
 
 ## 7. Magazine lists
 
@@ -243,7 +245,7 @@ A folder on this computer is a channel by the same structure, with the same name
 **A page a viewer can use:** a folder at your site's root, `https://example.org/`, holding
 
 ```json
-{ "name": "Example", "push": { "method": "websocket", "input": true } }
+{ "name": "Example", "push": { "input": true } }
 ```
 
 as `channel.json`, and a server answering `wss://example.org/push` with a program that publishes page 100 and reads the viewer's keys: a game, a menu, a form, each viewer's page its own. `100.t42` beside it, MAY be given, so the page shows before the connection opens and while it is down. With `"presentation": "site"`, it shows as a site with no channel interface.

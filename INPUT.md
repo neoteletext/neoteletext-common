@@ -91,7 +91,7 @@ Everything in the protocol is fixed-size or length-prefixed and decodable byte b
 A channel takes input when its descriptor says so inside its push object:
 
 ```json
-"push": { "method": "websocket", "input": true }
+"push": { "input": true }
 ```
 
 - `input` MUST be a JSON boolean; it defaults to false.
