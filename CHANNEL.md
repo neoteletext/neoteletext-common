@@ -39,7 +39,7 @@ A channel is a folder on a web server, a folder on a computer, or a folder on an
 
 | Name | Holds | Format | Largest | Tier |
 |---|---|---|---|---|
-| `channel.json` | The channel's settings | Section 6 | 16,384 bytes | Optional |
+| `channel.ttx` | The channel's settings | Section 6 | 16,384 bytes | Optional |
 | `contents.txt` | The channel's table of contents: sections, pages and titles, in the order shown | The engine's REQ-WEB-025 | 65,536 bytes, 1,000 lines | Optional |
 | `index.t42` | The first sub-page of any number of pages, so a channel opens with one request | T42 packets | 262,144 bytes (REQ-CHN-011) | Built |
 | `M.pag` | Magazine `M`'s pages: each one's sub-page count, version and title | Section 7 | 17,204 bytes | Built |
@@ -50,7 +50,7 @@ A channel is a folder on a web server, a folder on a computer, or a folder on an
 | `NNN/P.sub` | Part `P` of page `NNN`'s list of sub-pages | Section 5.2 | 4,119 bytes | Built |
 | `push` | The live connection: pages as they change, sounds, and the viewer's keys back | `SERVER.md`, `INPUT.md` | One message 65,536 bytes (REQ-WEB-008) | Optional |
 
-A reader asks for these names and no others (REQ-CHN-002). Every name fits the 8.3 form a minimal FAT library reads, but `channel.json` and `contents.txt`'s place in it is `channel.json`, which needs long names: the owner kept the name (section 13 item 9).
+A reader asks for these names and no others (REQ-CHN-002). Every name fits the 8.3 form a minimal FAT library reads (section 13 item 9).
 
 The largest EP1 file is the 6-byte header, sixteen 40-byte enhancement packets, 25 rows of 40 bytes and the 2-byte terminator: 6 + 640 + 1,000 + 2 = 1,648 bytes (REQ-INP-015).
 
@@ -67,7 +67,7 @@ A page not found costs at most three requests. A file that answers 200 but fails
 
 ## 4. Two tiers
 
-**Hand-written.** A folder with page files, `NNN.tti`, `NNN.t42` or `NNN.ep1`, each holding the whole page, and optionally `channel.json` and `contents.txt`. Nothing else is needed, and a reader MUST open such a folder fully: it learns a page's sub-pages from the page's file as it decodes it. EP1 and edit.tf files carry no trusted page number; in a channel the file's name gives it.
+**Hand-written.** A folder with page files, `NNN.tti`, `NNN.t42` or `NNN.ep1`, each holding the whole page, and optionally `channel.ttx` and `contents.txt`. Nothing else is needed, and a reader MUST open such a folder fully: it learns a page's sub-pages from the page's file as it decodes it. EP1 and edit.tf files carry no trusted page number; in a channel the file's name gives it.
 
 **Built.** What a generator writes, from a hand-written folder or from a program's pages: every page as `NNN.t42`, and a page of more than one sub-page with its folder `NNN/` holding every sub-page's file and the parts of its list; the magazine lists `M.pag`; and `index.t42`. A built channel MAY also carry the hand-written files. Nobody writes a validator, a part or a magazine list by hand: they are derived from the page data (REQ-CHN-014), and a generator writes them again from the pages every time.
 
@@ -127,9 +127,9 @@ A sub-page's title is, in this order (REQ-CHN-009):
 
 Row 0 is never used: its text is the service's header, the same on every sub-page. A page's title, in `M.pag`, is its first sub-page's.
 
-## 6. `channel.json`
+## 6. `channel.ttx`
 
-The channel's settings, read by the engine's strict, bounded reader of at most 16,384 bytes (REQ-WEB-024). Every member is optional; an absent member takes its default; a duplicate member is refused; **an unknown member is refused**, and the channel does not open (REQ-CHN-012).
+A channel's entry file: the channel's settings, as JSON, read by the engine's strict, bounded reader of at most 16,384 bytes (REQ-WEB-024). The name is for now, and the owner expects to change it (DEC-1726). Every member is optional; an absent member takes its default; a duplicate member is refused; **an unknown member is refused**, and the channel does not open (REQ-CHN-012).
 
 | Member | Holds | Default |
 |---|---|---|
@@ -167,7 +167,7 @@ The channel's settings, read by the engine's strict, bounded reader of at most 1
 
 ## 8. The live connection
 
-A channel's live connection is always at its folder's `push`: `wss://` for a channel at `https://`, `ws://` for one at `http://` (REQ-CHN-013). Server-sent events were withdrawn by DEC-1738. A reader opens it only when `channel.json` has `push`, and never asks for `push` otherwise. Its cookies are the channel's (REQ-WEB-026). What travels on it is `SERVER.md`'s and `INPUT.md`'s.
+A channel's live connection is always at its folder's `push`: `wss://` for a channel at `https://`, `ws://` for one at `http://` (REQ-CHN-013). Server-sent events were withdrawn by DEC-1738. A reader opens it only when `channel.ttx` has `push`, and never asks for `push` otherwise. Its cookies are the channel's (REQ-WEB-026). What travels on it is `SERVER.md`'s and `INPUT.md`'s.
 
 A static host serves the files and cannot serve `push`; a channel that takes the viewer's keys needs a server on the channel's own origin (`INPUT.md` section 4).
 
@@ -182,14 +182,14 @@ Every address of a channel, for a channel at `https://example.org/news/`:
 | The channel | `https://example.org/news/` | Never itself |
 | A page, as a viewer bookmarks or shares it | `https://example.org/news/602` | Never: a reader goes to the page's file, or selects it on a live channel |
 | A sub-page, as a viewer bookmarks or shares it | `https://example.org/news/602/0101` | Never |
-| Its settings | `…/news/channel.json` | When it opens |
+| Its settings | `…/news/channel.ttx` | When it opens |
 | Its contents | `…/news/contents.txt` | When the contents are shown |
 | Its bundle | `…/news/index.t42` | When it opens |
 | Magazine 6's pages | `…/news/6.pag` | When the reader needs magazine 6's inventory |
 | Page 602 | `…/news/602.tti`, `…/news/602.t42`, `…/news/602.ep1` | Section 3.3 |
 | Sub-page 0101 of page 602 | `…/news/602/0101.t42` | When it is shown, or beside the one shown |
 | Rows 64 to 127 of page 602's list | `…/news/602/1.sub` | When those rows are needed |
-| The live connection | `wss://example.org/news/push` | When `channel.json` has `push` |
+| The live connection | `wss://example.org/news/push` | When `channel.ttx` has `push` |
 
 **Rules** (REQ-CHN-002, REQ-CHN-015):
 1. **Each address is the folder followed by a fixed name,** worked out from the page number, sub-code or part number. There is no map file and no setting that changes the map.
@@ -227,7 +227,7 @@ A folder on this computer is a channel by the same structure, with the same name
 
 ## 11. Presentation
 
-`channel.json`'s `presentation` says how a reader shows the channel; it changes nothing about the structure (REQ-CHN-019).
+`channel.ttx`'s `presentation` says how a reader shows the channel; it changes nothing about the structure (REQ-CHN-019).
 
 - **`"teletext"`, the default:** the reader's whole interface: the overview of the channel's pages, the contents, the list and count of a page's sub-pages, and keying page numbers.
 - **`"site"`:** the channel is shown as a site of linked pages. By default the reader hides the overview, the contents, and the list and count of sub-pages, and keying digits does not select a page (they go to the channel when it takes keys, and do nothing otherwise). The viewer moves only by what the pages offer: their links, their Fastext keys, the prompts they make clickable, and back and forward through the pages they have seen. Every page keeps its address (`NNN`), and can be bookmarked and shared.
@@ -248,7 +248,7 @@ A folder on this computer is a channel by the same structure, with the same name
 { "name": "Example", "push": { "input": true } }
 ```
 
-as `channel.json`, and a server answering `wss://example.org/push` with a program that publishes page 100 and reads the viewer's keys: a game, a menu, a form, each viewer's page its own. `100.t42` beside it, MAY be given, so the page shows before the connection opens and while it is down. With `"presentation": "site"`, it shows as a site with no channel interface.
+as `channel.ttx`, and a server answering `wss://example.org/push` with a program that publishes page 100 and reads the viewer's keys: a game, a menu, a form, each viewer's page its own. `100.t42` beside it, MAY be given, so the page shows before the connection opens and while it is down. With `"presentation": "site"`, it shows as a site with no channel interface.
 
 A file alone is never interactive (section 10.1): taking keys needs the live connection, and the live connection belongs to a channel.
 
@@ -264,18 +264,18 @@ A file alone is never interactive (section 10.1): taking keys needs the live con
 | 6 | Ascending sub-code order | Order is derived, not a separate fact a list could get wrong |
 | 7 | Titles given, else row 1 | Row 0 is the service's header; row 1 is commonly the page's heading |
 | 8 | Magazine lists `M.pag` | Navigation by page number on a microcontroller, at most 17 KB a magazine |
-| 9 | The new names in 8.3 form, and `channel.json` kept | A minimal FAT library reads every list and page; `channel.json` needs long names, and the owner kept it |
+| 9 | The names in 8.3 form | A minimal FAT library reads every name, `channel.ttx` among them |
 | 10 | Descriptor services, `page_template` and `push.address` withdrawn | They map a channel to names of its own; the map is fixed |
 | 11 | EP1 among the page files | What the zxnet and edit.tf editors export, and a fixed name gives it the page number it lacks |
 | 12 | Any address opens | A recording or a page anywhere on the web is teletext too; only a channel is navigated, kept current and interactive |
 | 13 | Presentation as one switch, never touching what proves where the viewer is | A site can be shown as a site; the viewer's protection does not depend on the site |
-| 14 | No version member in `channel.json` | In development: what is built changes to meet this document, with nothing kept for an earlier layout |
+| 14 | No version member in `channel.ttx` | In development: what is built changes to meet this document, with nothing kept for an earlier layout |
 
 ## 14. Requirements
 
 **REQ-CHN-001 — A channel is a folder.** A channel shall be a folder, its address an `http` or `https` address whose path ends in `/` in the canonical form of the engine's REQ-WEB-023, identified by its origin and folder path, which shall be the boundary for cookies, redirects and links (REQ-WEB-018, REQ-WEB-026). *Reason:* section 3.1. *Verification:* the engine's tests of REQ-WEB-018, REQ-WEB-023 and REQ-WEB-026.
 
-**REQ-CHN-002 — Fixed names, one map.** A channel's files shall have the names of section 3.2 and no others, in the one spelling of section 9 rule 2, and a reader shall ask a channel for those names alone. No setting, file or page shall change the name of a channel's file. *Reason:* section 13 item 1. *Verification:* a reader's tests that opening, browsing and stepping through a channel of every file kind asks for nothing else, and that a `channel.json` with `page_template` is refused.
+**REQ-CHN-002 — Fixed names, one map.** A channel's files shall have the names of section 3.2 and no others, in the one spelling of section 9 rule 2, and a reader shall ask a channel for those names alone. No setting, file or page shall change the name of a channel's file. *Reason:* section 13 item 1. *Verification:* a reader's tests that opening, browsing and stepping through a channel of every file kind asks for nothing else, and that a `channel.ttx` with `page_template` is refused.
 
 **REQ-CHN-003 — Page folders.** Inside a channel's folder, a folder named by a page number in the form of section 3.2 shall belong to the channel as that page's folder, and any other folder shall be a channel of its own. *Reason:* section 13 item 2. *Verification:* tests that `602/0101.t42` is a file of the channel at `…/` and `other/100.tti` a file of the channel at `…/other/`, with cookies kept apart.
 
@@ -295,9 +295,9 @@ A file alone is never interactive (section 10.1): taking keys needs the live con
 
 **REQ-CHN-011 — The bundle's bound.** `index.t42` shall be at most 262,144 bytes. A generator shall put first sub-pages in it in ascending page order and stop before the page that would pass the bound. *Reason:* a channel larger than the bundle still opens with one request for its first pages; Hackaday's bundle was measured at 261,954 bytes on 30 October 2026. *Verification:* a generator's test with more first sub-pages than fit.
 
-**REQ-CHN-012 — `channel.json`.** `channel.json` shall have the members of section 6 and no others, read strictly at most 16,384 bytes, with an unknown, duplicate or invalid member refusing the file. *Reason:* section 6. *Verification:* tests of each member, each withdrawn member, an unknown member and a duplicate.
+**REQ-CHN-012 — `channel.ttx`.** `channel.ttx` shall have the members of section 6 and no others, read strictly at most 16,384 bytes, with an unknown, duplicate or invalid member refusing the file. *Reason:* section 6. *Verification:* tests of each member, each withdrawn member, an unknown member and a duplicate.
 
-**REQ-CHN-013 — The live connection's address.** A channel's live connection shall be at its folder's `push`, with the scheme section 8 says, and a reader shall open it only when `channel.json` has `push`. *Reason:* section 13 item 10. *Verification:* tests that the address is derived for `http` and `https`, and that no `push` member means no request to `push`.
+**REQ-CHN-013 — The live connection's address.** A channel's live connection shall be at its folder's `push`, with the scheme section 8 says, and a reader shall open it only when `channel.ttx` has `push`. *Reason:* section 13 item 10. *Verification:* tests that the address is derived for `http` and `https`, and that no `push` member means no request to `push`.
 
 **REQ-CHN-014 — Derived files.** A generator shall derive every part, magazine list, validator, version and title from the page data each time it writes them; a reader shall treat a sub-page's file as the truth when it disagrees with a list. *Reason:* section 2 principle 4. *Verification:* a reader's test that a listed sub-page whose file answers 404 is not found, and that a sub-page's file whose `ETag` differs from its list's validator is used.
 
@@ -321,10 +321,10 @@ A file alone is never interactive (section 10.1): taking keys needs the live con
 
 | Repository | Work |
 |---|---|
-| Engine `neoteletext-web` | The names: `NNN/SSSS.t42`, `NNN/P.sub`, `M.pag`, `NNN.ep1`, `push`; the parted list's reader and writer, replacing `NNN.sub`'s; the magazine list's reader and writer; finding a page in three files; finding sub-pages by part; `channel.json`'s `presentation`, `push` without `address`, `services` without `descriptor`; descriptor services and `page_template` withdrawn; the bundle's bound in the writer; page folders in the address rules; requirements REQ-WEB-002, 008, 018, 019, 023, 024, 026, 027 and 034 amended to point here |
+| Engine `neoteletext-web` | The names: `NNN/SSSS.t42`, `NNN/P.sub`, `M.pag`, `NNN.ep1`, `push`; the parted list's reader and writer, replacing `NNN.sub`'s; the magazine list's reader and writer; finding a page in three files; finding sub-pages by part; `channel.ttx`'s `presentation`, `push` without `address`, `services` without `descriptor`; descriptor services and `page_template` withdrawn; the bundle's bound in the writer; page folders in the address rules; requirements REQ-WEB-002, 008, 018, 019, 023, 024, 026, 027 and 034 amended to point here |
 | Engine `neoteletext-formats` | The title of a sub-page (section 5.5) |
 | Engine `neottx` | The build tool (section 4) |
-| Server | Serve the structure from the engine's names; `channel.json` with `push` alone and `presentation`; `M.pag`; titles; the validator as every built file's `ETag`; the bundle's bound; ascending order |
+| Server | Serve the structure from the engine's names; `channel.ttx` with `push` alone and `presentation`; `M.pag`; titles; the validator as every built file's `ETag`; the bundle's bound; ascending order |
 | Browser | The engine's new pin; sub-page lists by part; `presentation`; opening any address (section 10); this computer's folders by the structure; the live connection's derived address; EP1 among page files |
 | TypeScript kit and UI library | A channel's `presentation` and a sub-page's title declared to the server |
 | Channels | demosite, uicomponentsdemo and Hackaday published again by the server in the structure; `presentation` declared where wanted |

@@ -68,7 +68,7 @@ The server's teletext is almost all in the engine.
 | The input protocol's channel side | `StreamDecoder` (`E/neoteletext-input/src/event/decode.rs:203`); WELCOME and cursor records |
 | Audio to packets | `neoteletext-audio`, feature `encode`: sounds, live records, IMA ADPCM, IDL packets on data channel 12 |
 | The WebSocket handshake | `ws::accept_for` (`E/neoteletext-web/src/ws/handshake.rs:30`) |
-| `channel.json` and `contents.txt` read | `Descriptor::parse`, `contents::read` (`neoteletext-web`) |
+| `channel.ttx` and `contents.txt` read | `Descriptor::parse`, `contents::read` (`neoteletext-web`) |
 | Cookies | RFC 6265bis, client side (`neoteletext-web`) |
 | WebAssembly | `neoteletext-core` and `neoteletext-formats` build for `wasm32-unknown-unknown` and `wasm32-wasip1` (`scripts/build-targets.sh`), untested there |
 
@@ -83,7 +83,7 @@ The server's teletext is almost all in the engine.
    - used by the server, and imported by the browser's fetcher, as `neoteletext-input` serves receivers and channels.
 3. **The channel side of an INPUT.md session:** the counterpart of the receiver's `Session`, built on the engine's `StreamDecoder` and control records.
 4. **Server WebSocket frames:** unmasked writes, masked reads, beside the engine's `ws::accept_for`.
-5. **Writers for `channel.json` and `contents.txt`,** which tools now write by hand.
+5. **Writers for `channel.ttx` and `contents.txt`,** which tools now write by hand.
 6. **`Set-Cookie` writing and signing.**
 7. **The audio object cycler** that the engine's `docs/spec/design/audio.md` §6.1 asks of a transmitter, over the engine's audio encoder.
 8. **Tests that the engine's crates give the same output natively and in WebAssembly**, where the server needs WebAssembly.
@@ -111,7 +111,7 @@ The server repository, `teletext-server`:
 | `native` | tokio, TLS, the listener, application processes over stdio | Teletext logic |
 | `cli` | `serve`, `validate` (a channel against the engine's rules), `inspect` (what a client would receive) | — |
 
-**The browser's reference channel stops being a second server.** `B/site` today has its own HTTP server, its own WebSocket server half, TTI built as strings and `channel.json` written with `format!`. It is ported to the server:
+**The browser's reference channel stops being a second server.** `B/site` today has its own HTTP server, its own WebSocket server half, TTI built as strings and `channel.ttx` written with `format!`. It is ported to the server:
 - its pages (index, typing, invaders, piano, links, phone, podcast) become applications;
 - the browser's tests run the real server;
 - the hand-written transport is deleted.
@@ -144,11 +144,11 @@ One address does every job: the browser, a web visitor, a search engine and a li
 
 ### 4.2 What receivers use
 
-These are fixed names in the channel's folder (decision E.70). Viewers never see them in the address field, and a viewer's address naming a live or static channel's own file is refused, as section 4.4 says, except that a command-line reader told to open `channel.json` opens its channel (DEC-1710).
+These are fixed names in the channel's folder (decision E.70). Viewers never see them in the address field, and a viewer's address naming a live or static channel's own file is refused, as section 4.4 says, except that a command-line reader told to open `channel.ttx` opens its channel (DEC-1710).
 
 | Name | Channel | Holds |
 |---|---|---|
-| `channel.json` | Live and static | The channel's settings |
+| `channel.ttx` | Live and static | The channel's settings |
 | `push` | Live | The WebSocket. It is always `<channel>push`, and carries no query and no page |
 | `contents.txt` | Static | The contents |
 | `index.t42` | Static | A bundle of pages, first sub-pages only |
@@ -188,10 +188,10 @@ A live channel on the NeoTeletext server, on the native server and on Cloudflare
 
 | Request | Answer |
 |---|---|
-| `<channel>`, a place of section 4.1, each with any query | 200, a small page in an ordinary web browser, naming the channel and offering a `neoteletext://` link to that address and a link to get NeoTeletext. It runs no script, and it cannot lead anyone elsewhere |
+| `<channel>`, a place of section 4.1, each with any query | 200, a small page in an ordinary web browser, naming the channel and offering a `neottx://` link to that address and a link to get NeoTeletext. It runs no script, and it cannot lead anyone elsewhere |
 | The folder without its final `/` | 308, a redirect to `<channel>`, on the same origin, keeping its query |
 | A place with a final `/` | 308, a redirect to its one spelling, keeping its query |
-| `<channel>channel.json` | 200, the settings, generated |
+| `<channel>channel.ttx` | 200, the settings, generated, as `application/json`, because that is what the file holds. `<channel>channel.json` answers 404 like any other name (DEC-1726) |
 | `<channel>push` | The WebSocket; 426 without an upgrade |
 | Anything else under the channel, and `/` | 404 |
 
@@ -199,9 +199,9 @@ Only a `GET` or a `HEAD` reaches the small page or a redirect. A static channel 
 
 ### 4.8 Redirects, local files and what is outside the map
 
-- **Redirects.** A redirect of a channel's `channel.json` moves the channel, and the reader keeps the place it was opening. A program's redirect names a place of its own channel, or a whole address of this map.
+- **Redirects.** A redirect of a channel's `channel.ttx` moves the channel, and the reader keeps the place it was opening. A program's redirect names a place of its own channel, or a whole address of this map.
 - **Local files.** A `file:` address names a real file, so a path cannot also name a page in it: a file takes the places of section 4.1 after `#`, as `file:///tmp/news.tti#200`. This is the one use of `#`. Arriving normalises to its initial page, as in section 4.3. A `file:` address is never split by the file-name rule: each local file is its own channel (REQ-722).
-- **Outside the map.** The browser's built-in page `neoteletext:home` is not in a channel. A `neoteletext://` link wraps a whole address of this map and adds nothing to it (REQ-1672).
+- **Outside the map.** The browser's built-in page `neoteletext:home` is not in a channel. A `neottx://` link wraps a whole address of this map and adds nothing to it (REQ-1672).
 
 ## 5. The wire
 
@@ -583,7 +583,7 @@ An optional module, not the normal path:
 - changed pages come forward;
 - private pages never appear.
 
-It can go to the WebSocket as stream frames, UDP multicast on a local network, or a `.t42` file; never as chunked HTTP, since the server answers no HTTP but a channel's `channel.json` and its WebSocket (DEC-1467). A client in this mode is a decoder joining mid-cycle, as a television did. A `.t42` recording plays back as a carousel, or splits into pages for tuning.
+It can go to the WebSocket as stream frames, UDP multicast on a local network, or a `.t42` file; never as chunked HTTP, since the server answers no HTTP but a channel's `channel.ttx` and its WebSocket (DEC-1467). A client in this mode is a decoder joining mid-cycle, as a television did. A `.t42` recording plays back as a carousel, or splits into pages for tuning.
 
 ## 14. Security
 
