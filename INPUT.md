@@ -4,7 +4,8 @@
 |---|---|
 | **Status** | Proposed on 21 October 2026, for the owner to adopt. The owner agreed on 21 October that losing focus releases held input at the channel (section 13 item 11), that everything the channel says about input travels as teletext records (item 9), and that the mouse goes to a channel only when it asks (item 14), a page asking for itself (withdrawn on 27 October 2026, section 6.3). **Amended on 28 October 2026 for the return channel** (`RETURN-CHANNEL.md`, the owner's decisions A to N of its section 5; the engine's decision E.133): every move over the page at most 60 a second (section 9.8), MOUSE action 3, touch (TOUCH, MOUSE's device), the messages of one moment written together, what is never acknowledged counting nothing, a lost session resumed (section 6.4), the round trip from ping and pong, and pointer areas withdrawn. |
 | **Merges** | The input system built on 20 October 2026 (the engine's decisions E.90 to E.94 and E.97, the browser's decisions 44 to 46), and the owner's *Input Event Protocol v1* of 20 October 2026. Section 13 records what was taken from each and why. |
-| **Protocol** | Version 2. Version 1, the fixed 14-byte key record, is retired (section 14). |
+| **Protocol** | Version 7 (section 6.1). Version 1, the fixed 14-byte key record, is retired (section 14). |
+| **Reading it** | Sections 5 to 8 are the wire: what any receiver and any channel must do, whatever they are written in. Sections 9 and 10 are what the NeoTeletext browser does with it, and no other receiver is held to them. Section 15 is for someone implementing the wire: its byte-level vectors, the required core, what is legal when, what overload does, and what arrives as one unit (DEC-1759 lesson 1). |
 | **Words** | MUST, SHOULD and MAY as in RFC 2119. A *receiver* is anything that shows a channel and sends input: NeoTeletext, `neottx view`, `neottx keyboard`, a microcontroller receiver. A *channel* (or host) is the server that takes the input. |
 
 ---
@@ -105,6 +106,20 @@ A channel takes input when its descriptor says so inside its push object:
 ### 5.1 Transport and framing
 
 - **Transport:** the channel's push WebSocket. Each **binary** message the receiver sends is a piece of one ordered input stream, the concatenation of all binary messages on that connection. The only other message a receiver sends is the push subscription (text).
+- **The subprotocol** (DEC-1759 lesson 14). A receiver asks for `Sec-WebSocket-Protocol: neottx.7`: `neottx.` and this document's protocol version. A server accepts only that name, echoes it, and refuses any other upgrade with 426, naming the one it speaks, so a wrong server or a wrong version fails at the handshake and not at the first SELECT. A receiver that is answered 101 without the name it asked for closes the connection and stops. There is no compatibility path during development: old and new refuse each other.
+- **No `Origin`** (DEC-1759 lesson 18). A receiver never sends `Origin`, and a server refuses with 403 any push upgrade that carries it, whatever its value, `null` included. A web page's script always sends one, so this stops a web page reaching a channel with a viewer's cookies (cross-site WebSocket hijacking). It holds for browsers' `WebSocket` too: a receiver cannot be written in a web page.
+- **Close codes** (DEC-1759 lesson 10) say whether to try again, in two published ranges, so that a code nobody has defined yet needs no change in a receiver:
+
+| Code | Name | Meaning | A receiver |
+|---|---|---|---|
+| 4000 | `CLOSE_BROKE_PROTOCOL` | The receiver broke the WebSocket or the input protocol (section 8 rule 5) | Stops |
+| 4001 | `CLOSE_WRONG_VERSION` | HELLO named a version the channel does not speak (section 6.1) | Stops |
+| 4002 to 4099 | Unnamed | Reserved | Stops |
+| 4100 | `CLOSE_RESTARTING` | The server is restarting | Tries again |
+| 4101 to 4199 | Unnamed | Reserved | Tries again |
+| Any other, or no close at all | | Includes 1000, and a connection that simply went | Tries again |
+
+- **Stopping and trying again.** A receiver that stops does not reconnect until the viewer opens the channel again. It also stops when an upgrade is answered with a 4xx other than 429, which trying again would meet again; 429 and 5xx may pass. A receiver that tries again waits a random time in the upper half of a ceiling that starts at 1 second and doubles to 60 seconds: from 0.5 to 1 second, then 1 to 2, and so on. The ceiling goes back to 1 second once a connection has shown itself healthy. The randomness is so that the viewers a restart sent away do not all come back in the same instant.
 - **Whole events per message.** A message MUST hold whole events and whole UTF-8 characters, so a channel can parse each message alone; text may be split between messages anywhere between characters.
 - **At most `MAX_MESSAGE` (8192) bytes a message,** room for a SELECT carrying the longest query (DEC-1715).
 - The stream is defined so it also works over any reliable ordered byte stream (a microcontroller's serial line, a TCP socket); over TCP, `TCP_NODELAY` is set.
@@ -128,6 +143,10 @@ Any byte other than `0xFF` begins raw UTF-8 text.
 - Text MUST NOT contain control characters (U+0000 to U+001F, U+007F to U+009F). Enter, Tab, Backspace, Escape and every Control, Alt, Super, Hyper or Meta combination are key events.
 - Bytes `0xC0`, `0xC1` and `0xF5` to `0xFE` outside an event, and malformed UTF-8, are protocol errors.
 - A key is never sent as raw text: every key is a KEY event carrying its text (section 5.5). Raw text is what does not come from a key: an input method's committed text and a phone's.
+
+**Why a parser cannot lose its place** (the review of 1 November 2026, DEC-1759 lesson 17). `0xFF` is not an escape in the usual sense, with text on either side of it to be told apart: no UTF-8 sequence holds the byte (RFC 3629), so text can never forge an event, `U+00FF` being the two bytes `C3 BF`. Inside an event, position decides: `0xFF` may be a field's byte (a varint's, a RESUME token's), and is read as one because every field's length is known from what came before. An extension's payload is taken whole by its length and never looked into, so a payload holding event bytes is skipped as a payload. A flag bit, type or value nobody defined is a protocol error, not something to step over, and a protocol error closes the connection (section 8 rule 5): there is no resynchronising, so no state in which a parser carries on having lost its place.
+
+The review found one fault, now fixed: a UTF-8 character cut short by the next event, `E2 82 FF 05`. A stream reader took the cut character for one still arriving and held it, with every event after it, as text, until its buffer filled and the connection closed. So a character cut by an event is malformed UTF-8 at once. A character cut by the end of what has arrived is not, on a byte stream such as a serial line. On a WebSocket it is, because a message holds whole events and whole characters and is read alone: a message's cut item is a protocol error, and the next message's bytes can never be read as the rest of it. The engine's `input_stream` fuzz target holds both: fed anything in any pieces, a reader stops at a fault or holds at most one item's start, and an unknown extension's payload, whatever it holds, is skipped and the event after it read.
 
 ### 5.4 Events
 
@@ -175,7 +194,7 @@ So a page can be active without being focused: in a tab behind another, in a win
 **SELECT**, an extension (`0x40`, so a channel that does not know it skips it; REQ-INT-140), decided by the owner on 29 October 2026: "we send an event saying which page the user has selected and if there are subpages then the server transmits them at that time. also the same event should send if the user has selected a subpage", and revised on 30 October 2026 by DEC-1527 (each browser tab has its own self-contained connection and decoder, so a connection has one selection and SELECT carries no view number), by DEC-1526 (every sub-code is a peer), and on 1 November 2026 by DEC-1730 (a selection is a web request that stays open, so it carries the address's own text). `uv` length, then the place as text, the same text the URL map reads (`SERVER.md` section 4):
 - **`302`** selects the page: sub-code `0x3F7F`, "no particular page sub-code" (EN 300 706 clause 9.6.1), for a page keyed by its number alone, or a link or bookmark that names no sub-page.
 - **`302/0002`** selects one sub-page, a sub-code `0000` to `3F7E` (clause 9.3.1.2).
-- **Either followed by `?` and a query** gives the query of the address selected (`SERVER.md` section 4.6), as written: printable ASCII with no `#`, at most `MAX_PAGE_PARAMETERS` (8,000) bytes.
+- **Either followed by `?` and a query** gives the query of the address selected (`SERVER.md` section 4.6), as written: `name=value` pairs joined by `&`, as the URL map reads them, in printable ASCII with no `#`, at most `MAX_PAGE_PARAMETERS` (8,000) bytes.
 - **Empty** means the tab no longer shows a page of the channel.
 
 Digits are capitals, in the one spelling of `SERVER.md` section 4.5. Anything else is a protocol error, as is a query with no page. A query belongs to this one selection: the program receives it with it, and a SELECT that does not carry it leaves it behind (REQ-1693 item 6).
@@ -183,6 +202,10 @@ Digits are capitals, in the one spelling of `SERVER.md` section 4.5. Anything el
 **What the tab is then sent and shows** (DEC-1500, DEC-1526, REQ-1502). Every sub-code a page has is one of its sub-pages, all of them peers; sub-code 0000 beside others is the page's own content, and the page's order is ascending sub-code, 0000 first when present. With `sub` `0x3F7F` the tab shows the page's **first** sub-page in that order, and that sub-page then is the selection, exactly as if the viewer had chosen it: the channel answers with it, and stepping goes on from it. With a sub-code the tab shows that sub-page alone and is sent only it and its changes, while the page's other sub-pages change, until the tab selects something else. Stepping to the next or previous sub-page, by the keys, the remote, the arrows or the sub-page list (section 7.9), is a selection of that sub-code; nothing else is sent. Sub-pages are never sent with their page, and **nothing rotates on a live channel:** the sub-page shown changes only when the viewer selects another, or when the channel's program moves the tab, which is itself a selection. A broadcast recording played back keeps the broadcast's own behaviour.
 
 It is sent whenever the connection's selection changes: a page keyed or followed by a link, a sub-page stepped to or chosen from the list; at the start of each session, after HELLO (and after RESUME), when the tab shows a page of the channel, so a reconnection is sent its page again; and with page 0 when the tab leaves the channel's pages. It is sent whatever the focus, and focus never changes it. It is the only message that names a selection: a receiver that does not set SELECT has no selection, and is sent no page. It is sent only when both sides set SELECT (section 6.2), counts no input units, and is held to the rate as other events are (section 8).
+
+**Every selection has an ending** (DEC-1759 lesson 12, REQ-1481): a page, DENIED (section 7.12), or a deadline of `PROGRAM_REPLY_LIMIT_MS`, **5,000 ms** from the SELECT, after which the server sends DENIED 503 itself, with the channel's program running or not. A receiver need set no timer of its own for a selection. A later page for the same selection is still shown: the selection stands, and the program has come back. A selection a newer one replaced has no ending of its own, as the newer one's ending stands for both, and what the program sends for it is dropped.
+
+**The first SELECT.** The server holds its `connected` to the program until the connection's first SELECT, for at most `FIRST_SELECTION_WAIT_MS` (1,500 ms), so that a shared link goes straight to its page with no initial page before it. A receiver that does not set SELECT is not waited for. Measured with `neottx view` on one machine, the first SELECT came 8 ms after the connection opened. The bound exists for a receiver that selects nothing, which is then shown the program's answer for the initial page.
 
 **RESUME**, an extension (`0x45`): `uv` length, then the session's `token` (16 bytes, `TOKEN_BYTES`) and `acked` u16 big-endian, the last acknowledgement the receiver took; exactly 18 bytes of payload. It follows HELLO in a reconnection's first message, when the receiver asks to resume its session (section 6.4); a channel that does not know it skips it, and so begins a new session. It counts nothing.
 
@@ -287,8 +310,8 @@ The version-1 key record took 14 bytes for every key.
 
 ### 6.1 The session
 
-1. When the push WebSocket of a channel that declares input opens, the receiver sends HELLO with version 6 and the capabilities it has. Version 3 (31 October 2026, DEC-1538) added the stamp to the input events. Version 4 (31 October 2026, DEC-1689) added the REDIRECT record and ended a cursor record's moving a viewer. Version 5 (1 November 2026, DEC-1715) added page parameters to SELECT. Version 6 (1 November 2026, DEC-1730) makes SELECT's payload the address's text, so a channel and a receiver of different versions would disagree on what SELECT holds: both sides speak 6, and there is no compatibility path.
-2. The channel answers with WELCOME (section 7.2): the version it speaks and the subset of the capabilities it will use. A channel that cannot speak the version closes the connection.
+1. When the push WebSocket of a channel that declares input opens, the receiver sends HELLO with version 7 and the capabilities it has. Version 3 (31 October 2026, DEC-1538) added the stamp to the input events. Version 4 (31 October 2026, DEC-1689) added the REDIRECT record and ended a cursor record's moving a viewer. Version 5 (1 November 2026, DEC-1715) added page parameters to SELECT. Version 6 (1 November 2026, DEC-1730) makes SELECT's payload the address's text, so a channel and a receiver of different versions would disagree on what SELECT holds. Version 7 (1 November 2026, DEC-1759) names the subprotocol and the close codes (section 5.1), and lets a REDIRECT record's place keep a query (section 7.11). Both sides speak 7, and there is no compatibility path.
+2. The channel answers with WELCOME (section 7.2): the version it speaks and the subset of the capabilities it will use. A channel that cannot speak the version closes the connection with `CLOSE_WRONG_VERSION`, 4001.
 3. Then the receiver sends RESIZE, FOCUS_IN or FOCUS_OUT, and SELECT when it shows a page of the channel; and from then on the viewer's input.
 4. The receiver sends no input before WELCOME. A channel that has not answered within `WELCOME_TIMEOUT` (10 s) is taken not to take input, and the receiver says so.
 5. **A reconnection is a new session,** unless both sides set RESUME and the channel still holds the session (section 6.4): HELLO again, nothing held, the input count from zero. The channel pushes the selected page again when it receives SELECT. A resumed session goes on as section 6.4 says.
@@ -354,6 +377,7 @@ Everything a channel says to a receiver beyond its pages is teletext: records of
 | 9 | LINKS | one or more | 7.8 |
 | 10 | SUBPAGES | one or more | 7.9 |
 | 11 | REDIRECT | one or more | 7.11 |
+| 12 | DENIED | one | 7.12 |
 
 Every record type has a type of its own in the frame rather than a kind of the control record (decided 30 October 2026, TODO-1491): the control record is one fragment, 26 bytes of body, and the index, LOG, SET_COOKIE, LINKS, SUBPAGES and REDIRECT records need more; and a receiver that reads only some of the types skips the others by the type byte alone, before reading any field. Section 7.10 says how a record of more than one fragment travels and what a receiver does with a record it cannot use.
 
@@ -541,15 +565,15 @@ Each entry: `sub` u16, a sub-code `0x0000` to `0x3F7E` with no bit outside the t
 
 A channel's redirect (DEC-1683, DEC-1689, REQ-1688): what a channel's program sends to move a connection's viewer to another page of the channel, or to another channel. It is the only thing that moves a viewer (section 8 rule 8). An HTTP redirect from a web server (REQ-701) is another thing, and is not carried here; where the two are near, "page redirect" means this record's page form.
 
-The body is one address, as an HTTP `Location` is (DEC-1730): 1 to 8,000 bytes (`MAX_ADDRESS`, the longest address of REQ-1661) of printable ASCII with no space and no fragment. It is either a **place** of this channel, `302` or `302/0002`, or a **whole address**, an `http` or `https` address the engine's strict address parser accepts.
+The body is one address, as an HTTP `Location` is (DEC-1730), of printable ASCII with no space and no fragment. It is either a **place** of this channel, `302` or `302/0002`, with a query when the selection it moves keeps one, `302?a=1`, at most 8,009 bytes: a place and the longest query, 8,000 bytes (`MAX_PAGE_PARAMETERS`); or a **whole address**, an `http` or `https` address the engine's strict address parser accepts, at most 8,000 bytes (`MAX_ADDRESS`, the longest address of REQ-1661).
 
-- **A place.** The server sends the record and records the page as the connection's selection, exactly as it would a SELECT, and the program is then sent `selected` for it. The receiver opens that page and sub-page, whether or not its page has the focus, since a selected page is active whatever its focus (REQ-1553), and sends SELECT for it.
+- **A place.** The server sends the record and records the page as the connection's selection, with its query, exactly as it would a SELECT, and the program is then sent `selected` for it. The receiver opens that page and sub-page, whether or not its page has the focus, since a selected page is active whatever its focus (REQ-1553), and sends SELECT for it, with the query.
 - **A whole address.** The server sends the record and changes nothing else: the connection's selection stands until the receiver leaves. A receiver that opens channels puts the address through its own address rules, which alone decide: a redirect leads only to an `http` or `https` address, never a local file, a `web:` hand-off or the browser's own pages. It shows the redirect notice (REQ-1686) and then opens the address as another channel. A receiver that cannot open channels says that the channel redirected and to where, and stays.
 - **What a channel cannot do with it.** The record moves a viewer and nothing else. The viewer's own choice overrides it, and a receiver bounds how many redirects it follows in a row with no input from the viewer (REQ-1688 item 6).
 
 ### 7.12 The DENIED record (type 12)
 
-A selection refused, or a program that did not answer in time (REQ-1481, DEC-1730). It gives every selection a defined answer, as a status gives a web request one. Integers are big-endian.
+A selection refused by the channel's program, at once, or a program that did not answer by the deadline of section 5.4 (REQ-1481, DEC-1730). It gives every selection a defined answer, as a status gives a web request one. Integers are big-endian.
 
 | Bytes | Field | Range |
 |---|---|---|
@@ -568,7 +592,7 @@ The connection stays open. A receiver says so to the viewer in words of its own,
    - **The channel's part.** A channel keeps what each connection holds. On a signal it treats whatever is still held as released, itself, and acts on nothing else. A receiver may have sent nothing: a dropped connection cannot, and a terminal that reports no releases never does.
    - **The mark.** Every such release, the receiver's or the channel's, is marked as lost input, and reaches a channel's program marked so (`lost: true`), so a game can tell "the player let go" from "the player left". A real key-up or button-up carries no mark.
 4. **The rate.** A receiver sends at most `MAX_PER_SECOND` (120) input units in any second, counted as the input count counts them, and never drops a release, a key's, a button's or a contact's up, to keep to it. 120 is qrkeyboard's relay limit. A move, gone and HOVER count nothing: a move goes at most 60 a second and only when the dot changes (section 9.8); a HOVER only as a control is crossed. So the pointer can never cost a key. COMPOSE counts nothing in the input count, since it is never acknowledged, but is held to the rate as one unit, since nothing else bounds it.
-5. **Protocol errors** close the connection, on either side.
+5. **Protocol errors** close the connection, on either side, with a code a receiver stops on (section 5.1).
 6. **Bounds.** A message over `MAX_MESSAGE`, a field over its maximum, a varint over 5 bytes or not minimal: a protocol error.
 7. **Nothing waits on a timer** but the pointer's moves (section 9.8). A receiver sends an event when it happens and draws what comes back when it arrives (decision E.97, REQ-INT-008, REQ-RCH-011); the heartbeat (a ping after 25 s of silence, a pong within 10 s) and the round trip's ping (section 9.2) are the push connection's own.
 8. **A channel moves a viewer with a REDIRECT record** (section 7.11), and nothing else moves one: a cursor record never does, whatever page it names. A redirect to a page of the channel opens that page in the receiver, as a terminal shows what its host sends, and the receiver then sends SELECT for it, since the move is a selection. A redirect to another channel's address is followed after the redirect notice (REQ-1686). It needs no action from the viewer (DEC-1683), and the viewer choosing a page overrides it.
@@ -723,3 +747,79 @@ Adopted by the owner on 21 October 2026, as the engine's decision E.100 and the 
    - `neoteletext-site terminal` speaks version 2.
    - Requirements 18.1 to 18.10 replaced by pointers to REQ-INT-130 to REQ-INT-139; `docs/interaction.md` replaced by a pointer here, its sections 16 and 17 kept as history.
 3. **Tests:** each requirement's verification above; the latency tests unchanged in what they hold.
+
+## 15. For an implementer
+
+### 15.1 The bytes
+
+`neoteletext-common/wire-vectors.tsv` is this protocol's byte-level examples: the version and the subprotocol, the close codes and what a receiver does, messages of the input stream with what each reads as, messages a reader must refuse, and records as whole 42-byte packets (DEC-1759 lesson 3). The engine reads and writes every row, and the server runs every row against a channel whole, as both run the address map's table. A new implementation runs the same file.
+
+### 15.2 The required core, and every type there is
+
+A receiver that does this much works on every channel (DEC-1759 lesson 6): the upgrade with its subprotocol (section 5.1); HELLO, and WELCOME (section 6.1); SELECT (section 5.4), having set the SELECT capability; a page's packets; and stopping or trying again on a close. It need read no record to show a page. A channel's required core is: WELCOME; a page frame, or DENIED, for every SELECT; and closing with the codes of section 5.1.
+
+Everything else is optional, and each kind of thing has one rule for what is not understood (DEC-1759 lesson 16):
+
+| What | Where it is registered | What a reader does with one it does not know |
+|---|---|---|
+| A core event, `0x01` to `0x3F` | Section 5.4's table | A protocol error: it has no length to step over |
+| An extension event, `0x40` to `0x7F` | Section 5.4: SELECT `0x40`, HOVER `0x43`, TOUCH `0x44`, RESUME `0x45`; `0x41` and `0x42` reserved | Skipped by its length |
+| Type `0x00`, or `0x80` to `0xFF` | Reserved | A protocol error |
+| A flag bit of an event | Each event's table | A protocol error |
+| A capability | Section 6.2 | Ignored, and not agreed in WELCOME |
+| A record type on data channel 12 | Section 7's table | Skipped by the type byte, not counted (section 7.10) |
+| A control message | Section 7.2 | Skipped by its length, or ignored when withdrawn |
+| A field of a program's message, or a message's `type` | `SERVER.md` section 7, the published schema | Refused whole, with a `refused` message: the program protocol is exact, as its two ends are released together |
+| A member of `channel.ttx` | `CHANNEL.md` | Refused |
+
+### 15.3 What is legal when
+
+| In this state | A receiver may send | A channel may send |
+|---|---|---|
+| Upgrade answered, no HELLO | HELLO, first and once | Nothing a receiver must act on: pages wait for the program's answer, which waits for SELECT or `FIRST_SELECTION_WAIT_MS` |
+| HELLO sent, no WELCOME | Nothing | WELCOME, or a close (4001). A receiver waits at most `WELCOME_TIMEOUT` |
+| Welcomed, no selection | RESIZE, FOCUS_IN or FOCUS_OUT, SELECT, RESUME's resends first; no stamped input, which has no page on screen | Index, cursor and control records; nothing of a page's content until the program answers |
+| A selection awaiting its ending | Anything, a new SELECT included, which replaces it; stamped input on the page still on screen, dropped if it no longer matches | The selection's page, or DENIED; records. A later change to an older selection is dropped |
+| A selection ended with a page | Everything, while keys go (section 9.1) | That page's changes; records; a REDIRECT |
+| A selection ended with DENIED | SELECT; nothing on a page, as none is on screen | A page for that selection, if the program recovers |
+| After a close | Nothing on that connection | Nothing. A new connection is a new session (section 6.1) |
+
+Anything else on the receiver's side is a protocol error, or dropped when section 5.4's stamp says so.
+
+### 15.4 What overload does
+
+Each message type has one rule for when it cannot keep up (DEC-1759 lesson 11), and nothing is merged or dropped beyond them.
+
+| Message | The rule |
+|---|---|
+| A key, a button, a contact's down and up, PASTE | Never dropped, and limited to `MAX_PER_SECOND` (120) input units by the receiver, which never drops a release to keep to it (section 8 rule 4) |
+| A move | The latest of a contact's replaces the unsent one, at most 60 a second, and it waits while the socket has `PUSH_UNSENT_BOUND` bytes unsent (section 9.8) |
+| The wheel | Unsent deltas are summed (section 8 rule 1) |
+| HOVER | Goes as a control is crossed, counted nothing |
+| COMPOSE | Held to the rate as one unit |
+| SELECT | Held to the rate as other events are; a later one replaces an earlier, whose answer is dropped |
+| A page frame, and its records | An answer to a replaced selection is dropped, by its number (`SERVER.md` section 7.6). A connection's queue is bounded, and what will not fit is dropped, the newest first: a receiver that far behind can miss a change until the next whole frame |
+| LOG | At most 16 for each page frame a receiver takes (section 7.6) |
+| Live audio | The oldest whole record goes first (`SERVER.md` section 6.4) |
+
+### 15.5 What arrives as one unit
+
+A receiver applies these whole, or not at all (DEC-1759 lesson 15):
+
+- **A page frame and its links:** the frame's packets, then that sub-page's LINKS records when it has Link Extension links. The next frame, or a frame with no LINKS record, is what says it has none. A frame is applied before its LINKS records arrive, and a sub-page shows no Link Extension links until they do.
+- **A sending of the index, or of a SUBPAGES list:** whole when every part has arrived (sections 7.5 and 7.9). A partial one shows what it has and removes nothing.
+- **A LINKS sending:** part 0 replaces what was held, and later parts add to it (section 7.8).
+- **A record of several fragments:** whole by its CRC, or discarded (section 7.10).
+- **A WebSocket message of the input stream:** whole items, read alone (section 5.1).
+
+Nothing else is a unit. A selection's sub-page and its SUBPAGES record may arrive in either order, and a receiver holds neither back for the other.
+
+### 15.6 How a feature is written
+
+A new feature of this protocol is written as five parts, as SELECT is here (DEC-1759 lesson 5):
+
+- **Description:** a viewer's page selection is a web request that stays open, and SELECT names it by the text of the address's end.
+- **Bytes:** `FF 40 03 33 30 32`, SELECT of page 302, the row `select_page` of the vectors.
+- **Reply:** a page, DENIED, or by the deadline DENIED 503, and then the page's changes until the next SELECT.
+- **Pitfalls:** a digit in lower case is a protocol error, as the map writes capitals; a query belongs to one selection; a SELECT that repeats the selection is no new selection.
+- **Sources:** DEC-1730, DEC-1759 lesson 12, REQ-1090, REQ-1693, EN 300 706 clause 9.6.1.

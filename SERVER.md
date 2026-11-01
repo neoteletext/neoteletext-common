@@ -208,6 +208,8 @@ Only a `GET` or a `HEAD` reaches the small page or a redirect. A static channel 
 ### 5.1 Transport
 
 - **One WebSocket per tab** (DEC-1527): each browser tab showing a live channel opens its own, with its own decoder and store, never shared with another tab, even one on the same channel. The server sees one connection as one view with one selection (section 6.1); the channel's cookies stay shared by its tabs (section 8.2).
+- **The upgrade** (DEC-1759 lessons 14 and 18, `INPUT.md` section 5.1). A push upgrade must offer `Sec-WebSocket-Protocol: neottx.7`, the input protocol's version, and is answered with it; otherwise 426, naming it. One that carries `Origin` is refused with 403, whatever it offers. `teletext_runtime::landing::push_upgrade` is the one rule, for every host.
+- **Closing.** `INPUT.md` section 5.1's codes: 4000 for what broke the protocol, 4001 for another version, 4100 for a restart. A receiver stops on the first two and tries the third again.
 - `TCP_NODELAY` on.
 - **No `permessage-deflate`:** the payload is small and already dense, and a private overlay compressed in one context with attacker-influenced public rows makes a compression oracle (CRIME and BREACH).
 - **QUIC and WebTransport** later, only where measurement on a lossy mobile link shows head-of-line blocking. Section 5.2's self-contained frames are what make such a binding possible.
@@ -256,7 +258,7 @@ There are two delivery modes, kept apart:
 
 A receiver-compatible stream is not the original broadcast, and the server never claims it is. An authentic stream is never given current-state semantics: nothing in it is coalesced.
 
-### 5.4 Upstream: INPUT.md version 5
+### 5.4 Upstream: INPUT.md version 7
 
 Upstream is the input protocol already built on both sides and fuzzed (`C/INPUT.md`). It is binary events framed by `0xFF`, at most 8,192 bytes a message, and has:
 - HELLO and WELCOME;
@@ -270,13 +272,13 @@ PAGE (`0x0A`) and its capability were withdrawn on 31 October 2026 (DEC-1538, RE
 
 | Type | Name | Payload |
 |---|---|---|
-| `0x40` | SELECT | `page` uv (`0x100` to `0x8FF`, or 0 for none), `sub` uv (the sub-code chosen, or `0x3F7F`, "no particular page sub-code", when the page was chosen and none of its sub-pages), and nothing after |
+| `0x40` | SELECT | `uv` length, then the place as text: `302` selects the page, `302/0002` one sub-page, either with `?` and a query, and empty selects nothing (`INPUT.md` section 5.4, DEC-1730) |
 
-It is sent whenever the page or sub-page the tab has selected changes, whether or not keys go to the channel, and at the start of each session. It carries no view number: a connection is one tab with one selection (DEC-1527, which withdrew the `view` field and `MAX_VIEWS` of 29 October 2026). Section 6.1 says what the server sends in answer.
+It is sent whenever the page or sub-page the tab has selected changes, whether or not keys go to the channel, and at the start of each session. It carries no view number: a connection is one tab with one selection (DEC-1527, which withdrew the `view` field and `MAX_VIEWS` of 29 October 2026). Section 6.1 says what the server sends in answer. A message of the input stream holds whole items and is read alone (`INPUT.md` section 5.1), so one cut short is a protocol error.
 
 *Withdrawn on 29 October 2026, never built:* TUNE (`0x40`, a list of sub-pages tuned, with a `preview` flag), UNTUNE (`0x41`) and TITLES (`0x42`, titles by range), designed on 26 October 2026 for a receiver to tune single sub-pages and their neighbours. SELECT takes `0x40`; `0x41` and `0x42` are reserved.
 
-A receiver that does not set SELECT has no selection of its own: its connection is shown the program's answer to `connected` with no selection, the channel's initial page (REQ-1471).
+A receiver that does not set SELECT has no selection of its own: its connection is shown the program's answer to `connected` with no selection, the channel's initial page (REQ-1471), and `connected` is not held for it.
 
 - **Focus** is FOCUS_IN and FOCUS_OUT, for the keyboard, and the pointer being over the page: it decides only where input goes, never what is sent (REQ-1554). A selected page stays active, and is updated, without it (REQ-1553).
 - **The stamp.** Each input event carries the page and sub-code on screen when it happened. The server compares it with the connection's selection: a match goes to the program, with the page and sub-code; a press that differs is dropped, counted as `stale_input` in `/stats.json` and logged at most once an interval; a release is never dropped (REQ-1555, REQ-1557).
@@ -333,12 +335,13 @@ Reasons are codes; the words are the client's. A record that breaks its layout o
 
 | When | What the connection is sent |
 |---|---|
-| At connection | Nothing until the program answers `connected`; then the channel's index records (page-level), the one sub-page the connection's selection shows (the program's initial page with 3F7F when it named none), its LINKS record when it has links, and its page's SUBPAGES record |
+| At connection | Nothing until the program answers `connected`, which the server holds until the connection's first SELECT, for at most `FIRST_SELECTION_WAIT_MS`, 1,500 ms, so a shared link goes straight to its page (TODO-1731); then the channel's index records (page-level), the one sub-page the connection's selection shows (the program's initial page with 3F7F when it named none), its LINKS record when it has links, and its page's SUBPAGES record |
 | The selection changes (SELECT, or the program's page redirect) | The one sub-page the new selection shows, whole, as the table above says, with its LINKS record and, if needed, its page's SUBPAGES record |
 | The program sends a new version of the selected sub-page | That sub-page as changed rows, followed by its LINKS record when it has links |
 | The program sends any other sub-page to the connection | Nothing: a sub-page reaches a connection only when it is that connection's selection |
 | The program changes the selected page's sub-page list | The new SUBPAGES record |
-| The selected page does not exist, is refused, or the program does not answer in time | DENIED (section 5.5) |
+| The program ends the selection with `denied`: the page does not exist, or is refused | DENIED with its status, at once (section 5.5) |
+| The program does not answer within `PROGRAM_REPLY_LIMIT_MS`, 5,000 ms, or is not running | DENIED 503. Every selection has an ending (`INPUT.md` section 5.4, DEC-1759 lesson 12) |
 
 **No rotation on a live channel** (DEC-1526 item 4). The sub-page a connection shows never changes by itself. It changes only when the receiver selects another, or when the program moves the connection with a page redirect (the `redirect` message naming a page, `C/INPUT.md` section 7.11), which is itself a selection the server records exactly as it would a SELECT. A `redirect` naming another channel's address changes no selection: the receiver leaves (REQ-1688). Neither is an HTTP redirect from a web server (REQ-701). A program that sends another sub-page of the selected page does not change what is shown: it is not forwarded. A broadcast recording played back as a stream (section 5.3) keeps the broadcast's own rotation.
 
@@ -401,6 +404,8 @@ It costs bytes in proportion to the audience, but only numbers, and only for cli
 - **Messages:** newline-delimited JSON.
 
 ### 7.2 Messages
+
+*The table below is the design of 25 October 2026, withdrawn by DEC-1482.* The messages are a closed set, in the server's `docs/applications.md` sections 2 and 3 and `protocol/schema-6.json`, generated from the Rust types, and in REQ-1476. Section 7.6 says what program protocol 6 adds.
 
 | Direction | Message | Meaning |
 |---|---|---|
@@ -478,6 +483,19 @@ As a page's content they are validated and then delivered as page frames. As a `
   - tunes of them get DENIED (unavailable) until it returns.
 - **A stalled application** (no answer to `open` within a limit) is treated as crashed for that session.
 
+### 7.6 A selection's number, and its ending
+
+**The number** (DEC-1759 lesson 13). The server gives each selection on a connection a rising number, from 1, and passes it to the program in `connected` and `selected`. The program's `reply`, `page`, `subpages`, `redirect` and `denied` for a selection carry it back as `request`, and the server drops any whose number is not the connection's current selection and counts it as `stale_answers`. So a late answer cannot replace the page now on screen, and a program that was slow did nothing wrong: it is not refused. This is between server and program: the viewer's input protocol does not carry it, and the kits copy it, so that a program built on them never handles it.
+
+- A `reply` to a selection already replaced still gives the index, since that is the connection's, and its sub-page is dropped.
+- A number belongs to one connection, so a `page` or `subpages` that carries one names exactly one, and one that names others is refused (`one_connection`).
+- A `page` with a `request` of `null` is a change: it reaches connections whose selection it shows, and that have had their answer. A connection still awaiting its answer is not sent it, since that answer will be current.
+- A `redirect` for a selection already replaced is dropped: the viewer's own choice overrides it (`INPUT.md` section 7.11).
+
+**The ending.** `denied` carries a status of 403, 404, 429 or 503, and ends a selection at once. A `reply` whose `selected` is `null` does not end one: it says only that the page goes separately, and a `page`, `redirect` or `denied` must follow, or the deadline does. A redirect to another channel ends one.
+
+**Reading a query.** On a page that keeps a copy for each viewer, the UI library makes the page from the address's query, as it does from a redirect's params: `?article=5` reaches `root(params)`.
+
 ## 8. Sessions, cookies and identity
 
 ### 8.1 Sessions
@@ -490,6 +508,7 @@ As a page's content they are validated and then delivered as page frames. As a `
 ### 8.2 Cookies
 
 - **HTTP cookies, as the engine implements them** (RFC 6265bis, stricter: host-only, scoped to the channel folder, sent on the WebSocket upgrade and on each GET; separate jars for the browser's private tabs). The browser's trusted core already holds them, with its cookies panel, Clear-Site-Data and history clearing (browser decision 62). There is no second cookie model.
+- **At connection,** a program is given the cookies the connection opened with in `connected`, at most 50 (`MOST_COOKIES`), each name and value within 4,096 bytes, without the server's own, whose names begin `_` (REQ-1471). They are what the upgrade carried, untrusted, and are not updated while the connection is open: a change reaches the program on the next connection (DEC-1730 item 8).
 - **Mid-connection,** an application's `cookie` reaches the client as a SET_COOKIE record (type 8, `C/INPUT.md` §7.7) holding one `Set-Cookie` value, which the server builds from the typed message with the engine's encoder. The client applies it with the same parser as an HTTP response's.
 - **The session cookie** is `__Host-`-style and the server's alone. Names beginning `_` are reserved for the server.
 - **Signed cookies:**
@@ -592,6 +611,8 @@ It can go to the WebSocket as stream frames, UDP multicast on a local network, o
 | A private page shown to others | Ownership decides sharing, by where content was published; cookies reach applications only per session (section 7.3) |
 | A compromised client interface steering requests | Accepted by the owner: the interface decides tuning (section 6.1); the trusted core limits how fast the tuned set may change |
 | A compression oracle on private rows | No `permessage-deflate` (section 5.1) |
+| A web page reaching a channel with a viewer's cookies (cross-site WebSocket hijacking) | A push upgrade that carries `Origin` is refused (section 5.1, DEC-1759 lesson 18) |
+| A server told apart from a receiver by what it calls itself | No server code reads a receiver's agent text: capabilities in HELLO are the only signal, and the commit gate holds it (DEC-1759 lesson 19) |
 | Forged or replayed cookies | Signed with expiry, two keys for rotation (section 8.2) |
 | A hostile application | Validated output (section 7.3): its page numbers within its channel, its sessions its own, its packets well formed; bounded queues; no process per viewer to exhaust |
 | A flooding client | Limits, rate on events and tunes (section 11) |
