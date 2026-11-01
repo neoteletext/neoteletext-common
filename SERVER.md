@@ -211,7 +211,6 @@ Only a `GET` or a `HEAD` reaches the small page or the redirect. A static channe
 - **One WebSocket per tab** (DEC-1527): each browser tab showing a live channel opens its own, with its own decoder and store, never shared with another tab, even one on the same channel. The server sees one connection as one view with one selection (section 6.1); the channel's cookies stay shared by its tabs (section 8.2).
 - `TCP_NODELAY` on.
 - **No `permessage-deflate`:** the payload is small and already dense, and a private overlay compressed in one context with attacker-influenced public rows makes a compression oracle (CRIME and BREACH).
-- **SSE:** the engine's client keeps it for channels made elsewhere; this server needs only the WebSocket, since input needs the upgrade anyway.
 - **QUIC and WebTransport** later, only where measurement on a lossy mobile link shows head-of-line blocking. Section 5.2's self-contained frames are what make such a binding possible.
 
 ### 5.2 Downstream: four kinds of binary frame

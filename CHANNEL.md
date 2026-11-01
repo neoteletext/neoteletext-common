@@ -135,7 +135,7 @@ The channel's settings, read by the engine's strict, bounded reader of at most 1
 |---|---|---|
 | `name` | The channel's own name for itself, at most 120 characters. A reader may show it outside the page, never in row 0. | The channel's address |
 | `initial_page` | The page a channel opens at: three decimal digits, the magazine 1 to 8 first | `"100"` |
-| `push` | The live connection: `method`, `"websocket"` or `"sse"`; and `input`, `true` when the channel takes the viewer's keys back, with a WebSocket only. The connection is always at the channel's `push` (section 8). | No live connection |
+| `push` | The live connection: `method`, `"websocket"`; and `input`, `true` when the channel takes the viewer's keys back. The connection is always at the channel's `push` (section 8). | No live connection |
 | `region` | The default character set region (decision E.4) | The reader's configured region |
 | `services` | Linked channels: each a `name` (short, for `name:mpp` links), a `display_name`, and `channel`, the linked channel's folder address in canonical form | None |
 | `aliases` | At most 16 members, each mapping one page number to a target, `name:mpp` or a channel address (REQ-WEB-020) | None |
@@ -165,7 +165,7 @@ The channel's settings, read by the engine's strict, bounded reader of at most 1
 
 ## 8. The live connection
 
-A channel's live connection is always at its folder's `push`: `wss://` for a channel at `https://`, `ws://` for one at `http://`, with the method `channel.json`'s `push` names; a server-sent event stream is at the same `push` over `https://` or `http://` (REQ-CHN-013). A reader opens it only when `channel.json` has `push`, and never asks for `push` otherwise. Its cookies are the channel's (REQ-WEB-026). What travels on it is `SERVER.md`'s and `INPUT.md`'s.
+A channel's live connection is always at its folder's `push`: `wss://` for a channel at `https://`, `ws://` for one at `http://` (REQ-CHN-013). Server-sent events were withdrawn by DEC-1738. A reader opens it only when `channel.json` has `push`, and never asks for `push` otherwise. Its cookies are the channel's (REQ-WEB-026). What travels on it is `SERVER.md`'s and `INPUT.md`'s.
 
 A static host serves the files and cannot serve `push`; a channel that takes the viewer's keys needs a server on the channel's own origin (`INPUT.md` section 4).
 
@@ -295,7 +295,7 @@ A file alone is never interactive (section 10.1): taking keys needs the live con
 
 **REQ-CHN-012 — `channel.json`.** `channel.json` shall have the members of section 6 and no others, read strictly at most 16,384 bytes, with an unknown, duplicate or invalid member refusing the file. *Reason:* section 6. *Verification:* tests of each member, each withdrawn member, an unknown member and a duplicate.
 
-**REQ-CHN-013 — The live connection's address.** A channel's live connection shall be at its folder's `push`, with the scheme section 8 says, and a reader shall open it only when `channel.json` has `push`. *Reason:* section 13 item 10. *Verification:* tests that the address is derived for `http`, `https`, WebSocket and server-sent events, and that no `push` member means no request to `push`.
+**REQ-CHN-013 — The live connection's address.** A channel's live connection shall be at its folder's `push`, with the scheme section 8 says, and a reader shall open it only when `channel.json` has `push`. *Reason:* section 13 item 10. *Verification:* tests that the address is derived for `http` and `https`, and that no `push` member means no request to `push`.
 
 **REQ-CHN-014 — Derived files.** A generator shall derive every part, magazine list, validator, version and title from the page data each time it writes them; a reader shall treat a sub-page's file as the truth when it disagrees with a list. *Reason:* section 2 principle 4. *Verification:* a reader's test that a listed sub-page whose file answers 404 is not found, and that a sub-page's file whose `ETag` differs from its list's validator is used.
 

@@ -94,7 +94,7 @@ A channel takes input when its descriptor says so inside its push object:
 "push": { "method": "websocket", "input": true }
 ```
 
-- `input` MUST be a JSON boolean; it defaults to false. It is refused with `"method": "sse"`: input goes back only on the push WebSocket.
+- `input` MUST be a JSON boolean; it defaults to false.
 - The push WebSocket is always `<channel>push` (`SERVER.md` section 4.2), and a descriptor naming another address is refused. Over `https` it is `wss`, and over `http`, `ws`.
 - Plain `ws://` is allowed, and the receiver says "Not secure" wherever it says where keys go.
 - A page cannot declare input; only the channel's descriptor can.
