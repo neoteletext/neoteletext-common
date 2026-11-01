@@ -593,7 +593,7 @@ neottx check ../bad/100.tti
 neottx: 3 error(s)
 ```
 
-`check` looks at links and at rows longer than the page, and not much else. A row of 50 characters is an error on its line. It passes a line it does not know and an `OL` for a row that does not exist. For those use `list -v`, which reports them as diagnostics and prints your `LG` lines. `check --descriptor channel.ttx` does not work at this commit: it reads the file as an older kind of descriptor and refuses it with `Missing(PageTemplate)`.
+`check` looks at links and at rows longer than the page, and not much else. A row of 50 characters is an error on its line. It passes a line it does not know and an `OL` for a row that does not exist. For those use `list -v`, which reports them as diagnostics and prints your `LG` lines. `check --descriptor channel.ttx` also checks that a link to another service names one the file lists.
 
 `probe` opens a channel and makes each selection you name, then reports how it ended. Use capitals in page numbers. On a live channel it also asks for page `8FC`, to see a page refused.
 
