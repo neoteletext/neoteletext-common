@@ -155,7 +155,7 @@ Decisions are rdm records. Each repository's series stays valid as original IDs,
 - **No unused dependencies** (`cargo machete`). Advisories are checked by `cargo deny`; an advisory is ignored only with its reason and the owner's decision.
 - **Credits.** A solution taken from another project is credited in `CREDITS.md`, naming the project, licence, version and the problem it solved; outside reference projects are not named in source code. Bundled third-party material keeps its licence and provenance beside it.
 - **No copyrighted standards, datasheets, broadcast recordings or captures** in either repository. The engine's corpus is downloaded at test time and pinned by checksum, local files read from `$NEOTELETEXT_CORPUS`; the browser's sites built from recordings stay in ignored folders.
-- **Fonts.** The engine bundles one font, Bedstead; its Noto-derived fonts are loaded at run time; no other font or ROM glyph is added (the engine's decisions E.72 and E.77).
+- **Fonts.** The engine compiles in one font, Noto Teletext, converted from Noto; a user may load another at run time; no other font or ROM glyph is added (the engine's DEC-1761).
 
 ## 8. Tests
 
