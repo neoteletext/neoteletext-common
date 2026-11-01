@@ -65,7 +65,7 @@ The server's teletext is almost all in the engine.
 | A page to packets | `encode_page` (`encode/page.rs:120`): M/29, X/0 with parity and control bits, X/27/0 with the checksum, X/28/0, X/26, rows, in EN 300 706 Annex B.2's order; transmission order by Annex B.7 |
 | Packet codes | Hamming 8/4, Hamming 24/18 and odd parity, both directions (`E/neoteletext-core/src/ecc.rs`); X/0, X/26, X/27, X/28 and M/29 builders (`packet/encode.rs`) |
 | Level 2.5 and 3.5 authoring, MOT | `author` module of `neoteletext-formats` |
-| The input protocol's channel side | `StreamDecoder` (`E/neoteletext-input/src/event/decode.rs:203`); WELCOME, PUSH_MODE, POP_MODE, PAGE_MODES and cursor records |
+| The input protocol's channel side | `StreamDecoder` (`E/neoteletext-input/src/event/decode.rs:203`); WELCOME and cursor records |
 | Audio to packets | `neoteletext-audio`, feature `encode`: sounds, live records, IMA ADPCM, IDL packets on data channel 12 |
 | The WebSocket handshake | `ws::accept_for` (`E/neoteletext-web/src/ws/handshake.rs:30`) |
 | `channel.json` and `contents.txt` read | `Descriptor::parse`, `contents::read` (`neoteletext-web`) |
@@ -124,22 +124,23 @@ The protocol of section 7 is the interface; a kit is a convenience. One referenc
 
 ## 4. Channels and addressing
 
-**This section is the one written URL map** (REQ-1693, decided by DEC-1694). Every other document points here. A channel has one map: it is complete, so nothing is reachable by an address it does not list; it is fixed, so it is the same for every channel, and a channel cannot rename, move or add to it; and it is defined, so each thing has one spelling, and every other spelling is normalised to it or refused. `<channel>` means an `http` or `https` origin and folder, ending in `/`, optionally followed by a query, such as `https://app.neottx.com/home/`. The conformance table, every address below with what it opens, why it is refused or what a server answers, is the engine's `crates/neoteletext-web/src/map/conformance.tsv`, which the engine, the server and the browser each run at their pin of the engine (`neoteletext_web::map::CONFORMANCE`).
+**This section is the one written URL map** (REQ-1693, decided by DEC-1694 version 3). Every other document points here. A channel has one map: it is complete, so nothing is reachable by an address it does not list; it is fixed, so it is the same for every channel, and a channel cannot rename, move or add to it; and it is defined, so each thing has one spelling, and every other spelling is normalised to it or refused. `<channel>` means an `http` or `https` origin and folder, ending in `/`, such as `https://app.neottx.com/home/`. The conformance table, every address below with what it opens, why it is refused or what a server answers, is the engine's `crates/neoteletext-web/src/map/conformance.tsv`, which the engine, the server and the browser each run at their pin of the engine (`neoteletext_web::map::CONFORMANCE`).
+
+One address does every job: the browser, a web visitor, a search engine and a link preview. A reader never requests a page's address: it goes from `<channel>200` to `200.tti` by rule on a static channel, and to SELECT `200` on a live one. Only a web browser or a search engine asks a server for it.
 
 ### 4.1 What viewers see
-
-A channel's identity is its address up to `#`. Everything after `#` is inside the channel, and is never sent to a server (RFC 9110 section 4.2.5 and RFC 3986 section 3.5).
 
 | Address | Opens |
 |---|---|
 | `<channel>` | The channel, arriving at its initial page (section 4.3) |
-| `<channel>#302` | Page 302 |
-| `<channel>#302/0002` | Sub-page 0002 of page 302 |
-| `<channel>#302?name=value` | Page 302, with page parameters for the channel's program |
-| `<channel>#302/0002?name=value` | Sub-page 0002 of page 302, with page parameters |
-| `<channel>#contents` | The channel's contents |
-| `<channel>#wall` | The wall of pages, with no page selected |
-| `<channel>?name=value#302` | Any of these, with channel parameters, which are part of the channel's address and reach its program when it connects |
+| `<channel>302` | Page 302 |
+| `<channel>302/0002` | Sub-page 0002 of page 302 |
+| `<channel>302?name=value` | Page 302, with a query for the channel's program |
+| `<channel>302/0002?name=value` | Sub-page 0002 of page 302, with a query |
+| `<channel>contents` | The channel's contents |
+| `<channel>wall` | The wall of pages, with no page selected |
+
+**Where a channel ends.** The parser reads the end of the path. A last segment of `contents` or `wall`, a last segment that is a page number, or a page number followed by a sub-code, is inside the channel, and what comes before it is the channel's folder. Any other address must end in `/` and is a folder. So a folder named `contents`, `wall` or like a page number, such as `100` or `2fa`, cannot be a channel: it belongs to the channel above it (DEC-1694 rule 2).
 
 ### 4.2 What receivers use
 
@@ -148,7 +149,7 @@ These are fixed names in the channel's folder (decision E.70). Viewers never see
 | Name | Channel | Holds |
 |---|---|---|
 | `channel.json` | Live and static | The channel's settings |
-| `push` | Live | The WebSocket. It is always `<channel>push`, and `channel.json` has no member naming another address (`push: {method, input}`) |
+| `push` | Live | The WebSocket. It is always `<channel>push`, and carries no query and no page |
 | `contents.txt` | Static | The contents |
 | `index.t42` | Static | A bundle of pages, first sub-pages only |
 | `NNN.tti`, `NNN.t42` | Static | A page, or its first sub-page when it has several |
@@ -159,28 +160,27 @@ These are fixed names in the channel's folder (decision E.70). Viewers never see
 
 Each of these is changed to its one spelling when it is typed, linked, redirected to or opened from outside, and the address field, history and bookmarks hold only that spelling.
 
-- **Arriving at `<channel>`.** Once the channel has given its initial page, the address becomes `<channel>#NNN` for that page, replacing the entry and adding no Back entry: `https://app.neottx.com/home/` becomes `https://app.neottx.com/home/#100`.
-- **Digits.** Hexadecimal digits are capitals: `#1fe` becomes `#1FE`, and `#302/3f7e` becomes `#302/3F7E`.
-- **File names.** `<channel>302.tti` and `<channel>302.t42` become `<channel>#302`, and `<channel>302-0002.t42` becomes `<channel>#302/0002`.
-- **Parameters are not normalised.** They stay in the order given, percent-encoded as they came.
+- **Arriving at `<channel>`.** Once the channel has given its initial page, the address becomes `<channel>NNN` for that page, replacing the entry and adding no Back entry: `https://app.neottx.com/home/` becomes `https://app.neottx.com/home/100`. A query goes with it: `<channel>?a=1` becomes `<channel>100?a=1`.
+- **Digits.** Hexadecimal digits are capitals: `1fe` becomes `1FE`, and `302/3f7e` becomes `302/3F7E`.
+- **A final slash after a place** is removed: `<channel>302/` becomes `<channel>302`.
+- **File names.** `<channel>302.tti` and `<channel>302.t42` become `<channel>302`, and `<channel>302-0002.t42` becomes `<channel>302/0002`.
+- **Queries are not normalised.** They stay in the order given, percent-encoded as they came.
 
 ### 4.4 Refused
 
-Any other fragment is refused, never ignored or repaired: the address is not opened, and a link carrying it is not a link. That includes `#`, `#30`, `#3021`, `#G02`, `#902` and any page the standard does not define, `#302/2`, `#302/3F7F` (which means no particular sub-page, and so cannot name one), `#302:0002`, `#WALL`, `#contents/1`, `#wall?name=value` and `#?name=value`. A page's file name with a fragment, such as `<channel>302.tti#303`, says where to go twice and is refused too, as are the receivers' names of section 4.2 that are not pages.
+A fragment on an `http` or `https` address is refused, never ignored or repaired: the address is not opened, and a link carrying it is not a link. So are a place the map does not list, such as `30`, `3021`, `G02`, `902`, `302/2`, `302/3F7F` (which means no particular sub-page, and so cannot name one), `WALL` and `contents/1`, and a query that is not `name=value` pairs, or that follows `contents` or `wall`. The receivers' names of section 4.2 that are not pages are refused too.
 
 ### 4.5 Spellings
 
 - **Page:** three hexadecimal digits, magazine first.
 - **Sub-page:** four hexadecimal digits, `0000` to `3F7E`.
-- **Parameters:** `name=value` pairs joined by `&`, percent-encoded as a query is, following `?` inside the fragment. A name may not be empty, and a value may. RFC 3986 section 3.5 allows `/` and `?` in a fragment, so neither is escaped.
+- **Query:** `name=value` pairs joined by `&`, percent-encoded. A name may not be empty, and a value may.
 - **Length:** the whole address obeys the general limit of 8,000 octets (REQ-1661).
-- **The words `contents` and `wall`** are in small letters and are the only words a fragment holds.
+- **The words `contents` and `wall`** are in small letters.
 
-### 4.6 Parameters
+### 4.6 The query
 
-**Channel parameters,** the query of `<channel>`, are no part of the channel's folder. The receiver sends them, as written, on the upgrade request to `push`, and the program is given them in `connected` (DEC-1665, REQ-1674).
-
-**Page parameters** go with the selection. The receiver sends them in SELECT (`INPUT.md` section 5.4, DEC-1715), and the program receives them with that selection, in `selected`. They belong to that one selection: choosing another page, by any path, leaves them behind. They stay in the address, so a copied address, a bookmark or Reload sends them again. A static channel has no program, so they are kept in the address and do nothing, as a static host ignores a query.
+An address has one query, and it goes with the selection (DEC-1730). The receiver sends it in SELECT (`INPUT.md` section 5.4), and the program receives it in `selected`, or in `connected` for a selection made before the program started. It belongs to that one selection: choosing another page, by any path, leaves it behind. It stays in the address, so a copied address, a bookmark or Reload sends it again. It never goes on the push connection. A static channel has no program, so it is kept in the address and does nothing, as a static host ignores a query.
 
 ### 4.7 What each address answers on the server
 
@@ -188,21 +188,20 @@ A live channel on the NeoTeletext server, on the native server and on Cloudflare
 
 | Request | Answer |
 |---|---|
-| `<channel>` | 200, a small page in an ordinary web browser, naming the channel and offering a `neoteletext://` link and a link to get NeoTeletext. One line of script carries the address's query and any fragment of section 4.1 into that link, and leaves out any other fragment. It changes nothing else: no timer, no automatic launch and no redirect, so the page cannot lead anyone elsewhere |
-| The folder without its final `/` | 308, a redirect to `<channel>`, on the same origin, keeping its query. A fragment stays with the web browser (RFC 9110 section 10.2.2) |
+| `<channel>`, a place of section 4.1, each with any query | 200, a small page in an ordinary web browser, naming the channel and offering a `neoteletext://` link to that address and a link to get NeoTeletext. It runs no script, and it cannot lead anyone elsewhere |
+| The folder without its final `/` | 308, a redirect to `<channel>`, on the same origin, keeping its query |
+| A place with a final `/` | 308, a redirect to its one spelling, keeping its query |
 | `<channel>channel.json` | 200, the settings, generated |
 | `<channel>push` | The WebSocket; 426 without an upgrade |
 | Anything else under the channel, and `/` | 404 |
 
-Only a `GET` or a `HEAD` reaches the small page or the redirect. A static channel answers whatever its host answers, and a receiver asks it only for the names in section 4.2.
+Only a `GET` or a `HEAD` reaches the small page or a redirect. A static channel answers whatever its host answers, and a receiver asks it only for the names in section 4.2.
 
 ### 4.8 Redirects, local files and what is outside the map
 
-- **Redirects.** An HTTP redirect follows RFC 9110 section 10.2.2: a `Location` with no fragment inherits the original one, so `<old>#302` redirected to `<new>` opens `<new>#302`. A program's redirect names an address of this map, or a page of its own channel.
-- **Local files.** A file or folder of page files takes the fragments of section 4.1, on its `file:` address. Arriving normalises to its initial page, as in section 4.3. A `file:` address is never split by the file-name rule: each local file is its own channel (REQ-722).
+- **Redirects.** A redirect of a channel's `channel.json` moves the channel, and the reader keeps the place it was opening. A program's redirect names a place of its own channel, or a whole address of this map.
+- **Local files.** A `file:` address names a real file, so a path cannot also name a page in it: a file takes the places of section 4.1 after `#`, as `file:///tmp/news.tti#200`. This is the one use of `#`. Arriving normalises to its initial page, as in section 4.3. A `file:` address is never split by the file-name rule: each local file is its own channel (REQ-722).
 - **Outside the map.** The browser's built-in page `neoteletext:home` is not in a channel. A `neoteletext://` link wraps a whole address of this map and adds nothing to it (REQ-1672).
-
-**Why not paths** (`/news/200/3`): every channel and client that exists already works with the layout, and a static host needs nothing new.
 
 ## 5. The wire
 
@@ -294,18 +293,18 @@ JSON belongs to the application protocol (section 7), which people read and writ
 
 ### 5.5 Control records
 
-Control records are teletext packets, as WELCOME is today: data channel 12, packet 4/31, records of the audio profile's frame, which a decoder that knows none of them skips, as EN 300 708 says. WELCOME is a kind of the control record, type 5 (`C/INPUT.md` section 7.2). The index, LOG, SET_COOKIE, LINKS, SUBPAGES and REDIRECT records are record types of their own, 6, 7, 8, 9, 10 and 11. **Each record's byte layout is defined once, in `C/INPUT.md` section 7, and nowhere else**: this section says only what each record is for and when it is sent. They are written with the engine's encoders and read with its readers.
+Control records are teletext packets, as WELCOME is today: data channel 12, packet 4/31, records of the audio profile's frame, which a decoder that knows none of them skips, as EN 300 708 says. WELCOME is a kind of the control record, type 5 (`C/INPUT.md` section 7.2). The index, LOG, SET_COOKIE, LINKS, SUBPAGES, REDIRECT and DENIED records are record types of their own, 6 to 12. **Each record's byte layout is defined once, in `C/INPUT.md` section 7, and nowhere else**: this section says only what each record is for and when it is sent. They are written with the engine's encoders and read with its readers.
 
 | Record | What it carries (layout) | When it is sent |
 |---|---|---|
-| WELCOME, PUSH_MODE, POP_MODE, PAGE_MODES (the control record, type 5) | As `C/INPUT.md` section 7.2 | As today |
+| WELCOME (the control record, type 5) | As `C/INPUT.md` section 7.2 | As today |
 | Index (type 6) | The channel's magazines with their names, and each page's number, title, section and sub-page count, split across as many records as it needs (`C/INPUT.md` section 7.5, with section 7.10 for records of several fragments). It is page-level: it never lists sub-pages (DEC-1500 item 5). It is built from the program's `reply` and `index` messages (DEC-1482), never from a `contents.txt`; a live channel has no `contents.txt` (DEC-1467) | At connection, from the program's `reply`, and whenever the program sends an `index` change (section 6.5) |
 | LOG (type 7) | `level` (`E`, `W` or `I`), the page it concerns or none, and UTF-8 `text` of 1 to 200 bytes (`C/INPUT.md` section 7.6): a log line for the channel's author, as a TTI `LG` line holds one (the engine's REQ-INP-026 and decision E.109 as amended for DEC-1459) | When the program sends an `author_log` |
 | SET_COOKIE (type 8) | One `Set-Cookie` header value, built by the server from the program's typed `cookie` message (`C/INPUT.md` section 7.7) | When the program sets or clears a cookie mid-connection (section 8.2). The browser stores it in the channel's one cookie jar, which every tab of the channel shares (DEC-1527 item 4) |
 | LINKS (type 9) | One sub-page's TTI Link Extension links: key links, page-number links and text links, with their targets and labels (`C/INPUT.md` section 7.8), so a sub-page sent as packets keeps the links packets cannot carry (DEC-1495, REQ-1494) | Straight after **every** page frame of a sub-page that has such links, whole or changed rows, whether or not they changed. A page frame not followed by one means the sub-page has none (DEC-1517, awaiting the owner's confirmation) |
 | SUBPAGES (type 10) | One page's list of sub-pages: the list's version, its count (1 to 8,190) and each sub-code with its title of at most 40 characters, in ascending sub-code order with 0000 first when the page has it (every sub-code is a peer, DEC-1526), split across as many records as it needs (`C/INPUT.md` section 7.9, with section 7.10) | When the connection selects the page or one of its sub-pages and does not already hold the list's current version, and whenever the program changes the list while the connection's selection is the page or one of its sub-pages (DEC-1500 item 3, REQ-1503). It is never sent with, or in place of, any sub-page's content |
-| REDIRECT (type 11) | A page and sub-code of this channel, or another channel's address (`C/INPUT.md` section 7.11) | When the program sends `redirect` (REQ-1688). It is the only thing that moves a viewer |
-| DENIED | `page`, `reason` code: not found, not allowed, unavailable, limit | A selection refused, or a program that did not answer in time ("unavailable", REQ-1481) |
+| REDIRECT (type 11) | An address, as `Location` carries one: a place of this channel, or a whole address (`C/INPUT.md` section 7.11) | When the program sends `redirect` (REQ-1688). It is the only thing that moves a viewer |
+| DENIED (type 12) | A real HTTP status, 403, 404, 429 or 503, and the place (`C/INPUT.md` section 7.12) | A selection refused, or a program that did not answer in time (503, REQ-1481) |
 | LIMITS | The standard's maxima and the budgets of section 11 | Advertised after WELCOME, revised at any time |
 | CHANGED | Page numbers | The coalesced change digest (section 6.5) |
 
@@ -313,7 +312,7 @@ The browser's sub-page list, its count and the selection's place ("3/12") come f
 
 *Withdrawn on 29 October 2026, never built:* a SUBPAGES record of 26 October 2026 (a tuned page's catalogue) and TITLES (titles by range). Today's SUBPAGES record (type 10) is a different record, made on 30 October 2026 because sub-pages no longer travel with their page.
 
-Reasons are codes; the words are the client's. A record that breaks its layout or a bound is discarded and its packets counted as invalid (REQ-1462, `C/INPUT.md` section 7.10). DENIED, LIMITS and CHANGED have no layout yet.
+Reasons are codes; the words are the client's. A record that breaks its layout or a bound is discarded and its packets counted as invalid (REQ-1462, `C/INPUT.md` section 7.10). LIMITS and CHANGED have no layout yet.
 
 ## 6. Tuning and delivery
 

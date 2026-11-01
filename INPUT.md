@@ -106,7 +106,7 @@ A channel takes input when its descriptor says so inside its push object:
 
 - **Transport:** the channel's push WebSocket. Each **binary** message the receiver sends is a piece of one ordered input stream, the concatenation of all binary messages on that connection. The only other message a receiver sends is the push subscription (text).
 - **Whole events per message.** A message MUST hold whole events and whole UTF-8 characters, so a channel can parse each message alone; text may be split between messages anywhere between characters.
-- **At most `MAX_MESSAGE` (8192) bytes a message,** room for a SELECT carrying the longest page parameters (DEC-1715).
+- **At most `MAX_MESSAGE` (8192) bytes a message,** room for a SELECT carrying the longest query (DEC-1715).
 - The stream is defined so it also works over any reliable ordered byte stream (a microcontroller's serial line, a TCP socket); over TCP, `TCP_NODELAY` is set.
 
 ### 5.2 Encoding primitives
@@ -172,10 +172,13 @@ So a page can be active without being focused: in a tab behind another, in a win
 - **A release is never dropped.** A release whose stamp does not match is still applied, as a release of what the connection holds, so that nothing stays held; so is a pointer's gone. A press with a stamp that does not match is dropped.
 - **One truth.** The selection stays the only truth: a stamp can only cause a drop, never send input to a page other than the selection.
 
-**SELECT**, an extension (`0x40`, so a channel that does not know it skips it; REQ-INT-140), decided by the owner on 29 October 2026: "we send an event saying which page the user has selected and if there are subpages then the server transmits them at that time. also the same event should send if the user has selected a subpage", and revised on 30 October 2026 by DEC-1527 (each browser tab has its own self-contained connection and decoder, so a connection has one selection and SELECT carries no view number) and DEC-1526 (every sub-code is a peer). `uv` length, then `page` uv and `sub` uv, then the page parameters to the end of the payload:
-- `page` is the page selected, `0x100` to `0x8FF` in teletext's hexadecimal page form, or 0 when the tab no longer shows a page of the channel.
-- `sub` is the sub-page selected, a sub-code `0x0000` to `0x3F7E` (EN 300 706 clause 9.3.1.2), or `0x3F7F`, "no particular page sub-code" (clause 9.6.1), when the viewer keyed the page's number alone or followed a link or bookmark that names no sub-page. A value with a bit outside the sub-code's thirteen is a protocol error; with `page` 0 it is `0x3F7F`.
-- The **page parameters** are what follows `?` in the fragment of the address selected (`SERVER.md` section 4.6), as written and without the `?`: printable ASCII with no `#`, at most `MAX_PAGE_PARAMETERS` (8,000) bytes, and none when the address has none. With `page` 0 there are none. Anything else is a protocol error. They belong to this one selection: the program receives them with it, and a SELECT that does not carry them leaves them behind (REQ-1693 item 6, DEC-1715).
+**SELECT**, an extension (`0x40`, so a channel that does not know it skips it; REQ-INT-140), decided by the owner on 29 October 2026: "we send an event saying which page the user has selected and if there are subpages then the server transmits them at that time. also the same event should send if the user has selected a subpage", and revised on 30 October 2026 by DEC-1527 (each browser tab has its own self-contained connection and decoder, so a connection has one selection and SELECT carries no view number), by DEC-1526 (every sub-code is a peer), and on 1 November 2026 by DEC-1730 (a selection is a web request that stays open, so it carries the address's own text). `uv` length, then the place as text, the same text the URL map reads (`SERVER.md` section 4):
+- **`302`** selects the page: sub-code `0x3F7F`, "no particular page sub-code" (EN 300 706 clause 9.6.1), for a page keyed by its number alone, or a link or bookmark that names no sub-page.
+- **`302/0002`** selects one sub-page, a sub-code `0000` to `3F7E` (clause 9.3.1.2).
+- **Either followed by `?` and a query** gives the query of the address selected (`SERVER.md` section 4.6), as written: printable ASCII with no `#`, at most `MAX_PAGE_PARAMETERS` (8,000) bytes.
+- **Empty** means the tab no longer shows a page of the channel.
+
+Digits are capitals, in the one spelling of `SERVER.md` section 4.5. Anything else is a protocol error, as is a query with no page. A query belongs to this one selection: the program receives it with it, and a SELECT that does not carry it leaves it behind (REQ-1693 item 6).
 
 **What the tab is then sent and shows** (DEC-1500, DEC-1526, REQ-1502). Every sub-code a page has is one of its sub-pages, all of them peers; sub-code 0000 beside others is the page's own content, and the page's order is ascending sub-code, 0000 first when present. With `sub` `0x3F7F` the tab shows the page's **first** sub-page in that order, and that sub-page then is the selection, exactly as if the viewer had chosen it: the channel answers with it, and stepping goes on from it. With a sub-code the tab shows that sub-page alone and is sent only it and its changes, while the page's other sub-pages change, until the tab selects something else. Stepping to the next or previous sub-page, by the keys, the remote, the arrows or the sub-page list (section 7.9), is a selection of that sub-code; nothing else is sent. Sub-pages are never sent with their page, and **nothing rotates on a live channel:** the sub-page shown changes only when the viewer selects another, or when the channel's program moves the tab, which is itself a selection. A broadcast recording played back keeps the broadcast's own behaviour.
 
@@ -264,7 +267,7 @@ Every key goes as KEY, with its text, since decision E.125 (REQ-RCH-029); raw te
 | Red (Fastext) pressed | `FF 01 80 02 00 04 5C` | 7 |
 | Control-C pressed | `FF 01 80 02 00 08 63 04` | 8 |
 | Page 100 selected | `FF 40 04 80 02 FF 7E` | 7 |
-| Page 302, sub-page 0002, selected with the page parameters `a=1` | `FF 40 06 82 06 02 61 3D 31` | 9 |
+| Page 302, sub-page 0002, selected with the query `a=1` | `FF 40 0C 33 30 32 2F 30 30 30 32 3F 61 3D 31` | 15 |
 | Click at column 10, row 5 | `FF 02 80 02 00 00 00 0A 05` | 9 |
 | The same, with its dot (120, 100) | `FF 02 80 02 00 04 00 0A 05 78 64` | 11 |
 | A move to the dot (121, 100), no button | `FF 02 80 02 00 06 00 0A 05 79 64` | 11 |
@@ -284,7 +287,7 @@ The version-1 key record took 14 bytes for every key.
 
 ### 6.1 The session
 
-1. When the push WebSocket of a channel that declares input opens, the receiver sends HELLO with version 5 and the capabilities it has. Version 3 (31 October 2026, DEC-1538) added the stamp to the input events. Version 4 (31 October 2026, DEC-1689) added the REDIRECT record and ended a cursor record's moving a viewer. Version 5 (1 November 2026, DEC-1715) adds page parameters to SELECT, so a channel and a receiver of different versions would disagree on what SELECT holds: both sides speak 5, and there is no compatibility path.
+1. When the push WebSocket of a channel that declares input opens, the receiver sends HELLO with version 6 and the capabilities it has. Version 3 (31 October 2026, DEC-1538) added the stamp to the input events. Version 4 (31 October 2026, DEC-1689) added the REDIRECT record and ended a cursor record's moving a viewer. Version 5 (1 November 2026, DEC-1715) added page parameters to SELECT. Version 6 (1 November 2026, DEC-1730) makes SELECT's payload the address's text, so a channel and a receiver of different versions would disagree on what SELECT holds: both sides speak 6, and there is no compatibility path.
 2. The channel answers with WELCOME (section 7.2): the version it speaks and the subset of the capabilities it will use. A channel that cannot speak the version closes the connection.
 3. Then the receiver sends RESIZE, FOCUS_IN or FOCUS_OUT, and SELECT when it shows a page of the channel; and from then on the viewer's input.
 4. The receiver sends no input before WELCOME. A channel that has not answered within `WELCOME_TIMEOUT` (10 s) is taken not to take input, and the receiver says so.
@@ -538,28 +541,22 @@ Each entry: `sub` u16, a sub-code `0x0000` to `0x3F7E` with no bit outside the t
 
 A channel's redirect (DEC-1683, DEC-1689, REQ-1688): what a channel's program sends to move a connection's viewer to another page of the channel, or to another channel. It is the only thing that moves a viewer (section 8 rule 8). An HTTP redirect from a web server (REQ-701) is another thing, and is not carried here; where the two are near, "page redirect" means this record's page form.
 
-**Integers are big-endian.** The body begins with one byte:
+The body is one address, as an HTTP `Location` is (DEC-1730): 1 to 8,000 bytes (`MAX_ADDRESS`, the longest address of REQ-1661) of printable ASCII with no space and no fragment. It is either a **place** of this channel, `302` or `302/0002`, or a **whole address**, an `http` or `https` address the engine's strict address parser accepts.
 
-| Bytes | Field | Range |
-|---|---|---|
-| 0 | `form` | 0, a page of this channel; 1, an address |
-
-The page form, 5 bytes of body and one fragment:
-
-| Bytes | Field | Range |
-|---|---|---|
-| 1–2 | `page` | `0x100` to `0x8FF`, never a reserved number |
-| 3–4 | `sub` | `0x0000` to `0x3F7E`, a sub-code with no bit outside the thirteen a sub-code has, or `0x3F7F` for the page |
-
-The address form:
-
-| Bytes | Field | Range |
-|---|---|---|
-| 1 to the end | `address` | 1 to 8,000 bytes (`MAX_ADDRESS`: the longest address of REQ-1661, its fragment included) of printable ASCII with no space: an `http` or `https` address the engine's strict address parser accepts, and after it, optionally, `#` and what follows it, which the receiver's address rules judge (REQ-505) |
-
-- **The page form.** The server sends the record and records the page as the connection's selection, exactly as it would a SELECT, and the program is then sent `selected` for it. The receiver opens that page and sub-page, whether or not its page has the focus, since a selected page is active whatever its focus (REQ-1553), and sends SELECT for it.
-- **The address form.** The server sends the record and changes nothing else: the connection's selection stands until the receiver leaves. A receiver that opens channels puts the address through its own address rules, which alone decide: a redirect leads only to an `http` or `https` address, never a local file, a `web:` hand-off or the browser's own pages. It shows the redirect notice (REQ-1686) and then opens the address as another channel. A receiver that cannot open channels says that the channel redirected and to where, and stays.
+- **A place.** The server sends the record and records the page as the connection's selection, exactly as it would a SELECT, and the program is then sent `selected` for it. The receiver opens that page and sub-page, whether or not its page has the focus, since a selected page is active whatever its focus (REQ-1553), and sends SELECT for it.
+- **A whole address.** The server sends the record and changes nothing else: the connection's selection stands until the receiver leaves. A receiver that opens channels puts the address through its own address rules, which alone decide: a redirect leads only to an `http` or `https` address, never a local file, a `web:` hand-off or the browser's own pages. It shows the redirect notice (REQ-1686) and then opens the address as another channel. A receiver that cannot open channels says that the channel redirected and to where, and stays.
 - **What a channel cannot do with it.** The record moves a viewer and nothing else. The viewer's own choice overrides it, and a receiver bounds how many redirects it follows in a row with no input from the viewer (REQ-1688 item 6).
+
+### 7.12 The DENIED record (type 12)
+
+A selection refused, or a program that did not answer in time (REQ-1481, DEC-1730). It gives every selection a defined answer, as a status gives a web request one. Integers are big-endian.
+
+| Bytes | Field | Range |
+|---|---|---|
+| 0–1 | `status` | A real HTTP status number: 403 not allowed, 404 no such page, 429 a limit reached, or 503 the channel's program is not answering |
+| 2 to the end | `place` | The place refused, as SELECT carried it with no query, at most 8 bytes of printable ASCII, or nothing when the whole channel is unavailable |
+
+The connection stays open. A receiver says so to the viewer in words of its own, and takes the next selection as usual.
 
 ## 8. Behaviour
 

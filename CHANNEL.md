@@ -171,15 +171,15 @@ A static host serves the files and cannot serve `push`; a channel that takes the
 
 ## 9. The URL map
 
-**The written URL map is now `SERVER.md` section 4** (REQ-1693, DEC-1694, 31 October 2026), which replaces what this section says of a viewer's addresses: a sub-page is `#602/0101`, and not `#602:0101`, and `#contents` and `#wall` are added. The file names below that differ from section 4.2 there, `NNN/SSSS.t42` for `NNN-SSSS.t42`, `NNN/P.sub` for `NNN.sub`, and `M.pag`, are this document's own proposal, not built.
+**The written URL map is `SERVER.md` section 4** (REQ-1693, DEC-1694 version 3), which replaces what this section said of a viewer's addresses. The file names below that differ from section 4.2 there, `NNN/SSSS.t42` for `NNN-SSSS.t42`, `NNN/P.sub` for `NNN.sub`, and `M.pag`, are this document's own proposal, not built.
 
 Every address of a channel, for a channel at `https://example.org/news/`:
 
 | What | Address | Asked for by a reader |
 |---|---|---|
 | The channel | `https://example.org/news/` | Never itself |
-| A page, as a viewer bookmarks or shares it | `https://example.org/news/#602` | Never: the fragment stays in the reader |
-| A sub-page, as a viewer bookmarks or shares it | `https://example.org/news/#602/0101` | Never |
+| A page, as a viewer bookmarks or shares it | `https://example.org/news/602` | Never: a reader goes to the page's file, or selects it on a live channel |
+| A sub-page, as a viewer bookmarks or shares it | `https://example.org/news/602/0101` | Never |
 | Its settings | `…/news/channel.json` | When it opens |
 | Its contents | `…/news/contents.txt` | When the contents are shown |
 | Its bundle | `…/news/index.t42` | When it opens |
@@ -192,8 +192,8 @@ Every address of a channel, for a channel at `https://example.org/news/`:
 **Rules** (REQ-CHN-002, REQ-CHN-015):
 1. **Each address is the folder followed by a fixed name,** worked out from the page number, sub-code or part number. There is no map file and no setting that changes the map.
 2. **One spelling.** Hexadecimal digits are capitals; a page is three digits, a sub-code four, a part decimal without leading zeros. A reader writes only these forms, and an address in another form names no file of the channel.
-3. **A viewer's address names a page, not a file.** `#NNN` and `#NNN/SSSS` after the channel's address, with the same digits as the file's path, so the two convert by rule: `#602/0101` is `602/0101.t42`, and `#602` is whichever of `602.tti`, `602.t42` or `602.ep1` holds the page. The fragment is never sent in a request.
-4. **Links resolve through the map,** never through anything a page says about files: a page link (X/27/0) is `#NNN` in the same channel; `name:mpp` goes through `services`; an alias through `aliases`; a `contents.txt` `x` entry names a channel or a file of one, which opens as section 10 says.
+3. **A viewer's address names a page, not a file.** `NNN` and `NNN/SSSS` after the channel's address, with the same digits as the file's path, so the two convert by rule: `602/0101` is the file `602/0101.t42`, and `602` is whichever of `602.tti`, `602.t42` or `602.ep1` holds the page. A reader never requests the viewer's address.
+4. **Links resolve through the map,** never through anything a page says about files: a page link (X/27/0) is `NNN` in the same channel; `name:mpp` goes through `services`; an alias through `aliases`; a `contents.txt` `x` entry names a channel or a file of one, which opens as section 10 says.
 
 ## 10. Opening any address
 
@@ -228,7 +228,7 @@ A folder on this computer is a channel by the same structure, with the same name
 `channel.json`'s `presentation` says how a reader shows the channel; it changes nothing about the structure (REQ-CHN-019).
 
 - **`"teletext"`, the default:** the reader's whole interface: the overview of the channel's pages, the contents, the list and count of a page's sub-pages, and keying page numbers.
-- **`"site"`:** the channel is shown as a site of linked pages. By default the reader hides the overview, the contents, and the list and count of sub-pages, and keying digits does not select a page (they go to the channel when it takes keys, and do nothing otherwise). The viewer moves only by what the pages offer: their links, their Fastext keys, the prompts they make clickable, and back and forward through the pages they have seen. Every page keeps its address (`#NNN`), and can be bookmarked and shared.
+- **`"site"`:** the channel is shown as a site of linked pages. By default the reader hides the overview, the contents, and the list and count of sub-pages, and keying digits does not select a page (they go to the channel when it takes keys, and do nothing otherwise). The viewer moves only by what the pages offer: their links, their Fastext keys, the prompts they make clickable, and back and forward through the pages they have seen. Every page keeps its address (`NNN`), and can be bookmarked and shared.
 
 **One switch, not a member a panel,** so that no channel can make a half of one and half of the other.
 
@@ -299,7 +299,7 @@ A file alone is never interactive (section 10.1): taking keys needs the live con
 
 **REQ-CHN-014 — Derived files.** A generator shall derive every part, magazine list, validator, version and title from the page data each time it writes them; a reader shall treat a sub-page's file as the truth when it disagrees with a list. *Reason:* section 2 principle 4. *Verification:* a reader's test that a listed sub-page whose file answers 404 is not found, and that a sub-page's file whose `ETag` differs from its list's validator is used.
 
-**REQ-CHN-015 — Viewer addresses.** A page's address for a viewer shall be the channel's address followed by `#NNN`, and a sub-page's by `#NNN/SSSS`, in the spelling of `SERVER.md` section 4; the fragment shall never be sent in a request. *Reason:* section 9 rule 3. *Verification:* tests that opening `…/#602/0101` asks for `602/0101.t42` and that no request carries a fragment.
+**REQ-CHN-015 — Viewer addresses.** A page's address for a viewer shall be the channel's address followed by `NNN`, and a sub-page's by `NNN/SSSS`, in the spelling of `SERVER.md` section 4. *Reason:* section 9 rule 3. *Verification:* tests that opening `…/602/0101` asks for `602/0101.t42` and never for `…/602/0101` itself.
 
 **REQ-CHN-016 — Opening any address.** A reader shall open any address in the order of section 10, and refuse what fits none, saying why. *Reason:* section 13 item 12. *Verification:* a test of each of the seven cases, and of an address that could be two of them, which opens as the earlier.
 
