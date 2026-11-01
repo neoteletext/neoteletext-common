@@ -1,6 +1,6 @@
 # NeoTeletext Server
 
-**Status:** recommended design, 25 October 2026. For the owner to decide (section 19); nothing here is built.
+**Status:** the design of 25 October 2026, decided by the owner since (section 19) and built in large part. Sections 4, 5, 6.1 and 7.6 say what is built. Sections 6.5, 7.2, 7.3 and 7.5 are the design DEC-1482 withdrew, and each says so. What a program speaks as built is the server's `docs/applications.md`.
 
 **Sources:**
 - The owner's two drafts of 25 October 2026: "NeoTeletext Server", and "NeoTeletext Server — Proposed Architecture".
@@ -232,14 +232,14 @@ A page is public on the web only when its channel's program says so, page by pag
 
 | Frame | Contents | Delivery |
 |---|---|---|
-| **Page frame** | Exactly one sub-page (DEC-1500, REQ-1501): its X/0 header, in serial magazine mode (C11 set), then either the whole sub-page with the erase bit (C4) set, or, for a later version of the same sub-page, only its changed rows and, if any of them changed, the whole group of enhancements (X/26, X/27, X/28). It is followed straight after by that sub-page's LINKS record whenever the sub-page has Link Extension links (section 5.5) | Only to the connection whose selection that sub-page is (section 6.1); changed rows are taken against what that connection was last sent (section 6.3) |
+| **Page frame** | Exactly one sub-page (DEC-1500, REQ-1501): its M/29 packets when it has them, in the order of EN 300 706 Annex B.2, its X/0 header, in serial magazine mode (C11 set), then either the whole sub-page with the erase bit (C4) set, or, for a later version of the same sub-page, only its changed rows and, if any of them changed, the whole group of enhancements (X/26, X/27, X/28). It is followed straight after by that sub-page's LINKS record whenever the sub-page has Link Extension links (section 5.5) | Only to the connection whose selection that sub-page is (section 6.1); changed rows are taken against what that connection was last sent (section 6.3) |
 | **Stream frame** | Packets of an ordered stream: a recording, a carousel, an application's raw packets (section 7.4) | In order, never coalesced, through a bounded queue |
 | **Audio frame** | One audio record as packet 4/31 on data channel 12 (section 9) | In order, through a bounded queue |
 | **Control frame** | One control record on data channel 12 (section 5.5) | In order |
 
 **One sub-page per frame, never a page's sub-pages together** (the owner, 30 October 2026: "IT IS VERY IMPORTANT THAT SUBPAGES ARE NOT TRANSMITTED WITH THEIR PARENT PAGE - SUBPAGES MUST BEHAVE IN EXACTLY THE SAME WAY AS PAGES", DEC-1500). No event sends two sub-pages in one frame, of the same page or of different pages: not a connection, not a selection, not a change. A page with one sub-page is a page whose list has one entry, sent the same way. A frame is therefore at most one sub-page, 3,108 bytes, and a page of the standard's 8,190 sub-pages, about 15 MB, is never sent to anyone at once.
 
-**Why a page frame begins with its header every time.** A row belongs to the last header sent. A frame that begins with its own header stands alone: it can be applied, dropped or resent by itself, in any binding, with no state carried between frames.
+**Why a page frame carries its header every time.** A row belongs to the last header sent, and M/29 packets belong to the magazine and not to the page, so they come first. A frame with its own header stands alone: it can be applied, dropped or resent by itself, in any binding, with no state carried between frames.
 
 - The cost: one 42-byte header per update, where a second change to the sub-page just addressed could do without. At an update a second, that is 42 bytes a second per connection.
 - Serial mode makes the stream valid teletext, and a `.t42` recording of it plays.
@@ -326,7 +326,7 @@ The browser's sub-page list, its count and the selection's place ("3/12") come f
 
 *Withdrawn on 29 October 2026, never built:* a SUBPAGES record of 26 October 2026 (a tuned page's catalogue) and TITLES (titles by range). Today's SUBPAGES record (type 10) is a different record, made on 30 October 2026 because sub-pages no longer travel with their page.
 
-Reasons are codes; the words are the client's. A record that breaks its layout or a bound is discarded and its packets counted as invalid (REQ-1462, `C/INPUT.md` section 7.10). LIMITS and CHANGED have no layout yet.
+Reasons are codes; the words are the client's. A record that breaks its layout or a bound is discarded and its packets counted as invalid (REQ-1462, `C/INPUT.md` section 7.10). LIMITS and CHANGED are designed and not built: they have no layout and no code.
 
 ## 6. Tuning and delivery
 
@@ -399,6 +399,8 @@ Nothing ever drops part of a page frame.
 
 ### 6.5 The channel's index (for the browser's overview)
 
+*This section is the design of 25 October 2026, and DEC-1482 withdrew the application messages it rests on. What is built is the index record (`C/INPUT.md` section 7.5), filled from a program's `reply` and `index`; CHANGED is not built.*
+
 The browser's overview shows every page's status: which exist, their titles, "updated 12 s". Without broadcast, that needs:
 
 - **INDEX at connection:** page numbers and titles, from `contents.txt` or the MOT;
@@ -438,6 +440,8 @@ It costs bytes in proportion to the audience, but only numbers, and only for cli
 `owner` is `channel` or a session id.
 
 ### 7.3 Content and ownership
+
+*This section is the design of 25 October 2026, withdrawn by DEC-1482: the server keeps no pages, and a program sends one sub-page at a time as typed JSON, never TTI (REQ-1478).*
 
 - **Content is TTI**, the engine's format, which teletext editors and archives use:
   - `tti` is a whole page;
@@ -488,6 +492,8 @@ As a page's content they are validated and then delivered as page frames. As a `
 
 ### 7.5 Isolation and failure
 
+*This section is the design of 25 October 2026, withdrawn by DEC-1482 where it names `open`. What a program's failure does as built is in the server's `docs/applications.md` section 1 and in section 7.6.*
+
 - **The network loop never waits for an application.** Each application has a bounded inbound queue; when it fills, the server drops `open` and coalesces `input` beyond the limit, and says so in the console.
 - **A crashed application** is restarted with backoff:
   - its channel pages stay as last published, marked stale;
@@ -514,7 +520,7 @@ As a page's content they are validated and then delivered as page frames. As a `
 
 - **A session is a viewer's relationship with a channel's application.** It is not a connection: a connection lost leaves the session for a grace period of minutes, since phones close background sockets.
 - **A session may be watched from several views,** and one viewer may hold several sessions.
-- **A reconnection is a new input session** (INPUT.md). On reconnecting, the client re-tunes and receives each tuned page whole. The application's session outlives connections through the session cookie (section 8.2), so the protocol needs no resume message.
+- **A reconnection is a new input session on this server.** `C/INPUT.md` section 6.4 defines RESUME, and the engine's receiver offers it, but the server agrees only CURSOR and SELECT in WELCOME, so neither RESUME nor TOUCH is live. On reconnecting, the receiver sends SELECT again and receives its page whole. The application's session outlives connections through the session cookie (section 8.2), so the server does not need RESUME for that.
 - **A session page starts at its first `open`,** lives while any of its views tunes it, and is released after a time untuned or at the session's end.
 
 ### 8.2 Cookies
