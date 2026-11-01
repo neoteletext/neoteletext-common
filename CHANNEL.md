@@ -52,6 +52,8 @@ A channel is a folder on a web server, a folder on a computer, or a folder on an
 
 A reader asks for these names and no others (REQ-CHN-002). Every name fits the 8.3 form a minimal FAT library reads (section 13 item 9).
 
+**For a web browser.** The tool `neottx html` also writes `index.html` in the channel's folder and `NNN/index.html` for each page, so that a person with an ordinary web browser finds a page there and not the host's 404 (REQ-1725; `SERVER.md` section 4.7). No reader asks for them, a folder named like a page cannot be a channel, and a channel without them is still a channel. A page shows nothing of itself in them unless the channel names it with `--public`, and all it then shows is readable by anyone.
+
 The largest EP1 file is the 6-byte header, sixteen 40-byte enhancement packets, 25 rows of 40 bytes and the 2-byte terminator: 6 + 640 + 1,000 + 2 = 1,648 bytes (REQ-INP-015).
 
 ### 3.3 Finding a page

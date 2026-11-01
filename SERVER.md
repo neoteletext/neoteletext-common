@@ -188,20 +188,32 @@ A live channel on the NeoTeletext server, on the native server and on Cloudflare
 
 | Request | Answer |
 |---|---|
-| `<channel>`, a place of section 4.1, each with any query | 200, a small page in an ordinary web browser, naming the channel and offering a `neottx://` link to that address and a link to get NeoTeletext. It runs no script, and it cannot lead anyone elsewhere |
+| `<channel>`, `<channel>contents`, `<channel>wall`, each with any query | 200, a small page in an ordinary web browser, naming the channel and offering a `neottx://` link to that address and a link to get NeoTeletext. It runs no script, and it cannot lead anyone elsewhere |
+| `<channel>NNN`, `<channel>NNN/SSSS`, each with any query | 200, what section 4.9 says: the small page with `noindex`, or a public page. A sub-page shows its page, and a query is not sent to the program and changes nothing but the `neottx://` link |
 | The folder without its final `/` | 308, a redirect to `<channel>`, on the same origin, keeping its query |
 | A place with a final `/` | 308, a redirect to its one spelling, keeping its query |
 | `<channel>channel.ttx` | 200, the settings, generated, as `application/json`, because that is what the file holds. `<channel>channel.json` answers 404 like any other name (DEC-1726) |
 | `<channel>push` | The WebSocket; 426 without an upgrade |
 | Anything else under the channel, and `/` | 404 |
 
-Only a `GET` or a `HEAD` reaches the small page or a redirect. A static channel answers whatever its host answers, and a receiver asks it only for the names in section 4.2.
+Only a `GET` or a `HEAD` reaches the small page or a redirect. A static channel answers whatever its host answers, and a receiver asks it only for the names in section 4.2. The tool `neottx html` writes a static channel an `index.html`, the same small page, and an `NNN/index.html` for each page, so that a web visitor at either finds a page and not the host's 404 (REQ-1725). A host serves a file at its folder with no configuration, and these names are not the channel's files of section 4.2: no reader asks for them. Each `NNN/index.html` has `noindex` and nothing of the page unless the channel names that page with `--public`.
 
 ### 4.8 Redirects, local files and what is outside the map
 
 - **Redirects.** A redirect of a channel's `channel.ttx` moves the channel, and the reader keeps the place it was opening. A program's redirect names a place of its own channel, or a whole address of this map.
 - **Local files.** A `file:` address names a real file, so a path cannot also name a page in it: a file takes the places of section 4.1 after `#`, as `file:///tmp/news.tti#200`. This is the one use of `#`. Arriving normalises to its initial page, as in section 4.3. A `file:` address is never split by the file-name rule: each local file is its own channel (REQ-722).
 - **Outside the map.** The browser's built-in page `neoteletext:home` is not in a channel. A `neottx://` link wraps a whole address of this map and adds nothing to it (REQ-1672).
+
+### 4.9 What a page's address shows
+
+A page is public on the web only when its channel's program says so, page by page, and it is not by default (REQ-1728, within DEC-1727). The server asks the program with `describe`, which carries the page number and nothing else, and the program answers with `description` (`docs/applications.md` sections 2 and 3). No kit says yes unless the program does. **The Cloudflare host asks nothing yet and answers every page as not public.**
+
+- **Not public.** A page the program says is not public, a page that does not exist, a page the standard reserves, and a page the program did not answer for in 2 seconds all give one answer: 200, the small page, and `noindex`. It differs only in the address its link repeats, so an address says nothing of whether a private page exists.
+- **Public.** The page's title; a picture of the page, drawn by the server with the engine's renderer through the decoder a receiver uses, and carried inline as a PNG `data:` address, so that no address is added to this map; the offer to open it or get NeoTeletext; a `rel="canonical"` link to `<channel>NNN`; and the page's text in `<div class="paywall">`, which the page's stylesheet hides. JSON-LD declares that element with `isAccessibleForFree` false and a `hasPart` naming `.paywall`, which is the structured data Google documents for paywalled content (`developers.google.com/search/docs/appearance/structured-data/paywalled-content`) and the form of hidden text that is not cloaking.
+- **Everyone gets the same bytes.** No request header reaches the answer: there is no crawler check and no `User-Agent` test. The text is in the answer for anyone who looks, so a page marked public is world-readable.
+- **What a program gives is untrusted.** Its message is checked against the schema (REQ-1475), and a title or text is escaped for HTML and for the JSON-LD block, so that it can never be markup. The picture is pixels the server drew.
+- **`Content-Security-Policy`.** The small page's, `default-src 'none'`, and on a public page `img-src data:` and `style-src` with the SHA-256 of the one fixed stylesheet: a program's words cannot change those bytes, and no other style or script runs.
+- **What is bounded** (`crates/teletext-runtime/src/descriptions.rs`, all provisional). Only page numbers that are not reserved reach a program. An answer is kept for a minute, not-public answers and unanswered pages included, one cache for all visitors, because nothing in it depends on who asked. A program is asked for at most 20 pages a second, 40 at once after a quiet time; what is over that is answered as not public and not kept. At most 1,024 visitors wait, and 256 answers are kept. A title is at most 120 characters, a text 16,000, a picture 64 KiB: a larger one is left out.
 
 ## 5. The wire
 
