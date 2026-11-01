@@ -52,6 +52,8 @@ A channel is a folder on a web server, a folder on a computer, or a folder on an
 
 A reader asks for these names and no others (REQ-CHN-002). Every name fits the 8.3 form a minimal FAT library reads (section 13 item 9).
 
+**What is read today.** The table is the structure decided on 30 October 2026, and not all of it is built. The engine reads `channel.ttx`, `contents.txt`, `index.t42`, `NNN.tti`, `NNN.t42` and `push`, and two names the table does not give: `NNN-SSSS.t42`, a sub-page, and `NNN.sub`, a page's list of sub-pages, which `SERVER.md` section 4.2 also gives. It does not read `M.pag`, `NNN.ep1`, `NNN/SSSS.t42` or `NNN/P.sub`. A channel for today's readers uses the names they read.
+
 **For a web browser.** The tool `neottx html` also writes `index.html` in the channel's folder and `NNN/index.html` for each page, so that a person with an ordinary web browser finds a page there and not the host's 404 (REQ-1725; `SERVER.md` section 4.7). No reader asks for them, a folder named like a page cannot be a channel, and a channel without them is still a channel. A page shows nothing of itself in them unless the channel names it with `--public`, and all it then shows is readable by anyone.
 
 The largest EP1 file is the 6-byte header, sixteen 40-byte enhancement packets, 25 rows of 40 bytes and the 2-byte terminator: 6 + 640 + 1,000 + 2 = 1,648 bytes (REQ-INP-015).
@@ -135,16 +137,16 @@ A channel's entry file: the channel's settings, as JSON, read by the engine's st
 
 | Member | Holds | Default |
 |---|---|---|
-| `name` | The channel's own name for itself, at most 120 characters. A reader may show it outside the page, never in row 0. | The channel's address |
+| `name` | The channel's own name for itself, at most 64 bytes (`MAX_SERVICE_NAME`). A reader may show it outside the page, never in row 0. | The channel's address |
 | `initial_page` | The page a channel opens at: three decimal digits, the magazine 1 to 8 first | `"100"` |
 | `push` | An object, whose presence makes the channel live. Its one member is `input`, `true` when the channel takes the viewer's keys back. The connection is always a WebSocket at the channel's `push` (section 8). | No live connection |
 | `region` | The default character set region (decision E.4) | The reader's configured region |
-| `services` | Linked channels: each a `name` (short, for `name:mpp` links), a `display_name`, and `channel`, the linked channel's folder address in canonical form | None |
+| `services` | Linked channels: each a `name` (short, for `name:mpp` links), a `display_name`, and either `channel`, the linked channel's folder address in canonical form, or `descriptor`, the address of a descriptor service (the engine's REQ-WEB-018, REQ-WEB-024). An entry with both or neither is refused. | None |
 | `aliases` | At most 16 members, each mapping one page number to a target, `name:mpp` or a channel address (REQ-WEB-020) | None |
 | `refresh` | Seconds, 5 to 86,400: how often the page on screen is asked for again when the channel has no live connection | Never |
 | `presentation` | `"teletext"` or `"site"` (section 11) | `"teletext"` |
 
-**Withdrawn on 30 October 2026:** `page_template`, and with it descriptor services, a descriptor at any other address with a template mapping page numbers to URLs (REQ-WEB-002), because a template maps a channel's files to names of its own and the structure is fixed; `push.address`, because the live connection's address is fixed (section 8); `services`' `descriptor`, for the same reason. Each is an unknown member, and refused.
+**Withdrawn on 30 October 2026:** `page_template`, and with it descriptor services, a descriptor at any other address with a template mapping page numbers to URLs (REQ-WEB-002), because a template maps a channel's files to names of its own and the structure is fixed; `push.address`, because the live connection's address is fixed (section 8). Each is an unknown member, and refused.
 
 **Withdrawn on 1 November 2026:** `push.method`, because a WebSocket is the only live connection (DEC-1738), so the member could say nothing. It is an unknown member, and refused, whatever its value.
 
