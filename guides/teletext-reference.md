@@ -525,7 +525,7 @@ RE,6
 OL,1,abcdefg shows Greek
 ```
 
-`channel.ttx` has a `region` member, but no receiver applies it yet ([section 11.3](#113-channelttx)). Set the group on each page with `RE` or `OL,28`.
+`channel.ttx` has a `region` member ([section 11.3](#113-channelttx)), the group of a page that names none. It stands above the receiver's configured region and below `neottx --region`. A page's own `RE` or `OL,28` stands above it.
 
 | | Call |
 |---|---|
@@ -910,7 +910,7 @@ OL,26,@iD@@@H␡␡C␡␡C␡␡C␡␡C␡␡C␡␡C␡␡C␡␡C␡␡C␡�
 
 That `OL,29` line designates group 4, so the text shows in Cyrillic. Precedence is the page before the magazine, in the order X/28/0, X/28/4, M/29/0, M/29/4. A group of fields decoded with a damaged triplet counts as absent for that group alone.
 
-Browser: yes for all of this. `neottx`: yes. A program can carry `x28` and `m29` lines in a sub-page's `packets`, which the schema allows and which was not tried on a live server here. Rust: `DisplayPage::page_data(fields)`, `neutral_fields(national)`, `MagazinePackets`.
+Browser: yes for all of this. `neottx`: yes. A program can carry `x28` and `m29` lines in a sub-page's `packets`, which the schema allows. `x28` lines were tried on a live server on 2 November 2026, and reach a receiver: for all 72 language pages of the two demo sites, behind `teletext-server` at neoteletext-app-server `c6c692b` with kits 6.0.0 and 12.0.0, the packets received on the push WebSocket held one X/28/0 with the page's designation, and the same X/28/0 and X/26 packets as `neottx convert` makes of the page's TTI, byte for byte, and rendering them with `neottx` at engine `fecedf4` gave rows 1 to 23 identical to a render of the file. The route was TTI through the library's `RawSubPage` and the kit's TTI reader. `m29` lines, and a page of `packets` built by hand, were not tried. A ready-made page from `neottx write-text` has no `FL` line, so it shows no row 24 when rendered from the file, and shows one only once its links are given, as `RawSubPage` does when it is passed `fastext`. Rust: `DisplayPage::page_data(fields)`, `neutral_fields(national)`, `MagazinePackets`.
 
 ### 5.6 Modified designation
 
@@ -1133,7 +1133,7 @@ Row 1 shows the Ukrainian set's lowercase letters.
 
 The code tables are in `crates/neoteletext-core/src/charset/`: `g0_extended.rs`, `arabic_script.rs`, `thai_lao.rs`, `latin.rs` and `g2.rs`. The designations are `extended_designations.rs`.
 
-**The second set.** Every new set has Latin English as its second G0 set, reached by ESC, so a page can mix a language with English. Value `0x60` differs: with no X/28 at all its second set is Thai. A TTI page with `RE,C` does **not** get that, because the writer's X/28/0 names Latin English as the second set. To have Thai second, write the packet yourself: `ol28(default=0x60, second=0x62)`.
+**The second set.** Every new set has Latin English as its second G0 set, reached by ESC, so a page can mix a language with English. Value `0x60` differs: its second set is Thai, with no X/28 at all and on a TTI page with `RE,C`, whose X/28/0 from the writer names `0x62`.
 
 **Marks.** A diacritical-mark triplet numbers its mark as [section 4.3](#43-g0-characters-and-diacritical-marks) does. On a page whose G2 set is Vietnamese, mark 12, `11100`, is the hook above in place of the low line. Vietnamese and Yoruba-Igbo are whole sets rather than Latin options so that a triplet's mark finds its base letter, since a triplet never reads a national option.
 
@@ -1253,7 +1253,7 @@ Every member is optional. An unknown or duplicate member refuses the file and th
 | `name` | The channel's name, at most 120 characters. Shown outside the page, never in row 0 | The address |
 | `initial_page` | Three decimal digits | `"100"` |
 | `push` | An object, whose presence makes the channel live. Its one member is `input`, true when it takes keys | None |
-| `region` | The default character set group, 0 to 15. **Read, and not yet applied by `neottx` or the browser** | The reader's |
+| `region` | The default character set group, 0 to 15, for a page that names none | The reader's |
 | `services` | Linked channels, for `name:mpp` links | None |
 | `aliases` | Up to 16: a page number and a target, `name:mpp` or a channel address | None |
 | `refresh` | Seconds, 5 to 86,400, between asking for the page on screen again | Never |
@@ -1708,11 +1708,8 @@ These are the differences found while writing this guide. The code won in each c
 |---|---|---|
 | A channel's file names | `CHANNEL.md` sections 3.2, 5, 7: `NNN/SSSS.t42`, `NNN/P.sub`, `M.pag`, `NNN.ep1` | `NNN-SSSS.t42` and `NNN.sub`. `M.pag` and `.ep1` in a channel are not built. `SERVER.md` section 4.2 already says so, and `CHANNEL.md` section 9 notes the proposal |
 | `presentation` | `CHANNEL.md` sections 6 and 11 list it | An unknown member: the file is refused and the channel does not open |
-| `region` in `channel.ttx` | `CHANNEL.md` section 6: the default region | Parsed, and passed in `ServiceReady`, but `neottx` and the browser ignore it |
 | `write-text --help` | Lists 18 sets | Takes 46 |
-| Group 1100 option 000 | The design: Thai second | Correct with no X/28. The writer's X/28/0 from `RE,C` names Latin English second (`crates/neoteletext-formats/src/encode/page_data.rs`, `second_g0_value`) |
 | `docs/spec/design/capabilities.md` | Calls the 32 colours "switched off in the profile" | True of `modern-classic`, but the browser adds them back |
 | The browser's `functionality-gaps.md` | As of 23 October 2026; several rows have since changed | Read it as history |
 | `INPUT.md` section 5.8, "Page 100 selected" | `FF 40 04 80 02 FF 7E`, the numeric form | SELECT carries text since protocol 6: page 100 is `FF 40 03 31 30 30`, as section 5.4 says |
-| The engine's `docs/user-guide.md`, on `#302` | `#302` after a channel's address starts at that page | The address is refused, `DescriptorFailed(Address(Fragment))`. `<channel>302` works |
 | `neottx html` | `SERVER.md` section 4.7 describes it | On the engine's branch `req-1728-engine`, not on `livedevelopment` at this guide's commit |

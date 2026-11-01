@@ -381,7 +381,7 @@ INFO teletext_server: stopped
 The server counts and never records who a viewer is. On the administration listener:
 
 - **`/healthz`** answers `ok`.
-- **`/readyz`** answers 200 `ready`, or 503 `no program running: away`. Ready means a program is running or connected, not that it has finished loading.
+- **`/readyz`** answers 200 `ready`, or 503 `no program answering: away`. Ready means the channel's program has answered something since it started, so it can answer a viewer. The server asks it with one `describe` when it starts, for the page viewers arrive at. A program that is loading is not ready: the demo site takes about 36 seconds, and in that time a viewer is told DENIED 503. The figure lags by up to a second.
 - **`/metrics`** is the Prometheus text format, since the process started.
 - **`/stats.json`** holds the same figures for every channel, with an `all_time` block when there is a state directory. Each channel's figures are recorded once a second, so they lag a moment.
 
@@ -396,7 +396,7 @@ teletext_channel_sessions_waiting{channel="guide"} 4
 teletext_channel_ready{channel="crash"} 0
 ```
 
-The figures to watch while writing a program are `refused`, `lines_dropped`, `invalid_packets` and `stale_input`. All should stay at 0, apart from the odd `stale_input`, which is a viewer pressing a key while a page changes.
+The figures to watch while writing a program are `refused`, `lines_dropped`, `invalid_packets`, `stale_input` and `stale_answers`. All should stay at 0, apart from the odd `stale_input`, which is a viewer pressing a key while a page changes, and the odd `stale_answers`, which is a viewer moving on before the program answered.
 
 ### 1.11 Build and run it locally
 
@@ -578,7 +578,7 @@ From the program:
 |---|---|---|
 | `reply` | Answers `connected`: `magazines`, the index, and `selected`, one sub-page or null. With null, a `page`, `redirect` or `denied` must follow | Automatic |
 | `page` | One sub-page to named connections. `request` is the selection it answers, or null for a change | `publish`, `publishSubpages`, `publishTti`, `put` |
-| `denied` | Ends a selection with 403, 404, 429 or 503. The connection stays | Automatic for 404 only. See below |
+| `denied` | Ends a selection with 403, 404, 429 or 503. The connection stays | Automatic for 404, and `deny` |
 | `subpages` | A page's sub-page list, with a `version` | Automatic |
 | `index` | The index changed | Automatic; `title` |
 | `redirect` | Sends a viewer to a page or an address | `redirect` |
@@ -588,7 +588,7 @@ From the program:
 | `log` | A line for the server's log | `log` |
 | `packets` | Raw 42-byte packets, base64 | `packets` |
 
-`Context` has no call for `denied`, so a kit program cannot answer 403 or 429. Use `App` and `serveLines` for that, or write the line yourself.
+`context.deny(session, status)` ends a viewer's selection with no page. Called from `request` or `opened` it is the selection's answer, in place of the page, and for a connection's first selection the kit sends the `reply` first. Anywhere else it goes at once. The UI library does not pass it on yet: a component has no call for it.
 
 A sub-page on the wire has every field present: `page`, `sub`, 25 `rows` as base64 of 40 seven-bit codes or null, six `links`, `display_row_24`, `link_extension`, `control`, `character_set`, `enhancements`, `packets` and `cursor`. Section 2.16 shows one.
 
@@ -1592,7 +1592,6 @@ node probe.ts ws://127.0.0.1:8090/guide/push 100 '103?start=5' key:Enter wait:30
 | Closed 4001 | HELLO named another version | Update the receiver |
 | Closed 4000 | The receiver broke the protocol. A key stamped with page 0, sent before any page arrived, did this in a run here | Wait for a page before sending input |
 | DENIED, `program_late` in the log | The program did not answer within 5 seconds, or none is running | Check that it is running, that it flushes its lines, and that it does not block. It also happened here once just after a restart on a heavily loaded machine, and the cause there was not pinned down |
-| 200 from `/readyz`, and viewers still DENIED | Ready means the program started, not that it has loaded | Load fast. A late page for a selection is still shown (`INPUT.md` section 5.4) |
 | `refused`, rule `syntax`, path empty | Something other than a protocol line reached standard output, such as a stray print | Write to standard error. A run with one `print` showed `"rule":"syntax","detail":"expected value at line 1 column 1"` |
 | Nothing happens and no error | Standard output is buffered | Flush each line. The kits do |
 | `ProtocolError` on standard error | The kit refused a message before writing it | Read the path and rule |
@@ -1610,7 +1609,7 @@ node probe.ts ws://127.0.0.1:8090/guide/push 100 '103?start=5' key:Enter wait:30
 | A cookie you set is not in `request.cookies` | Cookies are those the connection opened with | It arrives on the next connection |
 | The kit prints `the server speaks protocol N` | The kit is older or newer than the server | Take the matching tarball. There is no compatibility path |
 | Hackaday or the gallery is empty | The dataset or pictures are not there | Give `--dataset` or `--pictures` |
-| A channel at `/100/` | The server accepts the folder, and the URL map says it cannot be a channel | Choose another name |
+| The server stops at once, naming a folder that `belongs to the channel above it` | The channels file names a folder `contents`, `wall` or like a page number, which the URL map says cannot be a channel | Choose another name |
 
 ## What this guide could not settle
 
@@ -1619,5 +1618,4 @@ node probe.ts ws://127.0.0.1:8090/guide/push 100 '103?start=5' key:Enter wait:30
 - **`describe` and public pages.** These were being written as this was. The small page at a page's address will change.
 - **The reply limit.** 5,000 ms is marked provisional in the code, until TODO-1521 measures it.
 - **Real systemd.** Socket activation was run with a shell standing in for systemd, and `deploy/ionos/deploy.sh` was read and not run.
-- **`stale_answers`.** `SERVER.md` section 7.6 says dropped answers are counted. The runtime counts them, but neither `/stats.json` nor `stats` shows that figure at this commit.
 - **Flush policy and slow clients.** `SERVER.md` section 20 item 10 leaves them open, and at this commit a connection 256 messages behind loses the newest, which is not what section 6.4 proposes.

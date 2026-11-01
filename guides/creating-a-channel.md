@@ -506,7 +506,7 @@ said        DescriptorRejected(Unknown)
 }
 ```
 
-`region` is read and checked, but nothing in `neottx` or the browser acts on it yet, so set the group on each page with `RE`. `presentation`, which `CHANNEL.md` describes, is not built: the reader refuses it as an unknown member.
+`region` gives the group of a page that names none, so a channel in one language need not repeat `RE` on every page. `neottx --region` stands above it. `presentation`, which `CHANNEL.md` describes, is not built: the reader refuses it as an unknown member.
 
 ### `contents.txt`
 
@@ -593,7 +593,7 @@ neottx check ../bad/100.tti
 neottx: 3 error(s)
 ```
 
-`check` looks at links and not much else. It passes a row of 50 characters, a line it does not know and an `OL` for a row that does not exist. For those use `list -v`, which reports them as diagnostics and prints your `LG` lines. `check --descriptor channel.ttx` does not work at this commit: it reads the file as an older kind of descriptor and refuses it with `Missing(PageTemplate)`.
+`check` looks at links and at rows longer than the page, and not much else. A row of 50 characters is an error on its line. It passes a line it does not know and an `OL` for a row that does not exist. For those use `list -v`, which reports them as diagnostics and prints your `LG` lines. `check --descriptor channel.ttx` does not work at this commit: it reads the file as an older kind of descriptor and refuses it with `Missing(PageTemplate)`.
 
 `probe` opens a channel and makes each selection you name, then reports how it ended. Use capitals in page numbers. On a live channel it also asks for page `8FC`, to see a page refused.
 
@@ -1473,8 +1473,6 @@ Each of these is written somewhere as the plan, or is a gap you will meet.
 | `presentation` in `channel.ttx` | `CHANNEL.md` section 11 describes it. The reader refuses it as an unknown member |
 | `M.pag`, `NNN.ep1`, `NNN/SSSS.t42`, `NNN/P.sub` | `CHANNEL.md` proposes them. The built names are `NNN-SSSS.t42` and `NNN.sub`, and there are no magazine lists or EP1 pages in a channel |
 | A tool that builds a channel | `CHANNEL.md` section 4 describes one in `neottx`. There is no such command (TODO-1224): use `convert`, `contents`, `html` and `cat` |
-| `region` in `channel.ttx` | Read and checked, then not used by `neottx` or the browser |
-| `neottx check --descriptor` | Refuses a `channel.ttx` with `Missing(PageTemplate)` |
 | Choosing a live channel's first page | The server always says `initial_page` 100 and `input` true |
 | `neottx text`, `show`, `render` and `list` on a live channel | They send no selection, so they see only the initial page (TODO-1529). Use `probe --select` and `view` |
 | LINKS and SUBPAGES records in `neottx view` | Not used, so `keyLink` does nothing there, and Left and Right do not step a live page (TODO-1529) |
