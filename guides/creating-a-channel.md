@@ -1448,6 +1448,8 @@ For each page it tries `NNN.tti`, then `NNN.t42`. On a live channel, it fetches 
 
 ## 18. Limits
 
+The limits are defined in [the channel format](../PROTOCOL.html#DOC-1786) and in [every address is accepted](../PROTOCOL.html#DOC-1807) and [reserved and recommended page numbers](../PROTOCOL.html#DOC-1808). This section collects them for a channel's author.
+
 | What | Most |
 |---|---|
 | `channel.ttx` | 16,384 bytes |

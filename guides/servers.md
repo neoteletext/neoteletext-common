@@ -340,6 +340,8 @@ On `SIGTERM` or `SIGINT` the server closes every viewer with 4100, keeps its fig
 
 ### 1.9 Limits
 
+The bounds a program and a receiver must keep are in [what the server tells a program](../PROTOCOL.html#DOC-1968) and [every address is accepted](../PROTOCOL.html#DOC-1807). This section says how they feel in use, and they define nothing here.
+
 Maxima are not limits: every page and sub-page the standard allows may exist, and a program learns them in `start`. These are budgets, which bound what is held at once. All come from the code at the commit above, and the ones a program needs are in `start`.
 
 | What | Value | Where |
@@ -634,6 +636,8 @@ Publish a channel's copy of every page in `start`, even if each viewer will have
 
 ### 2.7 Sub-pages
 
+The rules of a sub-page are in [a sub-page](../PROTOCOL.html#DOC-1971). This section shows the kit's way of writing one.
+
 A page has one sub-page or many, and every sub-code is a peer. Give a page whole and the kit numbers it by place, as the code of practice says: one sub-page is 0000, and 2 to 79 are 0001 to 0079, decimal, so 0009 is followed by 0010. `put` and `remove` name sub-codes themselves and keep them as given.
 
 ```ts
@@ -673,6 +677,8 @@ A viewer's own stepping is a selection, so each step costs one round trip to the
 
 ### 2.8 Input
 
+What a program hears is defined in [what a program hears of input](../PROTOCOL.html#DOC-1969). This section shows it arriving through the kit.
+
 `input(session, page, input, context, sub)` gets everything a viewer does on the page on screen. A key's press and release, every mouse move and every wheel turn all come. Ignore what you do not use.
 
 | `input.kind` | Fields |
@@ -709,6 +715,8 @@ A target is `mpp`, `mpp:ssss`, `name:mpp`, `name:mpp:ssss`, an `http` or `https`
 What a receiver does with a link is the receiver's business: [DOC-1947](../PROTOCOL.html#DOC-1947) and [DOC-1879](../PROTOCOL.html#DOC-1879) say. This guide confirmed that the LINKS record is sent, as the walk in section 1.3 shows, and did not run a receiver that follows it.
 
 ### 2.10 Redirects
+
+`redirect` is defined in [from a program to the server](../PROTOCOL.html#DOC-1970). This section shows it in use.
 
 `redirect` moves a viewer with no action from them. It is not an HTTP redirect, and a viewer's own choice overrides it.
 
@@ -752,6 +760,8 @@ A page is 40 by 25 cells, so a picture is one of three things:
 How a Level 2.5 or 3.5 page's object pages and DRCS pages reach a receiver is not designed yet: TODO-2023 item 7.
 
 ### 2.12 Sound
+
+The sound messages are defined in [sounds](../PROTOCOL.html#DOC-1972). This section shows them in use.
 
 Sound is the engine's audio profile. Desktop and phone receivers play Opus alone. The program encodes it and the server checks each packet against the profile and carries it unchanged. PCM, which the server encodes as IMA ADPCM, is for microcontroller receivers.
 
@@ -1210,6 +1220,8 @@ message of 168 bytes
 
 ### 2.16 A program with no kit
 
+The protocol is defined in [the program protocol](../PROTOCOL.html#DOC-1787), and [build a program](../PROTOCOL.html#DOC-1978) is the procedure. This section is a worked example.
+
 The protocol is the interface, and a kit is a convenience. This is the whole of a channel of one page, in the Python standard library. Reading it shows what a kit does for you. Note `flush=True`: a program must flush every line at once (REQ-1348), and standard output to a pipe is otherwise held back.
 
 ```python
@@ -1584,6 +1596,8 @@ node probe.ts ws://127.0.0.1:8090/guide/push 100 '103?start=5' key:Enter wait:30
 **Then the browser.** Open `http://127.0.0.1:8090/guide/` with the NeoTeletext browser. The harness and the probe show what was sent, and only the browser shows how it looks. This guide did not open one.
 
 ### 3.3 Common faults
+
+The document's own list is under [troubleshooting](../PROTOCOL.html#DOC-1789).
 
 | What you see | Why | What to do |
 |---|---|---|

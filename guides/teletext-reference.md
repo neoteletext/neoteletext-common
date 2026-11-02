@@ -1196,6 +1196,8 @@ The simplest path for fixed text is `neottx write-text`, then `publishTti` or `S
 
 ## 10. Noto Teletext
 
+The font's rules are in [the one compiled font](../PROTOCOL.html#DOC-1851).
+
 Noto Teletext is the one compiled font, in every build that draws (DEC-1761, DEC-1766). It is Google's Noto fonts converted to the 12 by 20 cell, licensed under the SIL Open Font License 1.1, and it replaces Bedstead, which is gone.
 
 - There is no font choice. No feature selects it, the browser has no font setting, and **no channel or page can name a font**: `channel.ttx` refuses a `font` member and a `TF` line is an error. An author cannot change the look of text except through colour, size and the enhancement attributes.
@@ -1316,7 +1318,7 @@ A channel's address asked for by a web browser answers a small page offering a `
 
 ## 14. Links beyond Fastext
 
-The TTI Link Extension declares links packets cannot carry. Its definition is `docs/spec/design/tti-link-extension.md` in the engine, Appendix E.
+The TTI Link Extension declares links packets cannot carry. The lines are defined in [the TTI Link Extension](../PROTOCOL.html#DOC-1879), and this section teaches their use.
 
 | Line | Meaning | Limit |
 |---|---|---|
