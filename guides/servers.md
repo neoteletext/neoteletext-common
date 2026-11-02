@@ -14,7 +14,7 @@ Every version number belongs in this table. The rest of the guide says "the prog
 |---|---|---|
 | Program protocol, server to program | 6 | `PROTOCOL` in `neoteletext-app-server/crates/teletext-runtime/src/protocol.rs` |
 | Its schema | `protocol/schema-6.json` | `neoteletext-app-server`; each kit keeps a copy |
-| Input protocol, receiver to server | 7 | `neoteletext_input::VERSION` in the engine; `INPUT.md` section 6.1 |
+| Input protocol, receiver to server | 7 | `neoteletext_input::VERSION` in the engine; [DOC-1921](../PROTOCOL.html#DOC-1921) |
 | WebSocket subprotocol | `neottx.7` | `PUSH_SUBPROTOCOL` in the engine's `neoteletext-web`; `wire-vectors.tsv` |
 | TypeScript protocol kit | 5.0.0, speaks program protocol 6 | `neoteletext-server-ts-protocol/package.json` |
 | UI library | 11.0.0, on kit 5.0.0 | `neoteletext-server-ts-ui-components/package.json` |
@@ -35,7 +35,7 @@ This guide describes these commits, 1 November 2026:
 | `neoteletext-server-ts-ui-components` | `1ce8db5` |
 | `neoteletext-server-channels` | `36b6d21` |
 
-Work in progress at that moment was left out of this guide on purpose. The largest piece is the `describe` and `description` messages, with a public web page for a page a program marks public, which `SERVER.md` section 4.9 describes in a change not yet committed. Check that section once it lands.
+Work in progress at that moment was left out of this guide on purpose. The largest piece is the `describe` and `description` messages, with a public web page for a page a program marks public, which [DOC-1975](../PROTOCOL.html#DOC-1975) describes.
 
 ## Part 1: the Rust server
 
@@ -154,7 +154,7 @@ The receiver there pressed Enter and closed without letting go, so the program w
 
 The two protocols are kept apart on purpose. The first is binary, for a small trusted receiver. The second is JSON, for people.
 
-**The input protocol** runs on the push WebSocket, and `INPUT.md` is its definition.
+**The input protocol** runs on the push WebSocket, and [DOC-1781](../PROTOCOL.html#DOC-1781) is its definition.
 
 - **The upgrade.** The request must offer the subprotocol, or it is answered 426, naming the one spoken. A request that carries `Origin` is answered 403, whatever it offers. A web page's script always sends `Origin`, so a receiver cannot be written in a web page.
 - **Upstream.** Binary events, each `0xFF`, a type byte and its fields, at most 8,192 bytes a message: HELLO, SELECT, KEY, MOUSE, WHEEL, PASTE, COMPOSE, FOCUS_IN, FOCUS_OUT, RESIZE, HOVER. Text outside an event is raw text. A message holds whole items and is read alone.
@@ -193,7 +193,7 @@ Two kinds of number matter:
 
 A connection is one browser tab. It has one **selection**, or none: one page and one sub-code. A sub-code of `3F7F` means the page and none of its sub-pages in particular. It is answered with the page's first sub-page in ascending order, and that sub-page then is the selection.
 
-Three words are defined once in `INPUT.md` section 5.4. **Selected** is what a tab shows. **Active** is what a selected page is to the server: it gets every update, whatever the viewer's input is doing. **Focused** is for input only. A page in a tab behind another stays selected, active and updated.
+Three words are defined once in [DOC-1933](../PROTOCOL.html#DOC-1933). **Selected** is what a tab shows. **Active** is what a selected page is to the server: it gets every update, whatever the viewer's input is doing. **Focused** is for input only. A page in a tab behind another stays selected, active and updated.
 
 Nothing rotates on a live channel. The sub-page a connection shows changes only when the receiver selects another, or when the program sends a page redirect.
 
@@ -238,7 +238,7 @@ WARN channel: connection 2: no reply to connected within 5000 ms channel="silent
 
 ### 1.6 What an ordinary web browser is answered with
 
-The server answers HTTP only as the URL map says. `SERVER.md` section 4.7 is the definition, and these were run:
+The server answers HTTP only as the URL map says. [DOC-1914](../PROTOCOL.html#DOC-1914) is the definition, and these were run:
 
 | Request | Answer |
 |---|---|
@@ -297,7 +297,7 @@ The small page runs no script and holds nothing from the program, so at this com
 ]}
 ```
 
-- **`folder`** is the channel's address, of letters, digits, `-` and `_`. The server does not refuse a name the URL map gives another meaning: `100` was accepted when tried. `SERVER.md` section 4.1 says a folder named `contents`, `wall` or like a page number cannot be a channel, so do not use one.
+- **`folder`** is the channel's address, of letters, digits, `-` and `_`. The server does not refuse a name the URL map gives another meaning: `100` was accepted when tried. [DOC-1908](../PROTOCOL.html#DOC-1908) says a folder named `contents`, `wall` or like a page number cannot be a channel, so do not use one.
 - **`name`** is shown to viewers. It defaults to the folder.
 - **`command` and `directory`** have the server start the program, on standard input and output. A relative `directory` is taken from the channels file's own folder, so `../neoteletext-server-channel-demosite` names a repository beside it. The program gets `NEOTELETEXT_CHANNEL`, its folder.
 - **`socket`**, in place of those, has the server listen on a Unix domain socket, and the program runs as a service of its own. A relative path is taken from the file's folder. The folder, if made, is `0700` and the socket `0600`, and those permissions are the authentication. One program at a time: a second is closed. Linux and macOS only.
@@ -361,7 +361,7 @@ Maxima are not limits: every page and sub-page the standard allows may exist, an
 | A line of a program's standard error | 64 KiB logged, the rest cut | `apps.rs` |
 | Keepalive | a connection silent for 35 s is pinged, and one silent 10 s more is dropped | `connection.rs`, from the engine's constants |
 
-Not built, though `SERVER.md` sections 6.3 and 11 discuss them: a rate limit on inbound events, a limit on connections per address, flush policies, and the LIMITS and CHANGED records. Reading `teletext-native` found none of them.
+Not built: a rate limit on inbound events, a limit on connections per address and flush policies, which TODO-2023 holds as open questions. Reading `teletext-native` found none of them.
 
 ### 1.10 Logging and figures
 
@@ -706,7 +706,7 @@ There are two kinds, and they travel differently.
 
 A target is `mpp`, `mpp:ssss`, `name:mpp`, `name:mpp:ssss`, an `http` or `https` address, or `web:` and one. It is printable ASCII without spaces or commas. Each sub-page has at most 8 number links and 8 text links, and a link's target is at most 8,004 bytes. Links go with every frame, so long ones are costly: one whose links are all that long costs about 208 KB an update.
 
-What a receiver does with a link is the receiver's business: `INPUT.md` section 9.7 and `CHANNEL.md` say. This guide confirmed that the LINKS record is sent, as the walk in section 1.3 shows, and did not run a receiver that follows it.
+What a receiver does with a link is the receiver's business: [DOC-1947](../PROTOCOL.html#DOC-1947) and [DOC-1879](../PROTOCOL.html#DOC-1879) say. This guide confirmed that the LINKS record is sent, as the walk in section 1.3 shows, and did not run a receiver that follows it.
 
 ### 2.10 Redirects
 
@@ -749,7 +749,7 @@ A page is 40 by 25 cells, so a picture is one of three things:
 - **TTI from a tool.** `context.publishTti(owner, page, text)` takes a converted picture whole, with its X/26 enhancement packets. `readTtiPages` reads TTI into typed sub-pages. In the UI library, `RawSubPage` takes a sub-page of TTI and `Picture` places a TTI's rows in a box. The demo channels read `NAME_l15.tti`, `NAME_l25.tti` and `NAME_l35.tti`, made by the engine's converter and collected by `neoteletext-server-channels/scripts/pictures.py`.
 - **Raw packets,** with `context.packets`, each checked by the server.
 
-How a Level 2.5 or 3.5 page's object pages and DRCS pages reach a receiver is not designed yet: `SERVER.md` section 20 item 7.
+How a Level 2.5 or 3.5 page's object pages and DRCS pages reach a receiver is not designed yet: TODO-2023 item 7.
 
 ### 2.12 Sound
 
@@ -1472,7 +1472,7 @@ const FUNCTIONAL_FLAG = 4;
 const KEY_CODES = new Map([["Escape", 1], ["Enter", 2], ["Home", 13]]);
 const SETTLE_MS = 400;
 
-/** INPUT.md section 5.2's `uv`. */
+/** DOC-1929's `uv`. */
 function uv(value: number): number[] {
   const bytes: number[] = [];
   let rest = value;
@@ -1577,7 +1577,7 @@ socket.addEventListener("error", () => {
 node probe.ts ws://127.0.0.1:8090/guide/push 100 '103?start=5' key:Enter wait:300
 ```
 
-`neoteletext-common/wire-vectors.tsv` holds the bytes to check it against. `INPUT.md` section 15.2 lists the required core of a receiver. `neottx view`, in the engine, is a real receiver in a terminal (`INPUT.md` section 9.6). It was not run for this guide.
+`neoteletext-common/wire-vectors.tsv` holds the bytes to check it against. [DOC-1927](../PROTOCOL.html#DOC-1927) lists the required core of a receiver. `neottx view`, in the engine, is a real receiver in a terminal (`docs/user-guide.md` there). It was not run for this guide.
 
 **Your log.** Run with `--log-format text` and read it. A program that logs each line it reads on standard error, as `raw.py` does, shows the whole conversation. `/stats.json` shows `refused` and `lines_dropped`. `RUST_LOG=connection=debug,info` shows connections open and close.
 
@@ -1618,4 +1618,4 @@ node probe.ts ws://127.0.0.1:8090/guide/push 100 '103?start=5' key:Enter wait:30
 - **`describe` and public pages.** These were being written as this was. The small page at a page's address will change.
 - **The reply limit.** 5,000 ms is marked provisional in the code, until TODO-1521 measures it.
 - **Real systemd.** Socket activation was run with a shell standing in for systemd, and `deploy/ionos/deploy.sh` was read and not run.
-- **Flush policy and slow clients.** `SERVER.md` section 20 item 10 leaves them open, and at this commit a connection 256 messages behind loses the newest, which is not what section 6.4 proposes.
+- **Flush policy and slow clients.** TODO-2023 items 10 and 11 leave them open, and at this commit a connection 256 messages behind loses the newest.

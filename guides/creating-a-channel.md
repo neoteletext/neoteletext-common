@@ -506,7 +506,7 @@ said        DescriptorRejected(Unknown)
 }
 ```
 
-`region` gives the group of a page that names none, so a channel in one language need not repeat `RE` on every page. `neottx --region` stands above it. `presentation`, which `CHANNEL.md` describes, is not built: the reader refuses it as an unknown member.
+`region` gives the group of a page that names none, so a channel in one language need not repeat `RE` on every page. `neottx --region` stands above it. `presentation`, which [DOC-2037](../PROTOCOL.html#DOC-2037) describes, is not built: the reader refuses it as an unknown member.
 
 ### `contents.txt`
 
@@ -1247,7 +1247,7 @@ result      no fault
 
 **Languages.** `Screen` writes English only, and folds any other character to its nearest: `é` becomes `e`, and what it cannot fold becomes `?`. It has no call that sets a character set. For any other language, write the page with `neottx write-text`, then publish the file: `publishTti` in TypeScript, `load_tti` in Python, which keeps the `OL,28` line and any X/26 marks. If the words change as the program runs, run `neottx write-text` from the program.
 
-**Input.** Your program is sent every key, click, wheel turn and pointer move on the page on screen, whether it wants them or not. Ignore what you do not use. A key has an `action`, `press`, `repeat` or `release`, and a `key`, a W3C `KeyboardEvent.key` name such as `ArrowUp`, `Enter` or `a`. A mouse event has a `column` and a `row`. A release with `lost` set means the key never came up, because the viewer left. Not every receiver reports releases: `neottx view` does not, except in a terminal with the Kitty keyboard protocol. A typed character is `typed(input)` or `character(input)` in TypeScript, and `event.typed` or `event.character` in Python. Draw what the viewer types on the page yourself, because the receiver draws nothing. `screen.cursor` places a cursor. In the browser, some keys never reach you: those with the browser's modifier, Command on macOS and Control-Shift elsewhere. Reference section 17 covers forms, and `INPUT.md` section 9 covers what a receiver does.
+**Input.** Your program is sent every key, click, wheel turn and pointer move on the page on screen, whether it wants them or not. Ignore what you do not use. A key has an `action`, `press`, `repeat` or `release`, and a `key`, a W3C `KeyboardEvent.key` name such as `ArrowUp`, `Enter` or `a`. A mouse event has a `column` and a `row`. A release with `lost` set means the key never came up, because the viewer left. Not every receiver reports releases: `neottx view` does not, except in a terminal with the Kitty keyboard protocol. A typed character is `typed(input)` or `character(input)` in TypeScript, and `event.typed` or `event.character` in Python. Draw what the viewer types on the page yourself, because the receiver draws nothing. `screen.cursor` places a cursor. In the browser, some keys never reach you: those with the browser's modifier, Command on macOS and Control-Shift elsewhere. Reference section 17 covers forms, and [DOC-1933](../PROTOCOL.html#DOC-1933) covers when a page is focused for input.
 
 **Links.** Use `fastext` for the coloured keys: the kit follows those. `keyLink`, `numberLink` and `textLink` are the program's `LN`, `LK` and `LT`. They travel with the sub-page as a LINKS record, and the browser acts on them. But the kit does not follow `keyLink` on a key press, and `neottx view` does not read LINKS records yet, so F1 did nothing on a page that had only a `keyLink`. Use them for what `fastext` cannot carry: links that leave the channel, and links on the page's own text.
 
@@ -1386,7 +1386,7 @@ That page runs no script and shows nothing of your pages. A page's own address h
 
 **A page is public only if your program says so,** page by page. When a web visitor or a search engine comes to a page's address, the server asks your program with `describe`, which carries the page number and nothing else. So the answer cannot depend on a viewer: it goes to everyone for a minute. Add a `describe` method, as both programs in section 14 did for page 100. The server then answers that address with the page's title, a picture of the page, the offer to open it, and the text you gave, hidden and declared for search engines. All of it is readable by anyone. A `PageSpec` in the UI library has a `describe()` of its own.
 
-The picture is drawn from the channel's copy of the page, so a page published only to sessions cannot be public. A program that does not answer within 2 seconds is taken to have said no. `SERVER.md` section 4.9 has the rest.
+The picture is drawn from the channel's copy of the page, so a page published only to sessions cannot be public. A program that does not answer within 2 seconds is taken to have said no. [DOC-1975](../PROTOCOL.html#DOC-1975) has the rest.
 
 ## 16. Sound
 
@@ -1404,7 +1404,7 @@ For a static channel, `neottx sound --page 100 chime.wav chime.t42` turns a 16-b
 
 ## 17. Addresses
 
-A channel has one URL map. It is the same for every channel, and a channel cannot add to it. `<channel>` is an `http` or `https` address ending in `/`. `SERVER.md` section 4 is the full text, and `crates/neoteletext-web/src/map/conformance.tsv` in the engine is the table every program tests against.
+A channel has one URL map. It is the same for every channel, and a channel cannot add to it. `<channel>` is an `http` or `https` address ending in `/`. [DOC-1779](../PROTOCOL.html#DOC-1779) is the full text, and `crates/neoteletext-web/src/map/conformance.tsv` in the engine is the table every program tests against.
 
 | Address | Opens |
 |---|---|
@@ -1470,16 +1470,16 @@ Each of these is written somewhere as the plan, or is a gap you will meet.
 
 | Thing | State at these commits |
 |---|---|
-| `presentation` in `channel.ttx` | `CHANNEL.md` section 11 describes it. The reader refuses it as an unknown member |
-| `M.pag`, `NNN.ep1`, `NNN/SSSS.t42`, `NNN/P.sub` | `CHANNEL.md` proposes them. The built names are `NNN-SSSS.t42` and `NNN.sub`, and there are no magazine lists or EP1 pages in a channel |
-| A tool that builds a channel | `CHANNEL.md` section 4 describes one in `neottx`. There is no such command (TODO-1224): use `convert`, `contents`, `html` and `cat` |
+| `presentation` in `channel.ttx` | [DOC-2037](../PROTOCOL.html#DOC-2037) describes it. The reader refuses it as an unknown member |
+| `M.pag`, `NNN.ep1`, `NNN/SSSS.t42`, `NNN/P.sub` | [DOC-2034](../PROTOCOL.html#DOC-2034), [DOC-2038](../PROTOCOL.html#DOC-2038) and [DOC-2039](../PROTOCOL.html#DOC-2039) describe them. The built names are `NNN-SSSS.t42` and `NNN.sub`, and there are no magazine lists or EP1 pages in a channel |
+| A tool that builds a channel | [DOC-2034](../PROTOCOL.html#DOC-2034) describes one in `neottx`. There is no such command (TODO-1224): use `convert`, `contents`, `html` and `cat` |
 | Choosing a live channel's first page | The server always says `initial_page` 100 and `input` true |
 | `neottx text`, `show`, `render` and `list` on a live channel | They send no selection, so they see only the initial page (TODO-1529). Use `probe --select` and `view` |
 | LINKS and SUBPAGES records in `neottx view` | Not used, so `keyLink` does nothing there, and Left and Right do not step a live page (TODO-1529) |
 | `LK` lines and aliases in `neottx view` | Typing the number did not follow them |
 | Logging in | Sessions exist, identity does not. A program sees only a session number |
 | Opus in the Python kit | Not built (TODO-1310) |
-| Levels 2.5 and 3.5 on a live channel | Packets X/26 to X/28 go with a sub-page through TTI. How object pages reach a receiver is not designed (`SERVER.md` section 20) |
+| Levels 2.5 and 3.5 on a live channel | Packets X/26 to X/28 go with a sub-page through TTI. How object pages reach a receiver is not designed (TODO-2023 item 7) |
 | The Cloudflare host | Its code exists and has never run |
 
 ## 20. Where to read next
@@ -1488,8 +1488,9 @@ Each of these is written somewhere as the plan, or is a gap you will meet.
 |---|---|
 | Learn everything a page can do, level by level | [`teletext-reference.md`](teletext-reference.md) |
 | Run the server, and program it in depth | [`servers.md`](servers.md) |
-| See the channel format, including what is proposed | `CHANNEL.md` |
-| See the wire, the URL map and the design | `SERVER.md` |
-| See input, key names and receivers | `INPUT.md` |
+| See the protocol whole | [`PROTOCOL.html`](../PROTOCOL.html), the one definition of it |
+| See the channel format, including what is proposed | [DOC-1786](../PROTOCOL.html#DOC-1786) |
+| See the URL map and the wire | [DOC-1779](../PROTOCOL.html#DOC-1779), [DOC-1780](../PROTOCOL.html#DOC-1780) and [DOC-1782](../PROTOCOL.html#DOC-1782) |
+| See input, key names and receivers | [DOC-1781](../PROTOCOL.html#DOC-1781) |
 | See every message of the program protocol | `docs/applications.md` in `neoteletext-app-server` |
 | See every `neottx` command | `docs/user-guide.md` in `neoteletext-engine` |

@@ -2,7 +2,7 @@
 
 This is a programmer's reference for writing pages. Part 1 lists the teletext features of EN 300 706 that NeoTeletext supports, level by level, with the bytes that switch each one on. Part 2 lists everything NeoTeletext adds beyond the standard, and how to program it.
 
-To build a channel step by step, read [`creating-a-channel.md`](creating-a-channel.md). To run a server and program it, read [`servers.md`](servers.md). To implement a receiver or a server, read `SERVER.md`, `INPUT.md` and `CHANNEL.md`. This guide says what a page author can do, and points at those documents for the wire.
+To build a channel step by step, read [`creating-a-channel.md`](creating-a-channel.md). To run a server and program it, read [`servers.md`](servers.md). To implement a receiver or a server, read [the protocol document](../PROTOCOL.html), the one definition of the protocol. This guide says what a page author can do, and points at those documents for the wire.
 
 The guide was checked against engine commit `3de0047`, browser commit `e87a652` (which pins engine `97f8fd2`), program protocol 6 and input protocol 7, on 1 November 2026. Every TTI block below was rendered with `neottx`. The **Browser** columns come from the browser's build and its code, not from running it.
 
@@ -1008,7 +1008,7 @@ fn build() -> author::Result<Stream> {
 |---|---|
 | A file | All of them, when the object page is in the file |
 | A static channel | Local Objects. Public objects when the object page is in the page's own file or in `index.t42`, since a reader asks for no other file for them |
-| A live channel | **Local Objects only.** How a selected sub-page's object pages and MOT reach the receiver is not designed (`SERVER.md` section 6.1) |
+| A live channel | **Local Objects only.** How a selected sub-page's object pages and MOT reach the receiver is not designed (TODO-2023 item 7) |
 
 ## 6. Level 3.5
 
@@ -1227,7 +1227,7 @@ For the walkthrough, read [`creating-a-channel.md`](creating-a-channel.md).
 | `NNN.sub` | A page's catalogue of sub-pages, with validators and titles |
 | `push` | The live connection, a WebSocket |
 
-`CHANNEL.md` proposes `NNN/SSSS.t42`, `NNN/P.sub`, `M.pag` and `NNN.ep1`. **Those names are not built**; the code and `SERVER.md` section 4.2 use the table above.
+[DOC-2038](../PROTOCOL.html#DOC-2038) and [DOC-2039](../PROTOCOL.html#DOC-2039) propose `NNN/SSSS.t42`, `NNN/P.sub`, `M.pag` and `NNN.ep1`. **Those names are not built**; the code and [DOC-1909](../PROTOCOL.html#DOC-1909) use the table above.
 
 Digits are capitals, with no other spelling. A reader tries `NNN.tti`, then `NNN.t42`.
 
@@ -1258,7 +1258,7 @@ Every member is optional. An unknown or duplicate member refuses the file and th
 | `aliases` | Up to 16: a page number and a target, `name:mpp` or a channel address | None |
 | `refresh` | Seconds, 5 to 86,400, between asking for the page on screen again | Never |
 
-Tried and confirmed: `{"presentation": "site"}` and `{"push": {"address": "..."}}` are both refused. `CHANNEL.md` section 6 lists `presentation`, but **it is not built**. `push.address`, `push.method`, `page_template` and `font` are withdrawn.
+Tried and confirmed: `{"presentation": "site"}` and `{"push": {"address": "..."}}` are both refused. [DOC-2037](../PROTOCOL.html#DOC-2037) describes `presentation`, but **it is not built**. `push.address`, `push.method`, `page_template` and `font` are withdrawn.
 
 `neottx probe <address>` opens a channel as a receiver does and reports each step, and `--allow-local 127.0.0.1` lets it reach a local server.
 
@@ -1279,7 +1279,7 @@ A live channel has no `contents.txt`: its program gives an index instead ([secti
 
 ## 12. Web addresses and the URL map
 
-`SERVER.md` section 4 is the one written URL map, and `crates/neoteletext-web/src/map/conformance.tsv` is its test table. Every channel has the same map. `<channel>` is an origin and folder ending in `/`.
+[DOC-1779](../PROTOCOL.html#DOC-1779) is the one written URL map, and `crates/neoteletext-web/src/map/conformance.tsv` is its test table. Every channel has the same map. `<channel>` is an origin and folder ending in `/`.
 
 | Address | Opens |
 |---|---|
@@ -1450,7 +1450,7 @@ A live channel's index, given by the program, fills the receiver's list of pages
 
 ## 16. The push WebSocket and the input protocol
 
-`INPUT.md` is the whole protocol. This section is what a page author should know. A kit does all of it.
+[DOC-1781](../PROTOCOL.html#DOC-1781) is the whole upstream protocol. This section is what a page author should know. A kit does all of it.
 
 **The connection.** A channel's WebSocket is always `<channel>push`: `wss` for `https`, `ws` for `http`. A receiver offers `Sec-WebSocket-Protocol: neottx.7`, sends no `Origin`, and a server refuses anything else (426 and 403). It is one socket a tab, with no compression. Close codes 4000 and 4001 mean stop; 4100 means try again.
 
@@ -1469,7 +1469,7 @@ A live channel's index, given by the program, fills the receiver's list of pages
 | 11 | REDIRECT | Moves a viewer |
 | 12 | DENIED | A selection refused |
 
-**Upstream is events.** Any byte but `0xFF` begins raw UTF-8 text. An event is `0xFF`, a type byte, and fields. Every key, click and move goes to the channel; **there are no modes to ask for** (`INPUT.md` section 6.3), and the channel ignores what it does not use.
+**Upstream is events.** Any byte but `0xFF` begins raw UTF-8 text. An event is `0xFF`, a type byte, and fields. Every key, click and move goes to the channel; **there are no modes to ask for** ([DOC-1922](../PROTOCOL.html#DOC-1922)), and the channel ignores what it does not use.
 
 | Type | Event | When |
 |---|---|---|
@@ -1604,11 +1604,11 @@ The receiver draws both at once and sends nothing, so a page lights up under the
 
 Rust: `triplets.control(column, width, joined)`. TypeScript's `Screen` has no call: the UI library writes these as `OL,26` lines (`src/core/controls.ts`), and every button in it declares one.
 
-The pointer's units are in `INPUT.md` section 9.9: `col` and `row` the cell, `px` and `py` the dot of a 480 by 500 image. Test a click by its cell.
+The pointer's units are in [DOC-1946](../PROTOCOL.html#DOC-1946): `col` and `row` the cell, `px` and `py` the dot of a 480 by 500 image. Test a click by its cell.
 
 ## 19. Audio
 
-A page can make sound, carried as records on data channel 12. The profile is `docs/spec/design/audio.md` in the engine, and `SERVER.md` section 9.
+A page can make sound, carried as records on data channel 12. The profile is `docs/spec/design/audio.md` in the engine, and [DOC-1785](../PROTOCOL.html#DOC-1785).
 
 | | |
 |---|---|
@@ -1665,7 +1665,7 @@ neottx qr "https://example.org/story" --page 150 --row 2 qr.tti
 
 Any phone camera reads it. `Screen.load_tti` in Python, and `Picture` or `QrPanel` in the UI library, place it in a page. This is the teletext way to give a web address, since a Level 1 set can follow no link.
 
-**A phone as a keyboard.** A phone scans a QR code and becomes a keyboard, through qrkeyboard's relay and protocol 3 (`INPUT.md` section 10).
+**A phone as a keyboard.** A phone scans a QR code and becomes a keyboard, through qrkeyboard's relay and protocol 3 ([DOC-2029](../PROTOCOL.html#DOC-2029)).
 
 | | |
 |---|---|
@@ -1706,10 +1706,6 @@ These are the differences found while writing this guide. The code won in each c
 
 | Subject | A document says | The code does |
 |---|---|---|
-| A channel's file names | `CHANNEL.md` sections 3.2, 5, 7: `NNN/SSSS.t42`, `NNN/P.sub`, `M.pag`, `NNN.ep1` | `NNN-SSSS.t42` and `NNN.sub`. `M.pag` and `.ep1` in a channel are not built. `SERVER.md` section 4.2 already says so, and `CHANNEL.md` section 9 notes the proposal |
-| `presentation` | `CHANNEL.md` sections 6 and 11 list it | An unknown member: the file is refused and the channel does not open |
 | `write-text --help` | Lists 18 sets | Takes 46 |
 | `docs/spec/design/capabilities.md` | Calls the 32 colours "switched off in the profile" | True of `modern-classic`, but the browser adds them back |
 | The browser's `functionality-gaps.md` | As of 23 October 2026; several rows have since changed | Read it as history |
-| `INPUT.md` section 5.8, "Page 100 selected" | `FF 40 04 80 02 FF 7E`, the numeric form | SELECT carries text since protocol 6: page 100 is `FF 40 03 31 30 30`, as section 5.4 says |
-| `neottx html` | `SERVER.md` section 4.7 describes it | On the engine's branch `req-1728-engine`, not on `livedevelopment` at this guide's commit |
