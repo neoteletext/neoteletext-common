@@ -43,7 +43,7 @@ The owner shapes behaviour by asking for changes and looking at the result (the 
 **Rapid iteration** is the default while behaviour is being shaped.
 - Make the change, rebuild with the fast profile and show the result: in the engine `cargo build --profile iterate -p neoteletext-cli`, then `target/iterate/neottx`; in the browser `scripts/try.sh` (Clippy on every save) or `scripts/try.sh <crate> [filter]`, and the program itself. Check the output, then tell the owner it is ready to look at.
 - Do not write tests, user-guide text, requirement prose or log rows yet. Run the existing tests of the code touched when that is quick.
-- Commit rarely, and never bypass a hook: batch the work instead.
+- Commit whenever a step compiles: the commit gate checks only that (section 9.1). Never bypass a hook.
 - **Everything owed is an rdm to-do** as it arises (`create_record`, type `todo`, linked to the requirement or decision it concerns): tests, requirements and decisions to record, documents to update, verification to run, shortcuts taken, loose ends. Nothing deferred may exist only in a reply.
 
 **Integration** starts when the owner says the feature works as they expect. Work through its open to-dos, in this order:
