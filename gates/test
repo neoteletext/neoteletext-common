@@ -82,8 +82,10 @@ expect refused "a document naming one, alone in a commit" commit_a_document "$(d
 expect passes "a clean document, alone in a commit" commit_a_document "DOC-1931"
 
 # TODO-1771: from a hook in a linked worktree, whose GIT_DIR git exports, the
-# copy of the gate is still compared with neoteletext-common's.
+# copy of the gate is still compared with neoteletext-common's, truly: an
+# edited copy is refused, given a first argument to append to the copy.
 copy_from_a_worktree() {
+    local edit="${1:-}"
     local common="$work/common-$RANDOM$RANDOM" repository
     repository="$common-repository"
     mkdir -p "$common/gates"
@@ -99,6 +101,7 @@ copy_from_a_worktree() {
     {
         printf '# Copied\n# neoteletext-common gates at %s\n' "$(git -C "$common" rev-parse HEAD)"
         cat "$gate"
+        printf '%s' "$edit"
     } >"$repository/scripts/gate.sh"
     cp "$common"/gates/pre-* "$repository/.githooks/"
     (
@@ -110,6 +113,7 @@ copy_from_a_worktree() {
     ) >/dev/null 2>&1
 }
 expect passes "the gate's copy read with GIT_DIR exported" copy_from_a_worktree
+expect refused "an edited copy read with GIT_DIR exported" copy_from_a_worktree "# edited"
 
 [[ "$failures" -eq 0 ]] || {
     printf '%d failed\n' "$failures" >&2
