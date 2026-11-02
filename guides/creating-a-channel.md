@@ -551,7 +551,9 @@ A folder with `channel.ttx` and `index.t42` and nothing else is a whole channel:
 
 A page file may be `NNN.t42` in place of `NNN.tti`. A reader tries `.tti` first, then `.t42`. `neottx convert` makes one.
 
-A very large page can keep each sub-page in `NNN-SSSS.t42`, with `NNN.t42` holding the first and `NNN.sub` listing them. Nothing writes these files for you, and `neottx` does not read `NNN.sub`, so `neottx view` shows only the first. Only the browser reads them. Keep sub-pages in one `NNN.tti` unless the page passes the 256 KiB a page file may be.
+A very large page can keep its sub-pages in a folder named for the page: `602/0101.t42` or `602/0101.tti` for sub-page 0101, the same path as its address `602/0101`. `602.t42` then holds the first sub-page, and `602/0.sub`, `602/1.sub` and so on list them, 64 to a file. A T42 sub-page file is at most 3,108 bytes. [DOC-2038](../PROTOCOL.html#DOC-2038) gives the format of the lists.
+
+Nothing writes these files for you yet: there is no build command (TODO-1224), and the lists hold a validator for each sub-page and a version for the page. `neottx` opens a sub-page you name or key from its file, and steps with Left and Right only through the sub-pages it already holds. The browser reads these files once it takes the engine that writes them. Keep sub-pages in one `NNN.tti` unless the page passes the 256 KiB a page file may be.
 
 ## 10. Checking a channel
 
@@ -1434,7 +1436,7 @@ For each page it tries `NNN.tti`, then `NNN.t42`. On a live channel, it fetches 
 | `contents.txt` | Your file | None. The program gives the index |
 | `index.t42` | Your file | None |
 | `NNN.tti`, `NNN.t42` | Your files | None |
-| `NNN-SSSS.t42`, `NNN.sub` | Your files | None |
+| `NNN/SSSS.t42`, `NNN/SSSS.tti`, `NNN/P.sub` | Your files | None |
 
 **`http` and `ws`.** A channel's WebSocket is at `<channel>push`, by rule: `wss://` for a channel at `https://`, and `ws://` for one at `http://`. Both are supported. The receiver marks a plain connection, with the red `!` in row 0, and in the browser "Not secure" in the strip.
 
@@ -1471,7 +1473,7 @@ Each of these is written somewhere as the plan, or is a gap you will meet.
 | Thing | State at these commits |
 |---|---|
 | `presentation` in `channel.ttx` | [DOC-2037](../PROTOCOL.html#DOC-2037) describes it. The reader refuses it as an unknown member |
-| `M.pag`, `NNN.ep1`, `NNN/SSSS.t42`, `NNN/P.sub` | [DOC-2034](../PROTOCOL.html#DOC-2034), [DOC-2038](../PROTOCOL.html#DOC-2038) and [DOC-2039](../PROTOCOL.html#DOC-2039) describe them. The built names are `NNN-SSSS.t42` and `NNN.sub`, and there are no magazine lists or EP1 pages in a channel |
+| `M.pag`, `NNN.ep1` | [DOC-2034](../PROTOCOL.html#DOC-2034) and [DOC-2039](../PROTOCOL.html#DOC-2039) describe them. There are no magazine lists or EP1 pages in a channel |
 | A tool that builds a channel | [DOC-2034](../PROTOCOL.html#DOC-2034) describes one in `neottx`. There is no such command (TODO-1224): use `convert`, `contents`, `html` and `cat` |
 | Choosing a live channel's first page | The server always says `initial_page` 100 and `input` true |
 | `neottx text`, `show`, `render` and `list` on a live channel | They send no selection, so they see only the initial page (TODO-1529). Use `probe --select` and `view` |

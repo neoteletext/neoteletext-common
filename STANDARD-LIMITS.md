@@ -87,7 +87,7 @@ Today the server holds a page as one frame of all its sub-pages, sends the whole
 6. **The server holds each sub-page once,** with its version, its encoded packets and its title (withdrawn with the page store, DEC-2024 item 7).
 
 **A channel served as files, with no server** (DOC-1779; the engine's REQ-WEB-025 and the static layout):
-7. **`NNN.t42` holds a page's first sub-page,** or the page when it has one; **`NNN-SSSS.t42`** holds sub-page SSSS; **`NNN.sub`** lists the sub-codes, their validators and their titles. A page response stays within the 256 KB limit of REQ-WEB-008 at any number of sub-pages, and the browser fetches a sub-page when it needs it, conditionally.
+7. **`NNN.t42` holds a page's first sub-page,** or the page when it has one; **`NNN/SSSS.t42`** holds sub-page SSSS; **`NNN/P.sub`** lists the sub-codes, their validators and their titles, in parts of 64. A page response stays within the 256 KB limit of REQ-WEB-008 at any number of sub-pages, and the browser fetches a sub-page when it needs it, conditionally.
 8. **`index.t42`** carries first sub-pages only, so a channel's opening costs the same at any number of sub-pages.
 
 **In the browser:**
@@ -122,7 +122,7 @@ In order; each is one commit or a few, through each repository's gates. Section 
 2. Replace the restatements: `consts::pages` re-exports from `limits`; `contents::MAX_PAGES` and its siblings name `limits`. *Built (E.130).*
 3. Withdraw `viewer::MAX_LISTED_SUBPAGES`: the viewer steps and counts sub-pages through the store (next and previous sub-code after a given one, and a count), with no fixed array, so a microcontroller's stack does not grow with the maximum. *Built (E.130): `subcodes`, `subpage_count`, `subpage_place`, `next_subpage`, `previous_subpage`.*
 4. REQ-NAV-005 amended: up to 8,190 sub-pages, four-digit entry within the decimal places; the status area per question 2. *Built, the status area as question 2 records, the question still open.*
-5. The static layout: `NNN-SSSS.t42`, `NNN.sub` and first sub-pages in `index.t42`; REQ-WEB-025's neighbour requirements amended, the reader of `NNN.sub` written and fuzzed. *Built (E.132): `neoteletext_web::subpages`, its reader, `write_entry` and `ChannelFiles`.*
+5. The static layout: `NNN/SSSS.t42`, `NNN/P.sub` and first sub-pages in `index.t42`; REQ-WEB-025's neighbour requirements amended, the reader of `NNN/P.sub` written and fuzzed. *Built (E.132): `neoteletext_web::subpages`, its reader, `write_entry` and `ChannelFiles`.*
 6. The TTI reader's `SC` field checked to carry all 8,190 sub-codes (REQ-INP-013). *Built (E.130).*
 7. Re-pin the server and the browser at the commit. *Done: the browser at `8c59a89`, the server at `a58958f`; the server pins the engine with `limits` but does not use it.*
 
@@ -132,14 +132,14 @@ In order; each is one commit or a few, through each repository's gates. Section 
 10. `publish` with sub-pages and `remove`, `start` with `standard` and `budgets` (`applications.md`); validation per sub-page. *Not started.*
 11. *Amended 29 October 2026:* SELECT (DOC-1753, REQ-INT-140), its reader in the engine's `neoteletext-input` and the server's handling of it, and LIMITS with the maxima, since withdrawn (DEC-2024 item 1); fuzzed. TUNE, UNTUNE, SUBPAGES and TITLES are withdrawn. *Not started; its bytes are specified.*
 12. *Amended 29 October 2026:* the sender per selected page: first sub-pages to every connection, a selected page's sub-pages to those that select it (DOC-1950). *Not started: every viewer of a page is sent all its sub-pages; measured on 29 October 2026, 3,542,532 bytes in a demo site connection's first 6 s.*
-13. The static files: `NNN-SSSS.t42`, `NNN.sub`, `index.t42` of first sub-pages. *Not started.*
+13. The static files: `NNN/SSSS.t42`, `NNN/P.sub`, `index.t42` of first sub-pages. *Not started.*
 14. The Python kit and the TypeScript kit: limits from `start`, publication by sub-page, a channel's literal limits removed (the Hackaday channel's `MOST_SUBPAGES` and `TEXT_SUBPAGES`); each kit's test that it holds no literal. *Not started. The Python kit holds no literal; the TypeScript kit, which came after this list, holds 64 and 800 (section 7.2).*
 15. Measure: a page of 8,190 sub-pages published, tuned, stepped and changed, with bytes on the wire per action, before and after. *Not started.*
 
 **The browser:**
 16. Re-pin; `interface_core` depends on `neoteletext-core` with no features and names `limits`; `MAX_SUBPAGES` and `ANY_SUBCODE` withdrawn. *Built (decision 121).*
 17. The protocol's sub-page counts and places become 16-bit (`FromDecoder::SubPages`, `SubPageTitles`, `ToInterface::SubPages`, `PageControls`), with round-trip and refusal tests at 8,190 and 8,191. *Built (decision 121).*
-18. The decoder store as a cache of sub-pages (section 2), the fetcher asking for `NNN-SSSS.t42` and `NNN.sub` on static channels. *Built (decision 121).*
+18. The decoder store as a cache of sub-pages (section 2), the fetcher asking for `NNN/SSSS.t42` and `NNN/P.sub` on static channels. *Built (decision 121) under the flat names of the time; the names and the parts changed on 2 November 2026 (DEC-2116), and the browser follows when it takes that engine.*
 19. *Amended 29 October 2026:* the trusted core sends SELECT for each view's page and sub-page, whatever the keys do, with the rate limit of TODO-2023 item 2. *Not started for a push channel; a static channel's sub-pages are fetched from their files (decision 121), which stands.*
 20. The sub-page list from the catalogue, titles by range, as a virtual list; the page controls' place and count to 8,190. *Built (decision 121), from a catalogue file or the decoder's store; on a push channel the decoder's store holds a selected page's sub-pages, so no server record is needed.*
 21. The security analysis amended (section 5); requirement 22.5 amended; the hostile harness given a channel that publishes 8,190 sub-pages on every page. *Built (decision 121).*

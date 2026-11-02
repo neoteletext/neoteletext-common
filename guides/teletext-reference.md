@@ -1223,11 +1223,11 @@ For the walkthrough, read [`creating-a-channel.md`](creating-a-channel.md).
 | `contents.txt` | The channel's table of contents |
 | `index.t42` | A bundle of first sub-pages, so a channel opens with one request |
 | `NNN.tti`, `NNN.t42` | Page `NNN`, or its first sub-page when it has several |
-| `NNN-SSSS.t42` | One sub-page |
-| `NNN.sub` | A page's catalogue of sub-pages, with validators and titles |
+| `NNN/SSSS.t42`, `NNN/SSSS.tti` | One sub-page, in a folder named for its page, at the path of its address |
+| `NNN/P.sub` | Part `P` of a page's list of sub-pages, 64 rows, with validators and titles |
 | `push` | The live connection, a WebSocket |
 
-[DOC-2038](../PROTOCOL.html#DOC-2038) and [DOC-2039](../PROTOCOL.html#DOC-2039) propose `NNN/SSSS.t42`, `NNN/P.sub`, `M.pag` and `NNN.ep1`. **Those names are not built**; the code and [DOC-1909](../PROTOCOL.html#DOC-1909) use the table above.
+[DOC-2034](../PROTOCOL.html#DOC-2034) and [DOC-2039](../PROTOCOL.html#DOC-2039) propose `M.pag` and `NNN.ep1`. **Those names are not built**; the code and [DOC-1909](../PROTOCOL.html#DOC-1909) use the table above.
 
 Digits are capitals, with no other spelling. A reader tries `NNN.tti`, then `NNN.t42`.
 
@@ -1293,7 +1293,7 @@ A live channel has no `contents.txt`: its program gives an index instead ([secti
 
 Rules a programmer needs:
 
-- **Spelling.** Page digits become capitals, a final slash after a place goes, and `302.tti` becomes `302`, `302-0002.t42` becomes `302/0002`. Queries are not changed.
+- **Spelling.** Page digits become capitals, a final slash after a place goes, and `302.tti` becomes `302`, `302/0002.t42` becomes `302/0002`. Queries are not changed.
 - **Refused:** a fragment on an `http` or `https` address, a place the map does not list (`30`, `G02`, `902`, `302/2`, `302/3F7F`), and a query after `contents` or `wall`.
 - **A last segment** that is a page number, `contents` or `wall` belongs to the channel above it, so no channel can be a folder of those names.
 - **The whole address** is at most 8,000 octets.
@@ -1676,7 +1676,7 @@ A phone's text goes as raw text, and its named keys as their functional codes, w
 
 ## 22. Other additions
 
-**Sub-pages at the standard's maximum.** 8,190 a page, each addressable, with lists sent only when needed. A channel's lists are SUBPAGES records on a live channel, and `NNN.sub` with `NNN-SSSS.t42` on a static one.
+**Sub-pages at the standard's maximum.** 8,190 a page, each addressable, with lists sent only when needed. A channel's lists are SUBPAGES records on a live channel, and `NNN/P.sub` with `NNN/SSSS.t42` on a static one.
 
 **Page titles.** A sub-page's title is what its publisher gave it: `DE` on the first sub-page, or a program's `title`. Failing that, it is row 1's alphanumeric text, trimmed to 40 characters. Row 0 is never used.
 
