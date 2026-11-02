@@ -167,6 +167,7 @@ Decisions are rdm records. Each repository's series stays valid as original IDs,
 - **Oracles** run as separate programs (`tests/oracles/`).
 - **The engine** also keeps line coverage of its core at 90 % or more, size and symbol budgets for the microcontroller builds (`cargo xtask size`), and each crate's build with no optional area and with each area alone (`cargo xtask features`, decision E.61).
 - **Platform behaviour** that cannot run unattended is an ignored test run by hand, and its result is recorded with the date.
+- **A test that cannot run says so** (`gates.md`). What it needs and does not have, such as the corpus or a running relay, makes it an ignored test whose reason names what would make it run, never an early return that reports `ok`; asked for without it, it fails.
 
 ## 9. Gates
 
@@ -302,9 +303,8 @@ Where the sources disagreed, this document chose as follows. Each is open to the
 Not yet done in the repositories; each is a change of its own.
 
 **Engine**
-1. `scripts/check.sh`: refuse unstaged changes in what the commit gate checks; fail instead of SKIPPED; fail when `NEOTELETEXT_REMOTE` is unset in the full gate; check lockfiles with `--locked`; check that the gate changed nothing committed.
+1. `scripts/check.sh`: refuse unstaged changes in what the commit gate checks; fail when `NEOTELETEXT_REMOTE` is unset in the full gate; check lockfiles with `--locked`; check that the gate changed nothing committed.
 2. `.githooks/pre-push`: run the full gate on a push to `main`.
-3. `scripts/tools.sh`: install cargo-deny, cargo-machete, cargo-fuzz, cargo-llvm-cov and the dated nightly at exact versions, as the browser's does.
 4. Workspace lints: add `allow_attributes_without_reason`, `dbg_macro`, `todo` and `unimplemented`; give every crate root that reads outside input the core's no-panic list, checked identical by `scripts/check.sh`; pin the application crates' own dependencies exactly.
 5. Requirements: reword "continuous integration" to "the full gate"; give withdrawn requirements "Withdrawn:" titles where they lack one (area TST, SEC); REQ-GEN-017 to require the owner's approval for every library; correct "clippy's disallowed lists" to `check-io`.
 6. `CLAUDE.md`: keep what is particular to the engine and point here; close `TECH-DEBT.md`'s item asking for one development-process document.

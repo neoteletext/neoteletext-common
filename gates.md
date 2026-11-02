@@ -26,7 +26,8 @@ Every neoteletext repository works this way (the owner's instruction of 29 Octob
 
 - **Each gate says its cost first:** its last pass's time and its three slowest steps, then each step's time as it ends.
 - **Nothing runs twice on the same code:** a pass records what it passed on, keyed on the paths the gates read, and a higher tier skips a lower one already passed there; a change to a document alone runs no gate again.
-- **Nothing is skipped silently:** a missing tool or an unreachable host fails the gate.
+- **Nothing is skipped silently:** a step that cannot run fails the gate and says what it lacks and how to get it, through `need_tool`, `need_host` and `need_host_tool` in `gate.sh`; a step never asks whether its tool is there and goes on without it. A tool a repository pins is installed by its `scripts/tools.sh` into its ignored `tools/`, and the full gate refuses a missing one, or another version, before anything long starts. The commit gate fails a check script that can report a step skipped.
+- **A test that cannot run says so:** it is marked ignored with a reason naming what it needs, so that a run counts it as ignored and not as passed, and asked for without what it needs it fails. It never returns early and reports `ok`. A gate prints the ignored tests with their reasons, because a pass says nothing of them.
 
 ## Where the gates live
 

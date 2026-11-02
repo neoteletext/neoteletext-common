@@ -3,6 +3,11 @@
 # refuse it refuses, and what it must let through it does. GATE_UNDER_TEST
 # names another copy of gate.sh, to see a test fail on an older one.
 set -euo pipefail
+# A hook in a linked worktree inherits GIT_DIR and its neighbours, which
+# override -C: every throwaway repository below would then be the real one,
+# and git init and git config would rewrite its configuration.
+# shellcheck disable=SC2046 # one name a word
+unset $(git rev-parse --local-env-vars)
 gates="$(cd "$(dirname "$0")" && pwd)"
 gate="${GATE_UNDER_TEST:-$gates/gate.sh}"
 work="$(mktemp -d)"
@@ -114,6 +119,72 @@ copy_from_a_worktree() {
 }
 expect passes "the gate's copy read with GIT_DIR exported" copy_from_a_worktree
 expect refused "an edited copy read with GIT_DIR exported" copy_from_a_worktree "# edited"
+
+# gates.md: a step that cannot run fails the gate, says which tool it lacks
+# and how to install it, and records no pass. The check script runs a gate
+# whose step needs tool $1; a second argument is what it says to install it.
+readonly NO_SUCH_TOOL=neoteletext-test-no-such-tool
+readonly INSTALL_ADVICE="run scripts/tools.sh to install it"
+tool_gate() {
+    local tool="$1" repository="$work/tool-$RANDOM$RANDOM"
+    # An empty gates/gate.sh makes it the original, whose copy is not checked:
+    # this test holds the tool's rule.
+    mkdir -p "$repository/scripts" "$repository/src" "$repository/gates"
+    git -C "$repository" init -q
+    git -C "$repository" config user.email test@example.invalid
+    git -C "$repository" config user.name test
+    cp "$gate" "$repository/scripts/gate.sh"
+    : >"$repository/gates/gate.sh"
+    cat >"$repository/scripts/check.sh" <<CHECK
+#!/usr/bin/env bash
+set -euo pipefail
+cd "\$(dirname "\$0")/.."
+readonly CHECKED_PATHS=(src)
+. scripts/gate.sh
+commit_steps() { :; }
+full_steps() {
+    step "a step that needs a tool"
+    need_tool $tool "$INSTALL_ADVICE"
+}
+gate_main "\$@"
+CHECK
+    chmod +x "$repository/scripts/check.sh"
+    printf 'code\n' >"$repository/src/a"
+    git -C "$repository" add .
+    git -C "$repository" commit -qm first
+    "$repository/scripts/check.sh" full >"$work/tool-output" 2>&1 || return 1
+    [[ -f "$repository/.git/gate-passed-full" ]]
+}
+says_what_is_missing() {
+    grep -qF "$NO_SUCH_TOOL is not installed" "$work/tool-output" && grep -qF "$INSTALL_ADVICE" "$work/tool-output"
+}
+expect passes "a gate whose step has its tool" tool_gate git
+expect refused "a gate whose step lacks its tool" tool_gate "$NO_SUCH_TOOL"
+expect passes "the refusal names the tool and how to install it" says_what_is_missing
+
+# Nothing is skipped silently: a check script that can say a step was skipped
+# is refused, at the commit that brings it. Written in two parts, as above.
+check_script_commit() {
+    local repository="$work/skip-$RANDOM$RANDOM"
+    mkdir -p "$repository/scripts" "$repository/gates"
+    git -C "$repository" init -q
+    cp "$gate" "$repository/scripts/gate.sh"
+    : >"$repository/gates/gate.sh"
+    cat >"$repository/scripts/check.sh" <<CHECK
+#!/usr/bin/env bash
+set -euo pipefail
+cd "\$(dirname "\$0")/.."
+readonly CHECKED_PATHS=(scripts)
+. scripts/gate.sh
+commit_steps() { step "$1"; }
+gate_main "\$@"
+CHECK
+    chmod +x "$repository/scripts/check.sh"
+    git -C "$repository" add scripts
+    "$repository/scripts/check.sh" commit >/dev/null 2>&1
+}
+expect refused "a check script reporting a step skipped" check_script_commit "cargo-deny not installed: $(printf 'SKIP%s' PED)"
+expect passes "a check script that reports none" check_script_commit "cargo-deny"
 
 [[ "$failures" -eq 0 ]] || {
     printf '%d failed\n' "$failures" >&2
