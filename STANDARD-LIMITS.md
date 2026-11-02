@@ -6,7 +6,7 @@ The design for two instructions the owner gave on 26 October 2026:
 
 > "I WANT SUB PAGES TO PASS THE WIRE ONLY WHEN NEEDED"
 
-It is recorded as the engine's decision E.122, the browser's decision 112 and the server's decision 10. The wire it describes is specified in `SERVER.md` (sections 4, 5, 6, 7.3, 11 and 12); this document says why, and lists the work (section 7), with the state of each item (section 7.2 lists the literal limits still in force).
+It is recorded as the engine's decision E.122, the browser's decision 112 and the server's decision 10. The wire it describes is defined by [`PROTOCOL.html`](PROTOCOL.html), whose items `DOC-n` here names; this document says why, and lists the work (section 7), with the state of each item (section 7.2 lists the literal limits still in force).
 
 **State on 29 October 2026:** the engine's items are built (E.130, E.132), and the browser's, except tuning a server's sub-pages (decision 121). The server's items 8 to 15 and the kits' are not started: the server still holds at most 64 sub-pages a page and 800 pages a channel, and sends a page whole to every viewer.
 
@@ -65,7 +65,7 @@ So the 4,096 slots of the browser's decoder store stop being a ceiling on a chan
 1. **One module in the engine,** `neoteletext_core::limits`, `no_std`, with no dependency and no feature gate, holds the standard's maxima as constants, each with its clause, and the function that numbers sub-pages (section 1). It is the only place they are written. It replaces the restatements: `consts::pages::{SUBCODE_MASK, SUBCODE_ANY, FIRST_PAGE, LAST_PAGE}` move into it or are re-exported from it; `viewer::MAX_LISTED_SUBPAGES` is withdrawn; `contents::MAX_PAGES` (800) becomes the number of keyable pages from `limits`, and a separate count covers every content page.
 2. **The server and the browser are Rust and import it,** at the engine commit each pins (the server's requirement 2.5, the browser's requirement 2.4): `teletext-runtime`'s `MOST_SUBPAGES` and `MOST_PAGES`, the browser's `interface_core::controls::{MAX_SUBPAGES, ANY_SUBCODE}` and the protocol's counts all become `limits` names. The browser's interface core, which today avoids the engine and restates the bound with an assertion, depends on `neoteletext-core` with its default features off: the module compiles alone, and nothing of the decoder comes with it.
 3. **The Python and TypeScript kits cannot import Rust.** They get the numbers at run time instead: the server's `start` message to an application carries a `standard` object (the maxima) and a `budgets` object (the server's own), written from the same `limits` constants, and the kits expose them. A kit and a channel never write a limit as a literal; a test of each kit checks that what it uses came from `start`. So the definition is still one piece of code: the kits hold none.
-4. **Clients of other makers** learn the server's budgets from the LIMITS control record (`SERVER.md` section 5.5), which now carries the standard's maxima as well, so a receiver of another maker need not assume them.
+4. **Clients of other makers** were to learn the server's budgets from a LIMITS control record, since withdrawn (DEC-2024 item 1), which would have carried the standard's maxima as well, so a receiver of another maker need not assume them.
 
 The engine and the server and browser pin the engine at commits that may differ; the maxima are the standard's and do not change between commits, which is what makes one definition safe across pins.
 
@@ -74,31 +74,31 @@ The engine and the server and browser pin the engine at commits that may differ;
 
 Today the server holds a page as one frame of all its sub-pages, sends the whole frame to every connection when any sub-page changes and again when a page is opened, and the browser decodes every sub-page to list its title. A page of 8,190 sub-pages would be about 9 MB a change. From now on **the sub-page is the unit** held, versioned, changed and sent, on both wires and in the static layout.
 
-**29 October 2026: a page's sub-pages pass the wire when the page is selected.** The owner's words: "revise the architecture and the requirements to formalise that we send an event saying which page the user has selected and if there are subpages then the server transmits them at that time. also the same event should send if the user has selected a subpage". The receiver sends SELECT, the page and the sub-page each view has selected (`INPUT.md` section 5.4, REQ-INT-140); every connection is sent each page's first sub-page, and a page's sub-pages go only to the connections that select it, at that time and as they change (`SERVER.md` section 6.1). Items 1 to 4 below, the tuning of single sub-pages with a catalogue and titles by range, are withdrawn, never built; items 5 to 11 stand, the browser's list (item 10) drawn from the sub-pages a selected page brings.
+**29 October 2026: a page's sub-pages pass the wire when the page is selected.** The owner's words: "revise the architecture and the requirements to formalise that we send an event saying which page the user has selected and if there are subpages then the server transmits them at that time. also the same event should send if the user has selected a subpage". The receiver sends SELECT, the page and the sub-page each view has selected (DOC-1753, REQ-INT-140); every connection is sent each page's first sub-page, and a page's sub-pages go only to the connections that select it, at that time and as they change (DOC-1950). Items 1 to 4 below, the tuning of single sub-pages with a catalogue and titles by range, are withdrawn, never built; items 5 to 11 stand, the browser's list (item 10) drawn from the sub-pages a selected page brings.
 
-**Downstream, server to browser** (`SERVER.md` sections 5 and 6), *items 1 to 4 withdrawn on 29 October 2026*:
+**Downstream, server to browser** (DOC-1782), *items 1 to 4 withdrawn on 29 October 2026*:
 1. **A page's catalogue:** for each page a client tunes, the server sends a SUBPAGES control record: the page's sub-codes, each with a version number; about 4 bytes a sub-page, 33 KB for 8,190. When a sub-page is added, removed or changed, the client gets the change to the catalogue, not the sub-page.
 2. **Titles by range:** a sub-page's title (the engine's title of its text, made once by the server when the sub-page is published) comes in TITLES records for a range of places the client asks for, so a list of 8,190 sub-pages fetches only the titles scrolled into view.
-3. **Content only when tuned:** TUNE names a page and a sub-page (`SERVER.md` section 5.4, which allowed this already). The client tunes the sub-page shown, the sub-pages either side of it within a budget so that stepping is instant, and for a thumbnail the sub-page the thumbnail shows. Only tuned sub-pages are sent, as page frames; the rest pass the wire when the client tunes them.
+3. **Content only when tuned:** TUNE names a page and a sub-page. The client tunes the sub-page shown, the sub-pages either side of it within a budget so that stepping is instant, and for a thumbnail the sub-page the thumbnail shows. Only tuned sub-pages are sent, as page frames; the rest pass the wire when the client tunes them.
 4. **Rotation** (the engine's REQ-NAV-005, the latest sub-page shown as it arrives): the catalogue's versions say which sub-page changed last; a client showing the latest tunes that one.
 
-**Upstream, application to server** (`SERVER.md` section 7.3, the server's `applications.md`):
+**Upstream, application to server** (the server's `applications.md`):
 5. **`publish` takes sub-pages:** a publication names the sub-pages it puts, by sub-code (`SC` in TTI, four hexadecimal digits) or by place, and a `remove` names those that go; the server keeps the others. A whole page is a publication of all its sub-pages. One message carries a few sub-pages at most, so the 16 MiB line limit is never near.
-6. **The server holds each sub-page once,** with its version, its encoded packets and its title (`SERVER.md` section 6.2).
+6. **The server holds each sub-page once,** with its version, its encoded packets and its title (withdrawn with the page store, DEC-2024 item 7).
 
-**A channel served as files, with no server** (`SERVER.md` section 4; the engine's REQ-WEB-025 and the static layout):
+**A channel served as files, with no server** (DOC-1779; the engine's REQ-WEB-025 and the static layout):
 7. **`NNN.t42` holds a page's first sub-page,** or the page when it has one; **`NNN-SSSS.t42`** holds sub-page SSSS; **`NNN.sub`** lists the sub-codes, their validators and their titles. A page response stays within the 256 KB limit of REQ-WEB-008 at any number of sub-pages, and the browser fetches a sub-page when it needs it, conditionally.
 8. **`index.t42`** carries first sub-pages only, so a channel's opening costs the same at any number of sub-pages.
 
 **In the browser:**
 9. **The decoder's store is a cache** of sub-pages within its budget, least recently used out first (section 2), not a ceiling.
 10. **The sub-page list** (decision 111) is drawn from the catalogue and the titles fetched by range, as a virtual list, so 8,190 rows cost the rows on screen; its counts and places are 16-bit.
-11. **The trusted core decides what is tuned,** from what the interface shows, under a rate limit (`SERVER.md` section 6.1; section 5 below).
+11. **The trusted core decides what is tuned,** from what the interface shows, under a rate limit (DOC-1950; section 5 below).
 
 ## 5. Security
 
 - **Maxima bound nothing; budgets bound everything.** Every reader keeps its limits: a catalogue is at most 8,190 entries, a TITLES record at most a budget of places, a sub-code is checked against the mask, a page number against the reserved numbers.
-- **Tuning by sub-page tells a channel which sub-page is read.** A channel already learns which page is open; the sub-page adds detail of the same kind. The browser's security analysis (section on push and tuning) and `SERVER.md` section 6.1's accepted consequence are amended to say so.
+- **Tuning by sub-page tells a channel which sub-page is read.** A channel already learns which page is open; the sub-page adds detail of the same kind. The browser's security analysis (section on push and tuning) and the protocol's accepted consequence are amended to say so.
 - **Titles are untrusted text,** cut and folded as page titles are (the browser's `MAX_PAGE_TITLE`).
 - **A channel cannot make the browser hold more** than its store budget, whatever it publishes: what is not tuned is not sent.
 
@@ -128,10 +128,10 @@ In order; each is one commit or a few, through each repository's gates. Section 
 
 **The server:**
 8. `teletext-runtime` uses `limits`: `MOST_SUBPAGES` and `MOST_PAGES` withdrawn; a channel may declare every content page. *Not started: `remote.rs` holds 64 and 800 (section 7.2).*
-9. The page store per sub-page (`SERVER.md` section 6.2): held, versioned, titled and encoded per sub-page. *Not started: a page is one frame of all its sub-pages.*
+9. The page store per sub-page (withdrawn, DEC-2024 item 7): held, versioned, titled and encoded per sub-page. *Not started: a page is one frame of all its sub-pages.*
 10. `publish` with sub-pages and `remove`, `start` with `standard` and `budgets` (`applications.md`); validation per sub-page. *Not started.*
-11. *Amended 29 October 2026:* SELECT (`INPUT.md` section 5.4, REQ-INT-140), its reader in the engine's `neoteletext-input` and the server's handling of it, and LIMITS with the maxima (`SERVER.md` sections 5.4 and 5.5); fuzzed. TUNE, UNTUNE, SUBPAGES and TITLES are withdrawn. *Not started; its bytes are specified.*
-12. *Amended 29 October 2026:* the sender per selected page: first sub-pages to every connection, a selected page's sub-pages to those that select it (`SERVER.md` sections 6.1 and 6.3). *Not started: every viewer of a page is sent all its sub-pages; measured on 29 October 2026, 3,542,532 bytes in a demo site connection's first 6 s.*
+11. *Amended 29 October 2026:* SELECT (DOC-1753, REQ-INT-140), its reader in the engine's `neoteletext-input` and the server's handling of it, and LIMITS with the maxima, since withdrawn (DEC-2024 item 1); fuzzed. TUNE, UNTUNE, SUBPAGES and TITLES are withdrawn. *Not started; its bytes are specified.*
+12. *Amended 29 October 2026:* the sender per selected page: first sub-pages to every connection, a selected page's sub-pages to those that select it (DOC-1950). *Not started: every viewer of a page is sent all its sub-pages; measured on 29 October 2026, 3,542,532 bytes in a demo site connection's first 6 s.*
 13. The static files: `NNN-SSSS.t42`, `NNN.sub`, `index.t42` of first sub-pages. *Not started.*
 14. The Python kit and the TypeScript kit: limits from `start`, publication by sub-page, a channel's literal limits removed (the Hackaday channel's `MOST_SUBPAGES` and `TEXT_SUBPAGES`); each kit's test that it holds no literal. *Not started. The Python kit holds no literal; the TypeScript kit, which came after this list, holds 64 and 800 (section 7.2).*
 15. Measure: a page of 8,190 sub-pages published, tuned, stepped and changed, with bytes on the wire per action, before and after. *Not started.*
@@ -140,7 +140,7 @@ In order; each is one commit or a few, through each repository's gates. Section 
 16. Re-pin; `interface_core` depends on `neoteletext-core` with no features and names `limits`; `MAX_SUBPAGES` and `ANY_SUBCODE` withdrawn. *Built (decision 121).*
 17. The protocol's sub-page counts and places become 16-bit (`FromDecoder::SubPages`, `SubPageTitles`, `ToInterface::SubPages`, `PageControls`), with round-trip and refusal tests at 8,190 and 8,191. *Built (decision 121).*
 18. The decoder store as a cache of sub-pages (section 2), the fetcher asking for `NNN-SSSS.t42` and `NNN.sub` on static channels. *Built (decision 121).*
-19. *Amended 29 October 2026:* the trusted core sends SELECT for each view's page and sub-page, whatever the keys do, with the rate limit of `SERVER.md` section 20 item 2. *Not started for a push channel; a static channel's sub-pages are fetched from their files (decision 121), which stands.*
+19. *Amended 29 October 2026:* the trusted core sends SELECT for each view's page and sub-page, whatever the keys do, with the rate limit of TODO-2023 item 2. *Not started for a push channel; a static channel's sub-pages are fetched from their files (decision 121), which stands.*
 20. The sub-page list from the catalogue, titles by range, as a virtual list; the page controls' place and count to 8,190. *Built (decision 121), from a catalogue file or the decoder's store; on a push channel the decoder's store holds a selected page's sub-pages, so no server record is needed.*
 21. The security analysis amended (section 5); requirement 22.5 amended; the hostile harness given a channel that publishes 8,190 sub-pages on every page. *Built (decision 121).*
 22. Measure: memory and bytes with that channel open, before and after. *Not recorded.*

@@ -116,7 +116,7 @@ Importers: the browser only, `native/sound/src/audio.rs:34` `neoteletext_audio_m
 
 ### 1.5 `neoteletext-input` (11 files, 3,245 lines, no integration tests)
 
-The input system of `INPUT.md` version 2: the receiver-to-channel stream over varint primitives, the functional key codes and the frozen W3C name table, capabilities and the mode stack, the receiver's session (handshake, filtering by mode, rate limit, input count and acknowledgement), the channel's cursor and control records, held-key release at the channel, and decimal digits of any script. `#![no_std]`, no allocation, no features. The crate root carries the panic deny list (`lib.rs:20-29`). Dependencies: core and audio (`idl`).
+The input system, protocol version 2: the receiver-to-channel stream over varint primitives, the functional key codes and the frozen W3C name table, capabilities and the mode stack, the receiver's session (handshake, filtering by mode, rate limit, input count and acknowledgement), the channel's cursor and control records, held-key release at the channel, and decimal digits of any script. `#![no_std]`, no allocation, no features. The crate root carries the panic deny list (`lib.rs:20-29`). Dependencies: core and audio (`idl`).
 
 | File | Lines |
 |---|---|
