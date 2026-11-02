@@ -4,6 +4,8 @@ neoteletext-browser
 neoteletext-engine
 neoteletext-app-server
 neoteletext-server-channel-demosite
+neoteletext-server-channel-hackaday
+neoteletext-server-channel-home-www.neoteletext.com
 neoteletext-server-channel-uicomponentsdemo
 neoteletext-server-ts-protocol
 neoteletext-server-ts-ui-components

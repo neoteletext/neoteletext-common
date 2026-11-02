@@ -31,5 +31,7 @@ Every neoteletext repository works this way (the owner's instruction of 29 Octob
 ## Where the gates live
 
 - **One copy of the machinery,** in neoteletext-common's `gates/`: `gate.sh` (timing, records, tiers, the Linux host alongside) and the three hooks. Change it there, commit, and run `gates/sync`, which writes `scripts/gate.sh` and `.githooks/` into every repository `gates/repositories` names. Each repository's commit gate fails if its copy differs from neoteletext-common's at the commit the copy names.
+- **No file names a deleted document.** The commit and push gates of every repository fail when a tracked file names a document DEC-2022 deleted: such a mention cites `DOC-n`, an item of `PROTOCOL.html`, instead. A file that must keep one as history, such as a dated review, is named alone in `DELETED_DOCUMENT_HISTORY` in that repository's `scripts/check.sh`.
+- **neoteletext-common has a gate too:** its `scripts/check.sh` runs the original machinery and `gates/test`, with `git config core.hooksPath gates`. Run `gates/test` after any change to the machinery.
 - **Each repository's own steps,** in its `scripts/check.sh`: `CHECKED_PATHS`, `commit_steps`, `push_steps`, `full_steps` and `linux_steps`, then `gate_main`.
 - **The copy to the Linux host compares content** (`rsync --no-times --checksum`): with this machine's times kept, a file edited here before the host's last build looks older than that build, and Cargo reuses the stale crate.

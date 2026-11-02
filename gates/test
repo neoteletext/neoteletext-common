@@ -1,0 +1,118 @@
+#!/usr/bin/env bash
+# The machinery's own test, on throwaway repositories: what the gate must
+# refuse it refuses, and what it must let through it does. GATE_UNDER_TEST
+# names another copy of gate.sh, to see a test fail on an older one.
+set -euo pipefail
+gates="$(cd "$(dirname "$0")" && pwd)"
+gate="${GATE_UNDER_TEST:-$gates/gate.sh}"
+work="$(mktemp -d)"
+trap 'rm -rf "$work"' EXIT
+failures=0
+
+# The names are written in two parts, so that this file does not name them.
+deleted() { printf '%s.md' "$1"; }
+
+# Runs check_deleted_documents in a repository holding $2 at path $1, with
+# any further arguments as DELETED_DOCUMENT_HISTORY. Says whether it passed.
+guard() {
+    local path="$1" text="$2"
+    shift 2
+    local repository="$work/guard-$RANDOM$RANDOM"
+    mkdir -p "$repository/$(dirname "$path")"
+    git -C "$repository" init -q
+    printf '%s\n' "$text" >"$repository/$path"
+    git -C "$repository" add -- "$path"
+    (
+        cd "$repository"
+        DELETED_DOCUMENT_HISTORY=("$@")
+        # shellcheck source=/dev/null
+        . "$gate"
+        check_deleted_documents
+    ) >/dev/null 2>&1
+}
+
+expect() {
+    local want="$1" name="$2"
+    shift 2
+    local got=passes
+    "$@" || got=refused
+    if [[ "$got" == "$want" ]]; then
+        printf 'ok: %s %s\n' "$name" "$want"
+    else
+        printf 'FAILED: %s: wanted %s, got %s\n' "$name" "$want" "$got" >&2
+        failures=$((failures + 1))
+    fi
+}
+
+for stem in INPUT SERVER CHANNEL; do
+    expect refused "a comment naming $stem" guard src/a.rs "// see $(deleted "$stem") section 5.4"
+done
+expect refused "a name at a line's start" guard docs/a.md "$(deleted INPUT) is the protocol"
+expect refused "a name in a path" guard docs/a.md "see neoteletext-common/$(deleted SERVER)"
+expect refused "a name with its dot escaped" guard test/a.ts "/${stem:-CHANNEL}\\.md section 7/"
+expect refused "another file's mention, with one file allowed" guard docs/a.md "$(deleted INPUT)" docs/other.md
+expect passes "a file named as history" guard reviews/old.md "$(deleted INPUT) v2" reviews/old.md
+expect passes "the document that stays" guard docs/a.md "see RETURN-$(deleted CHANNEL) section 2"
+expect passes "another document ending in a name" guard docs/a.md "see MY_$(deleted INPUT)"
+expect passes "a lower-case file" guard docs/a.md "see docs/spec/design/input.md"
+expect passes "a file with no mention" guard src/a.rs "// DOC-1931"
+
+# A document alone is staged, which CHECKED_PATHS does not hold: the commit
+# gate still reads it, and a clean one still commits.
+commit_a_document() {
+    local repository="$work/commit-$RANDOM$RANDOM"
+    mkdir -p "$repository/scripts" "$repository/docs"
+    git -C "$repository" init -q
+    cp "$gate" "$repository/scripts/gate.sh"
+    cat >"$repository/scripts/check.sh" <<'CHECK'
+#!/usr/bin/env bash
+set -euo pipefail
+cd "$(dirname "$0")/.."
+readonly CHECKED_PATHS=(src)
+. scripts/gate.sh
+commit_steps() { :; }
+gate_main "$@"
+CHECK
+    chmod +x "$repository/scripts/check.sh"
+    printf '%s\n' "$1" >"$repository/docs/a.md"
+    git -C "$repository" add docs/a.md
+    NEOTELETEXT_COMMON="$repository" "$repository/scripts/check.sh" commit >/dev/null 2>&1
+}
+expect refused "a document naming one, alone in a commit" commit_a_document "$(deleted SERVER)"
+expect passes "a clean document, alone in a commit" commit_a_document "DOC-1931"
+
+# TODO-1771: from a hook in a linked worktree, whose GIT_DIR git exports, the
+# copy of the gate is still compared with neoteletext-common's.
+copy_from_a_worktree() {
+    local common="$work/common-$RANDOM$RANDOM" repository
+    repository="$common-repository"
+    mkdir -p "$common/gates"
+    git -C "$common" init -q
+    git -C "$common" config user.email test@example.invalid
+    git -C "$common" config user.name test
+    cp "$gate" "$common/gates/gate.sh"
+    printf 'hook\n' | tee "$common/gates/pre-commit" "$common/gates/pre-merge-commit" "$common/gates/pre-push" >/dev/null
+    git -C "$common" add gates
+    git -C "$common" commit -qm first
+    mkdir -p "$repository/scripts" "$repository/.githooks"
+    git -C "$repository" init -q
+    {
+        printf '# Copied\n# neoteletext-common gates at %s\n' "$(git -C "$common" rev-parse HEAD)"
+        cat "$gate"
+    } >"$repository/scripts/gate.sh"
+    cp "$common"/gates/pre-* "$repository/.githooks/"
+    (
+        cd "$repository"
+        export NEOTELETEXT_COMMON="$common" GIT_DIR="$repository/.git"
+        # shellcheck source=/dev/null
+        . scripts/gate.sh
+        check_gate_copy
+    ) >/dev/null 2>&1
+}
+expect passes "the gate's copy read with GIT_DIR exported" copy_from_a_worktree
+
+[[ "$failures" -eq 0 ]] || {
+    printf '%d failed\n' "$failures" >&2
+    exit 1
+}
+printf 'the machinery passes its own test\n'
