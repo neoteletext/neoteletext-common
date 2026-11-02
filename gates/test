@@ -60,6 +60,11 @@ expect passes "a file named as history" guard reviews/old.md "$(deleted INPUT) v
 expect passes "the document that stays" guard docs/a.md "see RETURN-$(deleted CHANNEL) section 2"
 expect passes "another document ending in a name" guard docs/a.md "see MY_$(deleted INPUT)"
 expect passes "a lower-case file" guard docs/a.md "see docs/spec/design/input.md"
+for stem in gates rdm; do
+    expect refused "a mention of the folded-in $stem document" guard README.md "see ~/devel/neoteletext-common/$(deleted "$stem")"
+done
+expect passes "the gates folder" guard docs/a.md "run neoteletext-common/gates/sync"
+expect passes "a longer name ending in rdm" guard docs/a.md "see notes-$(deleted rdm)"
 expect passes "a file with no mention" guard src/a.rs "// DOC-1931"
 
 # A document alone is staged, which CHECKED_PATHS does not hold: the commit
@@ -120,7 +125,7 @@ copy_from_a_worktree() {
 expect passes "the gate's copy read with GIT_DIR exported" copy_from_a_worktree
 expect refused "an edited copy read with GIT_DIR exported" copy_from_a_worktree "# edited"
 
-# gates.md: a step that cannot run fails the gate, says which tool it lacks
+# DEVELOPMENT.md section 9.2: a step that cannot run fails the gate, says which tool it lacks
 # and how to install it, and records no pass. The check script runs a gate
 # whose step needs tool $1; a second argument is what it says to install it.
 readonly NO_SUCH_TOOL=neoteletext-test-no-such-tool

@@ -1,22 +1,27 @@
-# The neoteletext development process
+# How NeoTeletext is developed
 
-One process for the two neoteletext repositories:
+**The one document of how we work**, for every NeoTeletext repository (the owner's instruction of 3 November 2026: "we need a SINGLE document that unifies how we work, and rdm is the baseline"). **rdm is the baseline:** every requirement, decision, checklist, term, source, documentation item and piece of work owed is an rdm record, and nothing else tracks work (section 3). Each repository's `CLAUDE.md` imports this document and adds only what is particular to that repository.
 
-- **`neoteletext-engine`** (`~/devel/neoteletext-engine`, `crowdwave/neoteletext-engine`): the teletext engine, its libraries and the `neottx` program.
-- **`neoteletext-browser`** (`~/devel/neoteletext-browser`, `crowdwave/neoteletext-browser`): NeoTeletext, built on the engine at a pinned commit.
+The repositories, each in `~/devel/`:
+- **`neoteletext-engine`**: the teletext engine, its libraries and the `neottx` program;
+- **`neoteletext-browser`**: NeoTeletext, the browser, built on the engine at a pinned commit;
+- **`neoteletext-app-server`**: the NeoTeletext server;
+- **`neoteletext-server-ts-protocol`** and **`neoteletext-server-ts-ui-components`**: the TypeScript protocol kit and component library channels are written with;
+- **`neoteletext-server-channels`**, **`neoteletext-server-channel-demosite`**, **`neoteletext-server-channel-hackaday`**, **`neoteletext-server-channel-home-www.neoteletext.com`** and **`neoteletext-server-channel-uicomponentsdemo`**: the channels;
+- **`neoteletext-common`**: this document, the gate machinery every repository shares (section 9), the protocol document generated from rdm, and the guides.
 
-Written on 21 October 2026 by merging the owner's global instructions (`~/.claude/CLAUDE.md`), the engine's `CLAUDE.md`, `README.md`, `IMPLEMENTATION-LOG.md`, `TECH-DEBT.md`, `LICENSING.md`, `docs/spec/` and gate scripts, and the browser's `docs/requirements.md`, `docs/architecture.md`, `docs/licensing.md` and gate scripts. Where they disagreed, the rule chosen and its reason are in appendix A; appendix B lists what each repository still has to change to follow this document.
+It replaces the two shorter documents on the gates and on working with rdm, folded in here on 3 November 2026 (sections 3 and 9). This document was first written on 21 October 2026 by merging the owner's global instructions (`~/.claude/CLAUDE.md`), the engine's `CLAUDE.md`, `README.md`, `IMPLEMENTATION-LOG.md`, `TECH-DEBT.md`, `LICENSING.md`, `docs/spec/` and gate scripts, and the browser's `docs/requirements.md`, `docs/architecture.md`, `docs/licensing.md` and gate scripts. Where they disagreed, the rule chosen and its reason are in appendix A; appendix B lists what each repository still has to change to follow this document.
 
 ---
 
 ## 1. Authority
 
-1. **The owner's global instructions** (`~/.claude/CLAUDE.md`) apply to both repositories. This document adds to them; it departs from them only where it says so, with the owner's decision cited.
-2. **This document** is the development process. A repository's `CLAUDE.md` says what is particular to that repository and points here for the rest; where a repository's own text and this document disagree, this document holds until appendix B's change is made there.
+1. **The owner's global instructions** (`~/.claude/CLAUDE.md`) apply to every repository. This document adds to them; it departs from them only where it says so, with the owner's decision cited.
+2. **This document** is the development process, and the only one: no other file describes how we work. A repository's `CLAUDE.md` imports it (`@~/devel/neoteletext-common/DEVELOPMENT.md`) and says only what is particular to that repository; where a repository's own text and this document disagree, this document holds until the repository's text is corrected.
 3. **The standard, datasheet or specification is the source of truth** for behaviour. Read it before writing code against it and cite the clause in comments (`// EN 300 706 clause 9.3.1: ...`). A datasheet wins over a web snippet. Read PDFs with page ranges, not through a text extractor that mangles tables. Standards and datasheets live in `~/devel/teletext-reference/`, never in either repository.
-4. **Each repository's requirements are its only normative text, and they are kept in rdm** (since 30 October 2026, rdm decision DEC-1389), with the decisions, the checklists and the work owed. rdm is reached through its MCP tools; no repository keeps a file of requirements, decisions or to-dos, and a hook refuses edits to the files that used to. Decisions record choices and their reasons; design documents explain; neither overrides a requirement. Every record is fully detailed, and every interaction with rdm puts the relevant links in place (`rdm.md`, the owner's instructions of 30 October 2026).
-5. **Security overrides every other requirement** in both repositories (the engine's area SEC and decision E.32; the browser's decision 4 and requirement 1.2). A conflict is recorded as a decision and the other requirement is amended. No option may switch security off.
-6. **Each fact has one home.** Link rather than restate. Process lives here; behaviour lives in the requirements; choices in the decisions; explanation in design documents; where code lives in the engine's `ARCHITECTURE.md` and the browser's `docs/architecture.md`.
+4. **rdm is the baseline.** Each repository's requirements are its only normative text, and they are kept in rdm (since 30 October 2026, rdm decision DEC-1389), with the decisions, the checklists, the terms, the sources, the protocol's documentation items and the work owed. rdm is reached through its MCP tools; no repository keeps a file of requirements, decisions, design or to-dos, and a hook refuses edits to the files that used to. Decisions record choices, their reasons and their evidence; neither a decision nor a document overrides a requirement. Every record is fully detailed (section 3.5), and every interaction with rdm puts the relevant links in place (section 3.6).
+5. **Security overrides every other requirement** in every repository (the engine's area SEC and decision E.32; the browser's decision 4 and requirement 1.2). A conflict is recorded as a decision and the other requirement is amended. No option may switch security off.
+6. **Each fact has one home.** Link rather than restate. Process lives here; behaviour lives in the requirements; choices, their reasons and their evidence in the decisions; the protocol in its documentation items (DEC-2022); where code lives in the engine's `ARCHITECTURE.md` and the browser's `docs/architecture.md`. A design that grows in a document while it is being shaped is carried into rdm and the document deleted, as the engine's language design was on 3 November 2026.
 
 ## 2. How work proceeds
 
@@ -33,7 +38,7 @@ Written on 21 October 2026 by merging the owner's global instructions (`~/.claud
 
 ### 2.2 Two modes: rapid iteration, then integration
 
-The owner shapes behaviour by asking for changes and looking at the result (the owner's instruction of 13 October 2026). Work runs in two modes, in both repositories.
+The owner shapes behaviour by asking for changes and looking at the result (the owner's instruction of 13 October 2026). Work runs in two modes, in every repository.
 
 **Rapid iteration** is the default while behaviour is being shaped.
 - Make the change, rebuild with the fast profile and show the result: in the engine `cargo build --profile iterate -p neoteletext-cli`, then `target/iterate/neottx`; in the browser `scripts/try.sh` (Clippy on every save) or `scripts/try.sh <crate> [filter]`, and the program itself. Check the output, then tell the owner it is ready to look at.
@@ -47,14 +52,14 @@ The owner shapes behaviour by asking for changes and looking at the result (the 
 3. update the user guide, the architecture document and the other documents;
 4. add the implementation log row, if the work met a question without the owner (section 3.3);
 5. set each requirement's implementation status in rdm, on the commit that meets it;
-6. commit through the gates in small commits that reference their issues (section 10), and mark each to-do done in rdm as it is done.
+6. commit through the gates in small commits that name the rdm records they serve (section 10), and mark each to-do done in rdm, naming the commit, as it is done.
 
 Behaviour may be tried before it is recorded, but none is committed without its decision and requirements.
 
 ### 2.3 A feature's life
 
-A feature large enough to need design goes through these steps; both repositories have done so (the browser's hyperlinks and interaction work, the engine's areas AUD and INT).
-1. **A proposal document** and, for anything that reads outside input or adds an input or output, **its own security analysis**, whose findings are applied to the proposal.
+A feature large enough to need design goes through these steps; the engine and the browser have done so (the browser's hyperlinks and interaction work, the engine's areas AUD and INT).
+1. **A proposal** (in rdm, as a decision waiting for the owner, or a document while it is shaped) and, for anything that reads outside input or adds an input or output, **its own security analysis**, whose findings are applied to the proposal.
 2. **An adoption decision** by the owner, which adds the requirements.
 3. **The build.**
 4. **"What building changed"**: a section of the proposal listing every departure from it, and a decision recording the build that names the departures for the owner to confirm.
@@ -64,20 +69,21 @@ A feature large enough to need design goes through these steps; both repositorie
 
 When the owner asks for work to continue without questions, decisions are taken and recorded in rdm as usual, created with `needs_confirmation`, which lists them for the owner's review; only the owner's own words confirm one. An implementation log row records each question met.
 
-## 3. Tracking work
+## 3. Tracking work: rdm
 
-### 3.1 GitHub issues
+### 3.1 rdm is the one record of work
 
-Both repositories track work in GitHub issues on their own repository (`crowdwave/neoteletext-engine`, `crowdwave/neoteletext-browser`). An issue links to the requirement or decision it serves rather than restating it.
-- **Work starts from an issue.** If none exists, open one. During rapid iteration one issue per feature is enough; small changes are rdm to-dos.
-- **Commits reference it**: `Refs #123` for progress, `Closes #123` on the commit that finishes it (section 10.1).
-- **Log what you find.** A bug, a gap or a decision for the owner gets an issue, not just a mention in a reply. Decisions for the owner carry the `decision` label.
-- **Keep the milestones true.** Close finished work with the commit that did it; close work the design has overtaken as "not planned" with the reason. Delete an issue only with the owner's agreement.
-- Work that concerns the other repository is moved there.
+Work is tracked in rdm and nowhere else (the owner, 3 November 2026: "rdm is the baseline"). GitHub issues are not used: no new issue is opened, and a commit does not reference one.
+- **Work starts from a record.** Before substantive work, `search` rdm for the requirements and decisions that apply, and follow them. Work that has no record gets a to-do first.
+- **Log what you find.** A bug, a gap, a loose end or a decision for the owner becomes an rdm record (a to-do, or a decision with `needs_confirmation`), never just a mention in a reply.
+- **What waits on the owner** is listed by rdm: decisions with `needs_confirmation`, and to-dos created with `for_user` (`waiting_on_user`, and the summary at the start of each session). A task only the owner can do says so in its title.
+- **Commits name their records** (`REQ-n`, `DEC-n`, `TODO-n`) in the subject or body, and rdm links each commit to the records it names (section 10.1).
+- **Work that concerns another repository** is recorded in that repository, with a link from the record that found it.
+- **Keep the record true.** A to-do is marked done with the commit that did it, or cancelled with the reason, never deleted; rdm lists to-dos whose requirement was implemented since, to be checked and closed.
 
 ### 3.2 Work owed
 
-Each item is an rdm to-do: what is owed and why, linked to what it concerns. It is marked done (with the commit) or cancelled (with the reason), never deleted; one that needs the owner gets an issue, and a task only the owner can do says so in its title.
+Each item is an rdm to-do. A to-do names the decision and requirements it serves; says what exists today and where (files, functions, behaviour); explains each step to be done in sentences, with the file or component it changes and why; gives the order and what it depends on or blocks; says how the work will be checked; and says what "done" means. Nothing deferred may exist only in a reply.
 
 ### 3.3 The implementation log
 
@@ -87,13 +93,43 @@ Each item is an rdm to-do: what is owed and why, linked to what it concerns. It 
 
 Lead with the result. Report a failure as a failure, with its output; never claim a check passed that was not run. Name uncertainty as a fact about the evidence ("untested on hardware").
 
+### 3.5 Every record is fully detailed
+
+The owner, 30 October 2026: "ensure todos and REQUIREMENTS are DETAILED NEVER ABBREVIATED NEVER TOO CONCISE, must FULLY EXPLAIN WHAT NEEDS TO BE DONE". A record is read later by someone, or by a session, that never saw the conversation it came from, so it must stand alone:
+- **Full narrative sentences**, every term spelled out the first time it is used. No terse fragments, no abbreviations, no "as above", no "see the chat", and no pointer to a file for what the record itself should say.
+- **A requirement** states the behaviour in full (what must happen, in which part, under which conditions, with every bound named and its source cited), why it is required (the owner's words where they are the reason), where it comes from (the decision that made it), how it will be verified, and its state (section 4).
+- **A to-do** is as section 3.2 says.
+- **A decision** says who decided and when, what was chosen in numbered items, why, the alternatives considered, what it withdraws or changes, and when to reconsider (section 5).
+- **A revision** is a complete new version, never a patch that only makes sense beside the old one, with its reason.
+- **A record that comes from the owner's words** quotes them (`origin_quote`).
+
+### 3.6 rdm is a graph: every change is followed by its links
+
+The owner, 30 October 2026: "always treat every interaction with RDM as a GRAPH database, be careful to put in place RELEVANT LINKS with EVERY interaction", and "AFTER CLAUDE HAS MADE ONE CHANGE OR A GROUP OF CHANGES, IT MUST - THIS IS REQUIRED - THEN DO A SECOND PHASE WHICH IS TO ESTABLISH LINKS OF THE CHANGED AND NEW INFORMATION … WE DO NOT EVER WANT LINKS THAT DO NOT ADD MEANINGFUL RELATIONSHIPS".
+1. **The change:** create, revise or change the status of the records.
+2. **The linking phase, always:** for every record just created or changed, establish its links, then report them. Making no link is the right choice when none would add meaning; say so rather than add a link for its own sake.
+
+In the linking phase:
+- **Search first** for the records the new one concerns, in its repository and in every other (`search` with `repository: "all"`), and link them.
+- **The right kind of link:** `decides` from a decision to each requirement it makes or amends; `depends_on` from a record to what must exist or be done first, and from a requirement to the source it rests on (with the clause, table and page in the link's reason); `supersedes` from a new record to the one it replaces, whose status is set to superseded; `documents` from a documentation item to the requirement it states; `related` for everything else a reader of one should know about the other.
+- **Every to-do links** to the decision and requirements it implements, and to the to-dos that must come before it. **Every requirement** is linked from the decision that made it and to what it builds on. **Every decision** links to the decisions it amends, supersedes or relies on, and decides its requirements.
+- **A revision checks its links:** what the new version cites is linked, and links the change makes wrong are removed or replaced. Records a revision marks as needing a recheck are reviewed: revised to match, or reported as still holding.
+- **Across repositories:** a record that concerns another repository's record is linked to it.
+
+A `PostToolUse` hook in `~/.claude/settings.json` (`~/.claude/hooks/rdm-link-reminder.sh`) reminds the session of the linking phase after every rdm write.
+
+### 3.7 Sources and the protocol's documentation items
+
+- **A standard or other document that records rest on** is an rdm source (`create_record` type `source`): its publisher's address, its SHA-256, size and pages, pinned so the exact file can be fetched and checked. rdm holds its facts, clause numbers and positions only; the file itself stays in `~/devel/teletext-reference/`, never in a repository.
+- **The protocol is defined only by rdm's documentation items** (DEC-2022), from which `PROTOCOL.html` is generated (`README.md`); guides teach and point to the items. `DOC-n` anywhere names the item at `PROTOCOL.html#DOC-n`.
+
 ## 4. Requirements
 
-Requirements are rdm records. Each repository's numbering stays valid, since numbers are cited everywhere: the engine's `REQ-<AREA>-<NNN>`, the browser's and the server's "Requirement <section>.<n>" resolve in rdm as the records' original IDs. A new requirement takes rdm's ID (`REQ-n`); in the engine its title starts with its area code (`[INP] …`), in the browser and the server with its section.
+Requirements are rdm records (section 3). Each repository's numbering stays valid, since numbers are cited everywhere: the engine's `REQ-<AREA>-<NNN>`, the browser's and the server's "Requirement <section>.<n>" resolve in rdm as the records' original IDs. A new requirement takes rdm's ID (`REQ-n`); in the engine its title starts with its area code (`[INP] …`), in the browser and the server with its section.
 
 - **Numbers are permanent.** They are never reused; a requirement is never deleted.
 - **Modal verbs.** "Shall" or "must" is mandatory; "should" is expected unless a recorded reason says otherwise; "may" is an option.
-- **Every requirement has a reason and a verification.** Verification is a test (automated), a check (automated, in the check script), an inspection or a review (recorded by a person), or a demonstration.
+- **Every requirement is written in full** (section 3.5) and **has a reason and a verification.** Verification is a test (automated), a check (automated, in the check script), an inspection or a review (recorded by a person), or a demonstration.
 - **Source and state.** A requirement links to the decision that made it (`decides`). Whether it is met is rdm's implementation status, per branch, set on the commit that meets it; tests that name the requirement are linked to it, with their results (the engine's REQ-DOC-003).
 - **Phases.** In the engine a Phase 2 requirement says so in its body and is listed in decision F.0.1; Phase 1 must not depend on Phase 2, and a Phase 2 feature's tests come with it.
 - **Writing.** Full narrative sentences; terms spelled out (the engine's glossary is `docs/spec/glossary.md`, the browser's `docs/architecture.md` section 17); the standard cited by clause or table.
@@ -108,10 +144,10 @@ Requirements are rdm records. Each repository's numbering stays valid, since num
 
 ## 5. Decisions
 
-Decisions are rdm records. Each repository's series stays valid as original IDs, since both are cited across the code and the documents: the engine's **E.n**, the browser's and the server's **Decision n**. A decision of one repository cited in another names its repository: "the engine's decision E.95", "NeoTeletext's decision 46". A new decision takes rdm's ID (`DEC-n`). Feature documents may number their own decisions ("`hyperlinks.md` decision 7"); implementation log rows are "rows", not decisions.
+Decisions are rdm records (section 3). Each repository's series stays valid as original IDs, since both are cited across the code and the documents: the engine's **E.n**, the browser's and the server's **Decision n**. A decision of one repository cited in another names its repository: "the engine's decision E.95", "NeoTeletext's decision 46". A new decision takes rdm's ID (`DEC-n`). Feature documents may number their own decisions ("`hyperlinks.md` decision 7"); implementation log rows are "rows", not decisions.
 
 - **Record before committing behaviour.** Behaviour the standard or the design leaves open is recorded in rdm, or the decision revised, before the change is committed (the engine's REQ-DOC-004). During iteration it is an rdm to-do, decided at integration.
-- **A decision says who decided and when**, what was chosen, in numbered items where there are several, and its reason. rdm records who made each version and the conversation it came from.
+- **A decision says who decided and when**, what was chosen, in numbered items where there are several, its reason, the alternatives considered, what it withdraws or changes, and when to reconsider (section 3.5). rdm records who made each version and the conversation it came from.
 - **A decision taken without the owner needs the owner's confirmation:** it is created with `needs_confirmation`, and only the owner's words confirm it (`set_status` confirmation `confirmed`, quoting them).
 - **A dependency of a microcontroller crate** of the engine needs a decision (section 7).
 - **Decisions keep their history.** They are never deleted or renumbered.
@@ -167,13 +203,43 @@ Decisions are rdm records. Each repository's series stays valid as original IDs,
 - **Oracles** run as separate programs (`tests/oracles/`).
 - **The engine** also keeps line coverage of its core at 90 % or more, size and symbol budgets for the microcontroller builds (`cargo xtask size`), and each crate's build with no optional area and with each area alone (`cargo xtask features`, decision E.61).
 - **Platform behaviour** that cannot run unattended is an ignored test run by hand, and its result is recorded with the date.
-- **A test that cannot run says so** (`gates.md`). What it needs and does not have, such as the corpus or a running relay, makes it an ignored test whose reason names what would make it run, never an early return that reports `ok`; asked for without it, it fails.
+- **A test that cannot run says so** (section 9.2). What it needs and does not have, such as the corpus or a running relay, makes it an ignored test whose reason names what would make it run, never an early return that reports `ok`; asked for without it, it fails.
 
-## 9. Gates
+## 9. Gates and the work branch
 
-There is no continuous integration; the gates are local (the owner's instruction). How the gates work, their tiers, the day-to-day routine and where their one shared copy lives are in **`gates.md`**, beside this file; it is the only description, and each repository's `CLAUDE.md` imports it.
+There is no continuous integration; the gates are local (the owner's instruction). Every repository works this way (the owner's instruction of 29 October 2026: every process "as fast as possible", and "I need to know when I am committing to a long integration step").
 
-- **Measured costs.** The engine's commit gate: 3 seconds warm (29 October 2026; over ten minutes before the tiers). The full gates: about an hour each before the tiers; each gate now prints its own last measured time.
+### 9.1 Day to day, nothing long starts
+
+1. Work on `livedevelopment`.
+2. Build and run as often as you like: building or running a program runs no gate.
+3. Commit whenever a step compiles: the commit gate checks only that.
+4. Push `livedevelopment` whenever the work should be on GitHub: the push gate runs the tests, and nothing already passed on the same code.
+5. Push to `main` only to integrate, when the owner says: that is the one long step. It prints its last measured time before it starts, so Ctrl-C stops it if now is not the time.
+
+### 9.2 The tiers
+
+`scripts/check.sh commit | push | full`; the git hooks (`git config core.hooksPath .githooks`) run them. Never bypass a hook (`--no-verify`).
+
+| Tier | Hook | What it adds |
+|---|---|---|
+| `commit` | `pre-commit`, every commit | The code compiles clean: formatting, Clippy or the type check, the cheap text checks. It checks what is staged and refuses while a part it reads has unstaged or untracked changes. |
+| `push` | `pre-push` of any branch but `main` | The remaining feature shapes and the tests, on a clean tree at the commit pushed. |
+| `full` | `pre-push` to `main` | Everything else: release and feature-off tests, fuzzing, licences, unused dependencies, the Linux host's steps running alongside. It fails if running it changed a committed file. |
+
+- **Each gate says its cost first:** its last pass's time and its three slowest steps, then each step's time as it ends.
+- **Nothing runs twice on the same code:** a pass records what it passed on, keyed on the paths the gates read, and a higher tier skips a lower one already passed there; a change to a document alone runs no gate again.
+- **Nothing is skipped silently:** a step that cannot run fails the gate and says what it lacks and how to get it, through `need_tool`, `need_host` and `need_host_tool` in `gate.sh`; a step never asks whether its tool is there and goes on without it. A tool a repository pins is installed by its `scripts/tools.sh` into its ignored `tools/`, and the full gate refuses a missing one, or another version, before anything long starts. The commit gate fails a check script that can report a step skipped.
+- **A test that cannot run says so:** it is marked ignored with a reason naming what it needs, so that a run counts it as ignored and not as passed, and asked for without what it needs it fails. It never returns early and reports `ok`. A gate prints the ignored tests with their reasons, because a pass says nothing of them.
+- **Measured costs.** The engine's commit gate: 3 seconds warm (29 October 2026; over ten minutes before the tiers), 9 seconds on 3 November 2026. The full gates: about an hour each before the tiers; each gate prints its own last measured time.
+
+### 9.3 Where the gates live
+
+- **One copy of the machinery,** in neoteletext-common's `gates/`: `gate.sh` (timing, records, tiers, the Linux host alongside) and the three hooks. Change it there, commit, and run `gates/sync`, which writes `scripts/gate.sh` and `.githooks/` into every repository `gates/repositories` names. Each repository's commit gate fails if its copy differs from neoteletext-common's at the commit the copy names.
+- **No file names a deleted document.** The commit and push gates of every repository fail when a tracked file names a document that was deleted because rdm now holds it: the protocol documents DEC-2022 deleted, and the gate and rdm documents folded into this document on 3 November 2026. Such a mention cites the rdm record, the `DOC-n` item of `PROTOCOL.html`, or a section of this document instead. A file that must keep one as history, such as a dated review, is named alone in `DELETED_DOCUMENT_HISTORY` in that repository's `scripts/check.sh`.
+- **neoteletext-common has a gate too:** its `scripts/check.sh` runs the original machinery and `gates/test`, with `git config core.hooksPath gates`. Run `gates/test` after any change to the machinery.
+- **Each repository's own steps,** in its `scripts/check.sh`: `CHECKED_PATHS`, `commit_steps`, `push_steps`, `full_steps` and `linux_steps`, then `gate_main`.
+- **The copy to the Linux host compares content** (`rsync --no-times --checksum`): with this machine's times kept, a file edited here before the host's last build looks older than that build, and Cargo reuses the stale crate.
 
 ## 10. Commits, branches and pushing
 
@@ -182,13 +248,13 @@ There is no continuous integration; the gates are local (the owner's instruction
 - **Commit when asked**, or when the request clearly includes it.
 - **One concept per commit.** A fix, a refactor and a document change are separate commits.
 - **The subject** is an imperative sentence, sentence case, no full stop, naming the decision where there is one: "Stop drawing the Level 3.5 font styles; underline stays (E.96)".
-- **The body** says why, then what changed, with measured numbers, the decision and requirement numbers, regenerated golden files and their raised format versions, and that the new test fails on the old code. It ends with the issue: `Refs #123` or `Closes #123`.
+- **The body** says why, then what changed, with measured numbers, the rdm records it serves (`REQ-n`, `DEC-n`, `TODO-n`, or a record's original ID), regenerated golden files and their raised format versions, and that the new test fails on the old code. rdm links the commit to every record it names. It references no GitHub issue (section 3.1).
 - **Never credit an AI** in a commit, a pull request, a comment or a document: no `Co-Authored-By` trailer, no "Generated with" line, no session link. Write as the human author.
 - **Never commit secrets** (they live in `~/devel/credentials/*.env`), `.env` files, captures or scratch files.
 
 ### 10.2 Branches and pushing
 
-- **Both repositories work on `livedevelopment`** (the owner's name, 29 October 2026; the engine's was `implementation`), pushed through the push gate. `main` moves only by the full gate, when the owner says to merge. Feature branches merge into `livedevelopment` once their work is committed. A backup branch is made before a destructive change (`backup-before-drcs-removal`).
+- **Every repository works on `livedevelopment`** (the owner's name, 29 October 2026; the engine's was `implementation`), pushed through the push gate. `main` moves only by the full gate, when the owner says to merge. Feature branches merge into `livedevelopment` once their work is committed. A backup branch is made before a destructive change (`backup-before-drcs-removal`).
 - **Push when the owner says.**
 - **Moving a branch:** `git branch <new> <sha>`, and `git reset --soft` if needed; never `reset --hard`, `clean -fd`, `checkout -- <path>` or `filter-repo` on a dirty tree. Run `git status` first and stash everything, including files that seem not to be yours.
 - **Another session may be working in the same repository.** If HEAD or files change unexpectedly, stop and report; don't fight it.
@@ -258,20 +324,22 @@ The engine's targets are its REQ-GEN-015: Arm Cortex-M0 to M33 and Arm Linux; RI
 
 | Document | Engine | Browser |
 |---|---|---|
-| Repository guidance, pointing here | `CLAUDE.md` | `CLAUDE.md` |
-| Requirements, decisions, checklists, owed work, state and traceability | rdm | rdm |
+| Repository guidance, importing this document | `CLAUDE.md` | `CLAUDE.md` |
+| Requirements, decisions, checklists, owed work, sources, state and traceability | rdm | rdm |
 | Where code lives | `ARCHITECTURE.md` | `docs/architecture.md` |
-| Design and explanation | `docs/spec/design/` | feature documents in `docs/` |
+| Design and explanation | rdm's decisions; `docs/spec/design/` for what is not yet carried in | rdm's decisions; feature documents in `docs/` |
 | Questions met without the owner | `IMPLEMENTATION-LOG.md` | `IMPLEMENTATION-LOG.md` (to be made, appendix B) |
 | Security | `SECURITY.md`, `THREAT-MODEL.md`, area SEC | `docs/security-analysis.md`, per-feature analyses |
 | Licences and credits | `LICENSING.md`, `CREDITS.md` | `docs/licensing.md`, `CREDITS.md` |
 | User guide | `docs/user-guide.md` | (none yet) |
 
-Every public function, type and constant is documented (REQ-DOC-001; `missing_docs`).
+Every other repository keeps a `CLAUDE.md` importing this document, rdm for its records, and the `README.md`, `BUILD.md` and `DEPLOYMENT.md` its users need. Every public function, type and constant is documented (REQ-DOC-001; `missing_docs`).
 
 ---
 
 ## Appendix A. Choices made in merging
+
+*Note of 3 November 2026:* item 8's GitHub issues are withdrawn: rdm is the one record of work (section 3.1), and appendix B's issue steps no longer apply.
 
 *Note of 30 October 2026:* appendices A and B are the record of 21 October 2026. Where they name `TECH-DEBT.md`, requirement or decision files, or traceability, those are now rdm (section 1, rdm decision DEC-1389).
 
@@ -313,7 +381,7 @@ Not yet done in the repositories; each is a change of its own.
 **Browser**
 1. `CLAUDE.md`, pointing here.
 2. `TECH-DEBT.md` and `IMPLEMENTATION-LOG.md`.
-3. GitHub issues on `crowdwave/neoteletext-browser`, and the engine's browser issues (#215, #216, and parts of #177 and #210) moved there.
+3. *Withdrawn 3 November 2026:* GitHub issues are not used; rdm is the one record of work (section 3.1).
 4. `scripts/check.sh`: check that every `neoteletext-*` dependency names the same `rev` (requirement 2.5 asks for it; only the repository is checked today).
 5. Requirement forms: one amendment form (section 4.1); "Withdrawn:" titles.
 6. A Windows step in the full gate, or a recorded decision that Windows stays a by-hand check.

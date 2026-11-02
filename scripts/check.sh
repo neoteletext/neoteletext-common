@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # neoteletext-common's one check script, on the gate machinery it keeps for
-# every repository (gates.md): the original in gates/, not a copy, and its
-# hooks are gates/ itself (git config core.hooksPath gates).
+# every repository (DEVELOPMENT.md section 9.3): the original in gates/,
+# not a copy, and its hooks are gates/ itself (git config core.hooksPath
+# gates).
 #   scripts/check.sh commit   the machinery's own test, on what is staged
 #   scripts/check.sh push     the same
 #   scripts/check.sh full     the same

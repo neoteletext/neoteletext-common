@@ -416,7 +416,7 @@ The server needs no program to start. `--channels` may name any file you like, a
 
 Stop it with Ctrl-C, or `kill -TERM`.
 
-`scripts/check.sh commit`, `push` and `full` are the repository's gates, and `~/devel/neoteletext-common/gates.md` says how they work. `scripts/try.sh <crate> [filter]` is the edit loop. For this guide `cargo test -p teletext-native --test lifecycle` was run on the commit above: all 16 tests passed. They start the real binary and cover the stop, socket activation, sessions, cookies and the address map.
+`scripts/check.sh commit`, `push` and `full` are the repository's gates, and `~/devel/neoteletext-common/DEVELOPMENT.md` section 9 says how they work. `scripts/try.sh <crate> [filter]` is the edit loop. For this guide `cargo test -p teletext-native --test lifecycle` was run on the commit above: all 16 tests passed. They start the real binary and cover the stop, socket activation, sessions, cookies and the address map.
 
 `teletext-load --url ws://HOST:PORT/FOLDER/push --connections N [--page 105] [--seconds 60]` opens many connections and measures fan-out. It was not run for this guide.
 
