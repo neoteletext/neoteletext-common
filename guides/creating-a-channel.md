@@ -383,7 +383,7 @@ This table is `crates/neoteletext-app/src/write_text/sets.rs` in the engine. For
 | `kabyle-tamazight` | 0101 | 011 | `5` | `8300` |
 | `azerbaijani` | 0101 | 100 | `5` | `8080` |
 | `kanuri-mossi` | 0101 | 101 | `5` | `8280` |
-| `yoruba-igbo` | 0101 | 110 | `5` | `8180` |
+| `igbo` | 0101 | 110 | `5` | `8180` |
 | `vietnamese` | 0101 | 111 | `5` | `8380` |
 | `ukrainian` | 0111 | 000 | `7` | `8000` |
 | `belarusian` | 0111 | 001 | `7` | `8200` |

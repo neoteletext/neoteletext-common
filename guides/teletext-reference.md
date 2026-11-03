@@ -1096,7 +1096,7 @@ In TTI, `RE` is the group and `PS` the option, as in [section 3.11](#311-nationa
 | | 3 | `8300` | `0x2B` | Kabyle and Tamazight (Latin option) | Latin | `kabyle-tamazight` |
 | | 4 | `8080` | `0x2C` | Azerbaijani (Latin option) | Latin | `azerbaijani` |
 | | 5 | `8280` | `0x2D` | Kanuri and Mossi (Latin option) | Latin | `kanuri-mossi` |
-| | 6 | `8180` | `0x2E` | Yoruba and Igbo | Latin | `yoruba-igbo` |
+| | 6 | `8180` | `0x2E` | Igbo | Latin | `igbo` |
 | | 7 | `8380` | `0x2F` | Vietnamese | Vietnamese | `vietnamese` |
 | 0111, `7` | 0 | `8000` | `0x38` | Ukrainian | Cyrillic | `ukrainian` |
 | | 1 | `8200` | `0x39` | Belarusian | Cyrillic | `belarusian` |
@@ -1132,7 +1132,7 @@ The code tables are in `crates/neoteletext-core/src/charset/`: `g0_extended.rs`,
 
 **The second set.** Every new set has Latin English as its second G0 set, reached by ESC, so a page can mix a language with English.
 
-**Marks.** A diacritical-mark triplet numbers its mark as [section 4.3](#43-g0-characters-and-diacritical-marks) does. On a page whose G2 set is Vietnamese, mark 12, `11100`, is the hook above in place of the low line. Vietnamese and Yoruba-Igbo are whole sets rather than Latin options so that a triplet's mark finds its base letter, since a triplet never reads a national option.
+**Marks.** A diacritical-mark triplet numbers its mark as [section 4.3](#43-g0-characters-and-diacritical-marks) does. On a page whose G2 set is Vietnamese, mark 12, `11100`, is the hook above in place of the low line. Vietnamese and Igbo are whole sets rather than Latin options so that a triplet's mark finds its base letter, since a triplet never reads a national option.
 
 ### 9.2 Writing text in these sets
 
