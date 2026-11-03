@@ -177,7 +177,7 @@ Decisions are rdm records (section 3). Each repository's series stays valid as o
 ## 6. Code
 
 - **Strictest settings, warnings as errors.** Never silence a whole category. A suppression is narrow, at its site, with its reason written (`#[allow(..., reason = "...")]`); the gates make warnings errors. When strictness breaks the build, the warnings are the work.
-- **Lints, in both workspaces** (the engine is to add the last four, appendix B): `unsafe_code = "forbid"`; `missing_docs`; `unused_qualifications`; Clippy `pedantic`, with each workspace-wide exception listed and justified in `Cargo.toml`; `allow_attributes_without_reason`, `dbg_macro`, `todo` and `unimplemented`.
+- **Lints, in both workspaces**: `unsafe_code = "forbid"`; `missing_docs`; `unused_qualifications`; Clippy `pedantic`, with each workspace-wide exception listed and justified in `Cargo.toml`; `allow_attributes_without_reason`, `dbg_macro`, `todo` and `unimplemented`.
 - **No panics where input comes from outside.** Every crate root that reads input from outside its process denies `indexing_slicing`, `string_slice`, `unwrap_used`, `expect_used`, `panic`, `arithmetic_side_effects`, `unreachable`, `todo` and `unimplemented`, with one list kept identical across those roots by each repository's check script. Tests may use them.
 - **Unsafe code** only where the platform offers no safe interface, in a crate of its own that denies it everywhere else, with each unsafe block saying why it is sound (`undocumented_unsafe_blocks`). Today that is the browser's `dock-menu` and `web-opener`; the engine has none (a future FFI crate would be the place).
 - **No magic numbers.** Every literal is named, derived in the code, or cites its source or measurement. **Each constant is defined once**; where two places must agree, assert it. Every teletext constant lives in the engine core's `consts` (REQ-GEN-014, checked by `cargo xtask check-constants`); every limit the browser uses is an engine constant used by name (browser requirement 2.4).
@@ -379,15 +379,9 @@ Where the sources disagreed, this document chose as follows. Each is open to the
 
 ## Appendix B. Adopting this process
 
-Not yet done in the repositories; each is a change of its own.
+What each repository had to change to follow this process; each is a change of its own.
 
-**Engine**
-1. `scripts/check.sh`: refuse unstaged changes in what the commit gate checks; fail when `NEOTELETEXT_REMOTE` is unset in the full gate; check lockfiles with `--locked`; check that the gate changed nothing committed.
-2. `.githooks/pre-push`: run the full gate on a push to `main`.
-4. Workspace lints: add `allow_attributes_without_reason`, `dbg_macro`, `todo` and `unimplemented`; give every crate root that reads outside input the core's no-panic list, checked identical by `scripts/check.sh`; pin the application crates' own dependencies exactly.
-5. Requirements: reword "continuous integration" to "the full gate"; give withdrawn requirements "Withdrawn:" titles where they lack one (area TST, SEC); REQ-GEN-017 to require the owner's approval for every library; correct "clippy's disallowed lists" to `check-io`.
-6. `CLAUDE.md`: keep what is particular to the engine and point here; close `TECH-DEBT.md`'s item asking for one development-process document.
-7. Rename `oldvga` to `foundintelquiet4060` where the documents mean the build host.
+**Engine**: every item is done. The last, the lint `allow_attributes_without_reason` with a reason on every `allow`, is engine commit `4bea64f` (4 November 2026).
 
 **Browser**
 1. `CLAUDE.md`, pointing here.
