@@ -82,7 +82,7 @@ Today the server holds a page as one frame of all its sub-pages, sends the whole
 3. **Content only when tuned:** TUNE names a page and a sub-page. The client tunes the sub-page shown, the sub-pages either side of it within a budget so that stepping is instant, and for a thumbnail the sub-page the thumbnail shows. Only tuned sub-pages are sent, as page frames; the rest pass the wire when the client tunes them.
 4. **Rotation** (the engine's REQ-NAV-005, the latest sub-page shown as it arrives): the catalogue's versions say which sub-page changed last; a client showing the latest tunes that one.
 
-**Upstream, application to server** (the server's `applications.md`):
+**Upstream, application to server** (DOC-1964):
 5. **`publish` takes sub-pages:** a publication names the sub-pages it puts, by sub-code (`SC` in TTI, four hexadecimal digits) or by place, and a `remove` names those that go; the server keeps the others. A whole page is a publication of all its sub-pages. One message carries a few sub-pages at most, so the 16 MiB line limit is never near.
 6. **The server holds each sub-page once,** with its version, its encoded packets and its title (withdrawn with the page store, DEC-2024 item 7).
 
@@ -129,7 +129,7 @@ In order; each is one commit or a few, through each repository's gates. Section 
 **The server:**
 8. `teletext-runtime` uses `limits`: `MOST_SUBPAGES` and `MOST_PAGES` withdrawn; a channel may declare every content page. *Not started: `remote.rs` holds 64 and 800 (section 7.2).*
 9. The page store per sub-page (withdrawn, DEC-2024 item 7): held, versioned, titled and encoded per sub-page. *Not started: a page is one frame of all its sub-pages.*
-10. `publish` with sub-pages and `remove`, `start` with `standard` and `budgets` (`applications.md`); validation per sub-page. *Not started.*
+10. `publish` with sub-pages and `remove`, `start` with `standard` and `budgets` (DOC-1964); validation per sub-page. *Not started.*
 11. *Amended 29 October 2026:* SELECT (DOC-1753, REQ-INT-140), its reader in the engine's `neoteletext-input` and the server's handling of it, and LIMITS with the maxima, since withdrawn (DEC-2024 item 1); fuzzed. TUNE, UNTUNE, SUBPAGES and TITLES are withdrawn. *Not started; its bytes are specified.*
 12. *Amended 29 October 2026:* the sender per selected page: first sub-pages to every connection, a selected page's sub-pages to those that select it (DOC-1950). *Not started: every viewer of a page is sent all its sub-pages; measured on 29 October 2026, 3,542,532 bytes in a demo site connection's first 6 s.*
 13. The static files: `NNN/SSSS.t42`, `NNN/P.sub`, `index.t42` of first sub-pages. *Not started.*

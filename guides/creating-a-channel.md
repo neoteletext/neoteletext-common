@@ -688,7 +688,7 @@ The program answered:
 {"type":"page","connections":[1],"request":2,"page":{"page":"200","sub":"0000","rows":[...],...}}
 ```
 
-The kits do all of that. To write a program without one, `docs/applications.md` in the server's repository is the whole protocol, and [`servers.md`](servers.md) section 2.16 has a program with no kit.
+The kits do all of that. To write a program without one, DOC-1964 to DOC-1978 of PROTOCOL.html are the whole protocol, and [`servers.md`](servers.md) section 2.16 has a program with no kit.
 
 ## 13. A live channel, step by step
 
@@ -1494,5 +1494,5 @@ Each of these is written somewhere as the plan, or is a gap you will meet.
 | See the channel format, including what is proposed | [DOC-1786](../PROTOCOL.html#DOC-1786) |
 | See the URL map and the wire | [DOC-1779](../PROTOCOL.html#DOC-1779), [DOC-1780](../PROTOCOL.html#DOC-1780) and [DOC-1782](../PROTOCOL.html#DOC-1782) |
 | See input, key names and receivers | [DOC-1781](../PROTOCOL.html#DOC-1781) |
-| See every message of the program protocol | `docs/applications.md` in `neoteletext-app-server` |
+| See every message of the program protocol | DOC-1964 to DOC-1978 of `neoteletext-common/PROTOCOL.html` |
 | See every `neottx` command | `docs/user-guide.md` in `neoteletext-engine` |

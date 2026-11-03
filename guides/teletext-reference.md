@@ -1367,7 +1367,7 @@ A live channel is one whose `channel.ttx` has `push`. A program writes its pages
 ]}
 ```
 
-The protocol is `neoteletext-app-server/docs/applications.md`, version 6, with the schema `protocol/schema-6.json`. Every line is checked against it and refused whole if wrong.
+The protocol is DOC-1964 to DOC-1978 of `PROTOCOL.html`, version 10, with the schema `protocol/schema-10.json`. Every line is checked against it and refused whole if wrong.
 
 **A viewer's connection is one browser tab with one selection.** Selecting a page (sub-code 3F7F) brings its first sub-page in ascending sub-code order, which then is the selection. Selecting a sub-page brings that one. **Nothing rotates**: a sub-page changes only when the viewer selects another, or the program redirects them, or the program sends a change. Pages go one sub-page at a time, whole the first time and then as changed rows. The kits do all of this.
 

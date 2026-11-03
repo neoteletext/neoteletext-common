@@ -178,7 +178,7 @@ retired PAGE: closed 4000
 a stopped server: closed 4100
 ```
 
-**The program protocol** runs between the server and a program. It is defined once, by the Rust types in `crates/teletext-runtime/src/protocol.rs`, and published as a JSON Schema generated from them, in `protocol/`. `$defs/ServerMessage` is what the server sends and `$defs/ProgramMessage` is what a program sends. The schema is the exact contract. `docs/applications.md` sections 2 and 3 say what each message is for, and section 2.4 of this guide lists them.
+**The program protocol** runs between the server and a program. It is defined once, by the Rust types in `crates/teletext-runtime/src/protocol.rs`, and published as a JSON Schema generated from them, in `protocol/`. `$defs/ServerMessage` is what the server sends and `$defs/ProgramMessage` is what a program sends. The schema is the exact contract. DOC-1968 and DOC-1970 say what each message is for, and section 2.4 of this guide lists them.
 
 - One JSON object a line, UTF-8, ending in `\n`, at most 16 MiB.
 - Every message has a `type`. An unknown `type` or field is refused, never skipped.
@@ -559,7 +559,7 @@ It comes for every selection and before the page opens, so you may publish in it
 
 ### 2.4 Every message
 
-The kit writes these for you. This table is for reading the log and for writing without a kit. `docs/applications.md` sections 2 and 3 give every field, and the schema is the exact contract.
+The kit writes these for you. This table is for reading the log and for writing without a kit. DOC-1968 and DOC-1970 give every field, and the schema is the exact contract.
 
 From the server:
 
