@@ -3,7 +3,7 @@
 What the neoteletext repositories share:
 
 - [`DEVELOPMENT.md`](DEVELOPMENT.md): how we work, the one document for every NeoTeletext repository, with rdm as the record of all work; every repository's `CLAUDE.md` imports it.
-- [`PROTOCOL.html`](PROTOCOL.html): the protocol document, the one definition of NeoTeletext's protocol, generated from rdm's documentation items.
+- [`PROTOCOL.html`](PROTOCOL.html): the protocol document, the one definition of NeoTeletext's protocol and the documentation of the whole system (the engine, the browser, the server, the kits and the component library, in informative parts after the protocol's; DEC-2252), generated from rdm's documentation items.
 - `gates/`: the gate machinery every repository shares (`DEVELOPMENT.md` section 9).
 - [`guides/`](guides): teaching, which points to the protocol document for the rules.
 
