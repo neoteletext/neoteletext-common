@@ -549,7 +549,7 @@ OL,28,@@@\CpCu_@|w␡KpZA`UB_wLs_w}w␡w]␡_␡}_wM@@
 
 That `OL,28` line is X/28/0 with default designation `0x00` and second designation `0x37`, Greek, built with the helper in [section 5.5](#55-the-colour-map-and-page-level-data). Row 1 shows `αβγδεζ` between the Latin words.
 
-Browser: yes. `neottx`: yes. Kits: write `0x1B` with `screen.code`, and carry the `OL,28` line as [section 9.5](#95-programs) does.
+Browser: yes. `neottx`: yes. Kits: write `0x1B` with `screen.code`, and carry the `OL,28` line as [section 9.4](#94-programs) does.
 
 ## 4. Level 1.5
 
@@ -1082,7 +1082,7 @@ A page that uses any of these still shows, as a receiver without the feature sho
 
 ## 9. Character sets beyond the standard
 
-The feature `extended-sets`, in the default build and the browser's, adds 32 sets to the standard's 24: six national options of Latin G0, 22 whole G0 sets and four G2 sets. They are one byte a cell, read as EN 300 706 defines, and they serve about 55 languages. They use designation values that Tables 32 to 34 reserve, 29 of them, so another decoder takes the fallback of [section 3.11](#311-national-options), as does a build without the feature.
+The feature `extended-sets`, in the default build and the browser's, adds 28 sets to the standard's 24: six national options of Latin G0, 20 whole G0 sets and two G2 sets. They are one byte a cell, read as EN 300 706 defines, and they serve about 50 languages. They use designation values that Tables 32 to 34 reserve, 26 of them, so another decoder takes the fallback of [section 3.11](#311-national-options), as does a build without the feature.
 
 ### 9.1 The groups and options
 
@@ -1116,11 +1116,8 @@ In TTI, `RE` is the group and `PS` the option, as in [section 3.11](#311-nationa
 | 1011, `B` | 0 | `8000` | `0x58` | Georgian (Mkhedruli) | Latin | `georgian` |
 | | 1 | `8200` | `0x59` | Armenian | Armenian | `armenian` |
 | | 2 | `8100` | `0x5A` | Tifinagh | Latin | `tifinagh` |
-| 1100, `C` | 0 | `8000` | `0x60` | Latin English, with Thai second | Thai | None |
-| | 2 | `8100` | `0x62` | Thai | Thai | `thai` |
-| | 4 | `8080` | `0x64` | Lao | Lao | `lao` |
 
-Counting them: the 29 values are the six options, the 22 whole G0 sets, and `0x60`, which adds no G0 set of its own. The 32 sets are those 28 new G0 tables and the Vietnamese, Armenian, Thai and Lao G2 sets. Every G0 set has the space at 2/0 and the block at 7/F. Each of the 29 values was rendered with a page like the one below, showing its codes 2/0 to 7/F. Browser: yes for all of them. `neottx`: yes. A build without `extended-sets` falls back as a reserved value does.
+Counting them: the 26 values are the six options and the 20 whole G0 sets. The 28 sets are those 26 new G0 tables and the Vietnamese and Armenian G2 sets. Group 1100 is reserved: NeoTeletext defines no set there. Every G0 set has the space at 2/0 and the block at 7/F. Each of the 26 values was rendered with a page like the one below, showing its codes 2/0 to 7/F. Browser: yes for all of them. `neottx`: yes. A build without `extended-sets` falls back as a reserved value does.
 
 ```tti
 PN,21000
@@ -1131,9 +1128,9 @@ OL,1,abcdefghijklmnopqrstuvwxyz
 
 Row 1 shows the Ukrainian set's lowercase letters.
 
-The code tables are in `crates/neoteletext-core/src/charset/`: `g0_extended.rs`, `arabic_script.rs`, `thai_lao.rs`, `latin.rs` and `g2.rs`. The designations are `extended_designations.rs`.
+The code tables are in `crates/neoteletext-core/src/charset/`: `g0_extended.rs`, `arabic_script.rs`, `latin.rs` and `g2.rs`. The designations are `extended_designations.rs`.
 
-**The second set.** Every new set has Latin English as its second G0 set, reached by ESC, so a page can mix a language with English. Value `0x60` differs: its second set is Thai, with no X/28 at all and on a TTI page with `RE,C`, whose X/28/0 from the writer names `0x62`.
+**The second set.** Every new set has Latin English as its second G0 set, reached by ESC, so a page can mix a language with English.
 
 **Marks.** A diacritical-mark triplet numbers its mark as [section 4.3](#43-g0-characters-and-diacritical-marks) does. On a page whose G2 set is Vietnamese, mark 12, `11100`, is the hook above in place of the low line. Vietnamese and Yoruba-Igbo are whole sets rather than Latin options so that a triplet's mark finds its base letter, since a triplet never reads a national option.
 
@@ -1145,7 +1142,7 @@ neottx write-text --set vietnamese --page 300 input.txt page.tti
 
 Each character is written as, in order of preference: a code of the current G0 set; after an ESC, a code of Latin English; a G0 letter with an X/26 mark; a G2 character by X/26 over a stand-in. Anything else is refused, naming the character and its line. Text fills rows 1 to 23.
 
-The command takes 46 names: the 28 of the table and 18 of the standard's sets, `english` to `hebrew`. Its `--help` lists only 18 of them.
+The command takes 44 names: the 26 of the table and 18 of the standard's sets, `english` to `hebrew`. Its `--help` lists only 18 of them.
 
 ### 9.3 Arabic-script joining
 
@@ -1165,20 +1162,7 @@ printf 'سلام دنیا\n' > fa.txt
 neottx write-text --set persian --page 400 fa.txt fa.tti
 ```
 
-### 9.4 Thai and Lao
-
-The Thai sets are those of the Philips SAA5246AP/S, and Lao's codes come from the 1990 World System Teletext specification. A mark is an ordinary character in its own cell. The receiver neither overlays nor reorders.
-
-Each line of text takes three kinds of row: the letters, their upper marks on the row before and their lower vowels on the row after, each in its letter's column. A line's lower vowels share a row with the next line's upper marks unless a column needs both. A vowel with a tone is one G2 glyph, placed by X/26 over the vowel alone. In `write-text`, `ำ` is written as `ํ` over the consonant and `า` beside it. The G2 sets' columns 5 and 6 hold these pairs, which `neottx text` writes as two combining marks.
-
-```sh
-printf 'สวัสดี\n' > th.txt
-neottx write-text --set thai --page 401 th.txt th.tti
-```
-
-Partly settled: the code tables mark Thai 4/0, 7/9, 7/A and 7/C as readings still to be confirmed. Thai G2 6/D to 6/F and several Lao positions are not yet identified and show a space.
-
-### 9.5 Programs
+### 9.4 Programs
 
 The kits' `Screen.text` writes the English option. For any other set, a program writes codes from its own table and adds the designation as an `OL,28` line:
 
@@ -1192,7 +1176,7 @@ screen.codes(1, 0, codes_in_the_set)
 screen.load_tti(ol28_line)              # the X/28/0 goes in screen.packets
 ```
 
-The simplest path for fixed text is `neottx write-text`, then `publishTti` or `Screen.load_tti` on the file it wrote. It writes an X/28/0 line, so both kits carry the set. Thai and Lao mix rows and triplets, which is another reason to let it do the work.
+The simplest path for fixed text is `neottx write-text`, then `publishTti` or `Screen.load_tti` on the file it wrote. It writes an X/28/0 line, so both kits carry the set.
 
 ## 10. Noto Teletext
 

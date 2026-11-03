@@ -353,7 +353,7 @@ neottx text 201.tti 201 | sed -n 2p
 Привет, мир
 ```
 
-For sets in group 0, where the page's codes are mostly ASCII, `PS` alone does it: `PS,8200` with `OL,1,Gr}~e aus Berlin` is German, `Grüße aus Berlin`. `write-text` is easier for anything else, and is the only sensible way for Arabic, Hebrew, Thai and Lao, which it lays out for you. Arabic and Hebrew are written in visual order, right to left, and Thai and Lao put their marks on rows of their own.
+For sets in group 0, where the page's codes are mostly ASCII, `PS` alone does it: `PS,8200` with `OL,1,Gr}~e aus Berlin` is German, `Grüße aus Berlin`. `write-text` is easier for anything else, and is the only sensible way for Arabic and Hebrew, which it lays out for you in visual order, right to left.
 
 This table is `crates/neoteletext-app/src/write_text/sets.rs` in the engine. For every row, a page written by hand with this `RE` and `PS` was drawn the same as `write-text`'s.
 
@@ -403,8 +403,6 @@ This table is `crates/neoteletext-app/src/write_text/sets.rs` in the engine. For
 | `uyghur` | 1001 | 101 | `9` | `8280` |
 | `balochi` | 1001 | 110 | `9` | `8180` |
 | `arabic` | 1001 | 111 | `9` | `8380` |
-| `thai` | 1100 | 010 | `C` | `8100` |
-| `lao` | 1100 | 100 | `C` | `8080` |
 
 The `PS` value is 0x8000 with C12 (0x0080), C13 (0x0100) and C14 (0x0200) set from the option, whose bits are C12, C13 and C14 in that order. Sets in the groups NeoTeletext added have Latin English as a second set, which row text reaches with the code 0x1B. `write-text` does this for you when a line mixes the two. In the sets that place a letter's marks by packet X/26, a page has room for about 16 packets of them, so a very dense page of Vietnamese can be refused. `write-text` says so.
 
