@@ -125,6 +125,30 @@ copy_from_a_worktree() {
 expect passes "the gate's copy read with GIT_DIR exported" copy_from_a_worktree
 expect refused "an edited copy read with GIT_DIR exported" copy_from_a_worktree "# edited"
 
+# TODO-1771: a copy naming a commit neoteletext-common does not have is
+# refused with a message that says neoteletext-common could not be read, not
+# that the copy differs.
+copy_naming_a_missing_commit() {
+    local common="$work/common-$RANDOM$RANDOM" repository output
+    repository="$common-repository"
+    mkdir -p "$common/gates" "$repository/scripts" "$repository/.githooks"
+    git -C "$common" init -q
+    git -C "$repository" init -q
+    {
+        printf '# Copied\n# neoteletext-common gates at %s\n' "0123456789abcdef0123456789abcdef01234567"
+        cat "$gate"
+    } >"$repository/scripts/gate.sh"
+    output="$(
+        cd "$repository"
+        export NEOTELETEXT_COMMON="$common"
+        # shellcheck source=/dev/null
+        . scripts/gate.sh
+        check_gate_copy 2>&1
+    )" && return 1
+    [[ "$output" == *"could not be read"* ]]
+}
+expect passes "a copy naming a commit neoteletext-common lacks says it could not be read" copy_naming_a_missing_commit
+
 # DEVELOPMENT.md section 9.2: a step that cannot run fails the gate, says which tool it lacks
 # and how to install it, and records no pass. The check script runs a gate
 # whose step needs tool $1; a second argument is what it says to install it.
