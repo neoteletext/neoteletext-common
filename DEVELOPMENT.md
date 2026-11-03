@@ -115,6 +115,7 @@ In the linking phase:
 - **Every to-do links** to the decision and requirements it implements, and to the to-dos that must come before it. **Every requirement** is linked from the decision that made it and to what it builds on. **Every decision** links to the decisions it amends, supersedes or relies on, and decides its requirements.
 - **A revision checks its links:** what the new version cites is linked, and links the change makes wrong are removed or replaced. Records a revision marks as needing a recheck are reviewed: revised to match, or reported as still holding.
 - **Across repositories:** a record that concerns another repository's record is linked to it.
+- **Tags:** a record created or revised is given the tags of its subjects, and a revision checks they still fit (section 3.8).
 
 A `PostToolUse` hook in `~/.claude/settings.json` (`~/.claude/hooks/rdm-link-reminder.sh`) reminds the session of the linking phase after every rdm write.
 
@@ -122,6 +123,16 @@ A `PostToolUse` hook in `~/.claude/settings.json` (`~/.claude/hooks/rdm-link-rem
 
 - **A standard or other document that records rest on** is an rdm source (`create_record` type `source`): its publisher's address, its SHA-256, size and pages, pinned so the exact file can be fetched and checked. rdm holds its facts, clause numbers and positions only; the file itself stays in `~/devel/teletext-reference/`, never in a repository.
 - **The protocol is defined only by rdm's documentation items** (DEC-2022), from which `PROTOCOL.html` is generated (`README.md`); guides teach and point to the items. `DOC-n` anywhere names the item at `PROTOCOL.html#DOC-n`.
+
+### 3.8 Tags
+
+The owner, 3 November 2026: "I also now want RDM entries to have tags wherever it makes sense" (DEC-2168). A tag is a short subject label, written like a hashtag, that gathers every record about one subject across repositories and record types. It complements the rest of a record: its type, lifecycle and repository are fields, and its relationships to other records are links.
+- **Built into rdm, one project at a time.** Tags are a table and a relation in rdm, separated by project under the same Postgres row-level security as records, so NeoTeletext's tags are never seen from another project. Building them is rdm's own work, in rdm's project; a NeoTeletext session uses them and does not change rdm.
+- **Names:** lower case, words joined by hyphens, letters and digits only; `#character-sets` in prose, stored without the `#`. A tag names a subject: never a status, a type, a repository or a date, which rdm already holds.
+- **One shared vocabulary.** Every tag has a one-line description in rdm. Reuse an existing tag before making one; make a new one only for a subject several records share. The first are `#character-sets`, `#fonts`, `#noto`, `#languages`, `#arabic-script`, `#thai-lao`, `#protocol`, `#security`, `#gates`, `#development-process` and `#documentation`, and one for each of the engine's area codes.
+- **Where they go.** Every requirement, decision and to-do carries the tags of its subjects, usually one to three; terms, sources and documentation items carry them where a reader would look for them by subject. Tagging is part of the linking phase (section 3.6).
+- **The engine's area codes become tags:** a record whose title starts with one (`[CHR]`, `[FNT]`, `[SEC]` …) is given that area's tag, and new titles stop carrying the code.
+- **Until rdm has tags,** records carry none, and nothing imitates them in titles or bodies. TODO-2169 tags the existing records once rdm can.
 
 ## 4. Requirements
 
