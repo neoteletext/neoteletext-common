@@ -24,11 +24,12 @@ git_dir="$(git rev-parse --git-common-dir 2>/dev/null || true)"
 common_git() { env -u GIT_DIR -u GIT_INDEX_FILE -u GIT_WORK_TREE git -C "$common" "$@"; }
 # Names of the documents deleted because rdm or DEVELOPMENT.md now holds
 # them (DEC-2022's protocol documents; the gate and rdm documents folded into
-# DEVELOPMENT.md on 3 November 2026), as a tracked file might write them:
+# DEVELOPMENT.md on 3 November 2026; the server's applications document,
+# deleted for its items the same day, TODO-2245), as a tracked file might write them:
 # bare, or with the dot escaped in a pattern. A longer name that ends in one
 # of them is another document. This text cannot match itself, as a closing
 # bracket stands where a name would meet its extension.
-readonly DELETED_DOCUMENT_NAMES='(^|[^-A-Za-z0-9_])(INPUT|SERVER|CHANNEL|gates|rdm)\\*\.md'
+readonly DELETED_DOCUMENT_NAMES='(^|[^-A-Za-z0-9_])(INPUT|SERVER|CHANNEL|gates|rdm|applications)\\*\.md'
 
 fail() {
     printf '\nFAILED: %s\n' "$*" >&2
