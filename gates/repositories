@@ -1,7 +1,7 @@
 # The repositories gates/sync writes the gate machinery into, as folders
 # beside neoteletext-common.
 neoteletext-browser
-neoteletext-engine
+neoteletext-renderer-teletext
 neoteletext-app-server
 neoteletext-server-channel-demosite
 neoteletext-server-channel-hackaday
@@ -10,5 +10,5 @@ neoteletext-server-channel-uicomponentsdemo
 neoteletext-server-ts-protocol
 neoteletext-server-ts-ui-components
 neoteletext-server-channels
-neoteletext-naplps
-neoteletext-regis
+neoteletext-renderer-naplps
+neoteletext-renderer-regis

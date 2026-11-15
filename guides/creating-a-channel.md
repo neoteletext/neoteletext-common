@@ -6,7 +6,7 @@ The examples were run for this guide on a local machine, and the output is what 
 
 | What | Commit or version |
 |---|---|
-| `neottx`, from `neoteletext-engine` | `fecedf4` |
+| `neottx`, from `neoteletext-renderer-teletext` | `fecedf4` |
 | `teletext-server`, from `neoteletext-app-server` | `cce8d80` |
 | TypeScript kit | 6.0.0 |
 | UI library | 12.0.0 |
@@ -45,10 +45,10 @@ The words used in this guide:
 
 ## 2. Get the tools
 
-**`neottx`** is the command-line receiver and page tool. Every section uses it. Build it from `neoteletext-engine`, with the Rust the repository pins:
+**`neottx`** is the command-line receiver and page tool. Every section uses it. Build it from `neoteletext-renderer-teletext`, with the Rust the repository pins:
 
 ```
-cd neoteletext-engine
+cd neoteletext-renderer-teletext
 cargo build --release -p neoteletext-cli
 ```
 
@@ -1495,4 +1495,4 @@ Each of these is written somewhere as the plan, or is a gap you will meet.
 | See the URL map and the wire | [DOC-1779](../PROTOCOL.html#DOC-1779), [DOC-1780](../PROTOCOL.html#DOC-1780) and [DOC-1782](../PROTOCOL.html#DOC-1782) |
 | See input, key names and receivers | [DOC-1781](../PROTOCOL.html#DOC-1781) |
 | See every message of the program protocol | DOC-1964 to DOC-1978 of `neoteletext-common/PROTOCOL.html` |
-| See every `neottx` command | `docs/user-guide.md` in `neoteletext-engine` |
+| See every `neottx` command | `docs/user-guide.md` in `neoteletext-renderer-teletext` |

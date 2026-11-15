@@ -14,7 +14,7 @@ Each repository's own `CLAUDE.md` says what is particular to it and points here 
 `PROTOCOL.html` is generated: nobody edits it. Its items have anchors, and `DOC-n` anywhere in these repositories names the item at `PROTOCOL.html#DOC-n`. To change the protocol's text, revise the item in rdm, and then make the byte examples from the engine and generate the document again, naming today's date:
 
 ```sh
-cd ~/devel/neoteletext-engine && cargo xtask spec-examples "$TMPDIR/spec-examples.json"
+cd ~/devel/neoteletext-renderer-teletext && cargo xtask spec-examples "$TMPDIR/spec-examples.json"
 cd ~/devel/neoteletext-common && rdm spec -examples "$TMPDIR/spec-examples.json" -o PROTOCOL.html -version "$(date +%F)"
 ```
 

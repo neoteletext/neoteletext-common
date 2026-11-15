@@ -3,7 +3,7 @@
 **The one document of how we work**, for every NeoTeletext repository (the owner's instruction of 3 November 2026: "we need a SINGLE document that unifies how we work, and rdm is the baseline"). **rdm is the baseline:** every requirement, decision, checklist, term, source, documentation item and piece of work owed is an rdm record, and nothing else tracks work (section 3). Each repository's `CLAUDE.md` imports this document and adds only what is particular to that repository.
 
 The repositories, each in `~/devel/`:
-- **`neoteletext-engine`**: the teletext engine, its libraries and the `neottx` program;
+- **`neoteletext-renderer-teletext`**: the teletext engine, its libraries and the `neottx` program;
 - **`neoteletext-browser`**: NeoTeletext, the browser, built on the engine at a pinned commit;
 - **`neoteletext-app-server`**: the NeoTeletext server;
 - **`neoteletext-server-ts-protocol`** and **`neoteletext-server-ts-ui-components`**: the TypeScript protocol kit and component library channels are written with;
@@ -274,7 +274,7 @@ There is no continuous integration; the gates are local (the owner's instruction
 ## 11. The two repositories together
 
 - **Where code belongs.** The engine is the teletext engine only (its decision E.76): no browser code there. All teletext recognition, decoding, rendering and web-protocol reading is the engine's; the browser does not implement a second one (browser requirement 2.1). A limit or policy the browser needs is added to the engine, not to the browser.
-- **The pin.** The browser depends on every engine crate at one commit, through a `git` source on the engine's repository (`file:///Users/andrewstuart/devel/neoteletext-engine` while the commit is unpublished, then the GitHub address at the same commit), never a copy and never a local patch (browser requirement 2.5, decision 36). Every `neoteletext-*` dependency names the same `rev`.
+- **The pin.** The browser depends on every engine crate at one commit, through a `git` source on the engine's repository (`file:///Users/andrewstuart/devel/neoteletext-renderer-teletext` while the commit is unpublished, then the GitHub address at the same commit), never a copy and never a local patch (browser requirement 2.5, decision 36). Every `neoteletext-*` dependency names the same `rev`.
 - **Moving the pin** is a commit of its own in the browser:
   1. Change the `rev` in `native/Cargo.toml` and in `native/fuzz/Cargo.toml`.
   2. Re-resolve both workspaces without upgrading anything else (`cargo metadata --format-version 1`, and with `--manifest-path native/fuzz/Cargo.toml`), and check that both lockfiles' diffs touch only the engine's entries.
