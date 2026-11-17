@@ -457,7 +457,7 @@ The canonical value of each position is the first of its band.
 - (c) **The block.** synth8's blocks are the architecture's event lists (MIDI-23 to MIDI-38): at most 1,005 bytes and 256 events a block. No synth8 message is longer than three bytes, since synth8 takes no system exclusive; a system exclusive event in a synth8 block is counted as ignored (MIDI-34). A whole panel as control changes (S8-27) is 42 messages, 126 bytes with every status byte written, and both panels 84 messages, 252 bytes, which fit one block. The server writes every control change with its status byte (MIDI-12).
 - (d) **The OBJECT.** A synth8 sound's OBJECT carries its key mode and split point in extension tag 7, as today (S8-18, MIDI-48); no MIDI message replaces it, because the chart has none for a key mode.
 - (e) **The restatement.** The server, not the program and not a kit, restates synth8's state, as MIDI-93 to MIDI-99 require of every synthesizer: in the first block of a live sound and at least once in every 50 blocks after (MIDI-96), and at tick 0 of block 0 of every stored sound (MIDI-99). synth8's restatement is, for each half, written whole at one tick of one block (MIDI-98): on channel 1 for the upper half, the program change of its patch, then the latest value of every panel controller moved since by a control change, in ascending order of controller number (MIDI-95); then the same on channel 2 for the lower half. The performance controls, which are the whole instrument's, are restated with the upper half on channel 1, each only where it is not at its value after reset all controllers (MIDI-84) or at its start value: pitch bend, controller 1, controller 5, controller 7, controller 8, controller 11, controller 64, controller 118, and the VCO bend depth (as controller 41 where it was last set by controller 41, or as registered parameter number 0, controllers 101, 100, 6 and 38, followed by 101 and 100 at 127 to select none, where it was last set so). Held notes are not restated (MIDI-93). The restatement of one half is at most 42 control changes and a program change, 128 bytes, and the performance controls at most 15 messages more, so a whole restatement is well within one block. By S8-12 and S8-24, a restatement that carries the state the receiver already holds changes nothing that is heard (MIDI-97).
-- (f) **The codec.** synth8's sounds are of codec 17 and its banks of the bank codec 19, if the architecture's open question 1 is answered as it recommends (MIDI-107 to MIDI-109); otherwise synth8's sounds keep their present code, 9, and its banks the present analogue bank code, 11 (`codec.rs`, `Codec::Synth8`, `Codec::PatchBank`). This document does not decide it.
+- (f) **The codec.** synth8's sounds are of codec 17 and its banks of the bank codec 19, if the architecture's open question 1 is answered as it recommends (MIDI-107 to MIDI-109); otherwise synth8's sounds keep their present code, 9, and its banks the present analogue bank code, 11 (`codec.rs`, `Codec::Synth8`, `Codec::PatchBank`). This document does not decide it; DEC-6465 answered the architecture's open question 1 with new codes 12 to 19, codes 3 to 11 retired (awaiting the owner's confirmation), so synth8's sounds are of codec 17 and its banks of codec 19.
 - Reason: The instrument modelled holds 64 patches; the program numbers reach them all (S8-28). The sizes are what the architecture needs to size records. The restatement is the server's under DEC-6462 item 1 ("repeats what a viewer who joins late needs").
 - Source: Owner's manual, printed pages 3, 9 and 30. Decision A4. DEC-6462 items 1 and 3. The architecture, MIDI-23 to MIDI-38, MIDI-48, MIDI-55, MIDI-56, MIDI-59, MIDI-93 to MIDI-99 and MIDI-107 to MIDI-109.
 - Verification: A test stores a bank of 64 patches, plays program changes to each on both channels, and checks both panels; a server test drives both halves through a program change, ten panel control changes, a bend, the hold and a bend depth, plays the restatement into a fresh synth8, and checks the two states equal (MIDI-93); a server test checks block 0 of a stored synth8 sound begins with both halves' restatements; the architecture's tests cover the carriage.
@@ -590,41 +590,48 @@ The filed chart says "Model: JUPITER-08", "Date: October 1st, 2026", "Version: 1
 - *Option A:* file both and revise sections 7 and 9 to them before the interface is built.
 - *Option B:* build to this document now, and revise if the filed documents later differ.
 - *Recommendation:* A. The controller numbers here would very likely stand, but the bands of six selectors (whose SYSTEM-8 lists in the table have six entries where the instrument has three or four) and two controllers' meanings depend on it, and changing bands after patches exist breaks them.
+- Answered by DEC-6465 (awaiting the owner's confirmation): option A, a search for the rest of the JUPITER-08 reference manual and Roland's JP-08 Boutique chart and parameter list, begun at once, with sections 7 and 9 to be revised to them before the interface is built. DEC-6465 does not say what follows if nothing is found; its answers to questions 2 and 3 keep this document's readings until those documents say otherwise.
 
 **2. What do controllers 41 "BEND PITCH" and 57 "VCO-2 MODE" do?**
 The chart names them and says nothing more. This document takes 41 as the VCO bend depth (S8-14) and counts 57 as ignored.
 - *Option A:* as this document, until open question 1's documents say.
 - *Option B:* take 41 as a pitch-bend range in semitones (a common meaning on other instruments), and 57 as VCO-2's NORMAL / LOW FREQ switch.
 - *Recommendation:* A. Option B's 57 would give one switch two controllers (63 is "VCO-2 LO FREQ"), and the semitone reading of 41 is not in any filed document. Under either option the bend range is also set by registered parameter number 0 (S8-31, MIDI-90), so a sender that wants a range in semitones has the standard message for it.
+- Answered by DEC-6465 (awaiting the owner's confirmation): option A, as written: controller 41 is the VCO bend depth and controller 57 is ignored, until question 1's documents say otherwise.
 
 **3. Should the five modulation sliders and VCA LFO MOD keep their inverted half?**
 Today's patch keeps VCO LFO MOD, VCO ENV MOD, VCF ENV MOD, VCF LFO MOD, VCF KEY FOLLOW and VCA LFO MOD as signed bytes, after the table's −128 to +127, though the instrument's sliders run one way and its VCA LFO MOD is a four-position switch.
 - *Option A (this document):* each modulation slider is 0 (none) to 127 (most) in the instrument's direction; VCA LFO MOD is four bands. The inverted half is dropped.
 - *Option B:* each is centred at 64, 0 to 63 being the inverted half, as the table's range suggests; a sender who moves a controller from its bottom then starts at the inverted most, not at none.
 - *Recommendation:* A. It is the instrument's panel, value 0 is none as for every other slider, and ENV-1 POLARITY already inverts the envelope's modulation. If open question 1's documents show the JUPITER-08's controllers are centred, B follows them.
+- Answered by DEC-6465 (awaiting the owner's confirmation): option A, as written: the inverted half is dropped, unless question 1's documents show the controllers are centred.
 
 **4. Should the bender panel's other three depths have controllers?**
 The VCF bend depth, LFO VCO depth and LFO VCF depth have no message today and none in the chart; they stay at 0, 50 cents and 0.
 - *Option A (this document):* no controllers; the depths stay at their defaults.
 - *Option B:* three NeoTeletext controllers (for example 111, 112 and 113, undefined in MIDI 1.0 and unused by the chart), with the VCF and LFO switches as depth 0.
 - *Recommendation:* A for now. A sound cannot reach the filter from the bender or the wheel, which the instrument can; if the owner wants those, B, as additions listed in section 13.
+- Answered by DEC-6465 (awaiting the owner's confirmation): option A, as written: no controllers for the other three bender depths now.
 
 **5. Should a program change recall a patch preset?**
 - *Option A (this document):* no; a sender sends a program change on each channel, and the key mode stays in the OBJECT.
 - *Option B:* program changes 64 to 71 on channel 1 recall presets A to H stored with the bank, each two patch numbers and a key mode; the key mode would then change mid-sound, which today only the OBJECT can do, and a viewer joining late would need it repeated.
 - *Recommendation:* A. A preset is "pairs of numbers referring to patches" (printed page 24), which two program changes already express.
+- Answered by DEC-6465 (awaiting the owner's confirmation): option A, as written: a program change does not recall a patch preset.
 
 **6. Is 128 steps enough for a slider?**
 Today a slider is a byte of 256 steps; a control change carries 128. The table's ranges are 0 to 255.
 - *Option A (this document):* 128 steps, the chart's own form, 12.7 steps for each printed division of the slider.
 - *Option B:* NeoTeletext's own pairs or non-registered parameter numbers for 256 steps, which the chart does not have and DEC-6453 discourages.
 - *Recommendation:* A.
+- Answered by DEC-6465 (awaiting the owner's confirmation): option A, as written: 128 steps a slider.
 
 **7. Should the hold hold only the lower half in the split key mode, as the instrument modelled does?**
 The owner's manual says the hold pedal acts "on the Lower end of the keyboard only" in split (printed page 13), and what is built does so; the architecture's one rule for the sustain pedal (MIDI-87) holds every key in every synthesizer, and this document now follows it (S8-11).
 - *Option A (this document):* the architecture's rule: in every key mode the hold holds the whole keyboard, so a performance's pedal means the same on every synthesizer.
 - *Option B:* the instrument's behaviour, listed as a departure from MIDI-87, which the architecture would then have to allow.
 - *Recommendation:* A, under the owner's requirement that every synthesizer behave the same way on behaviours common to all MIDI instruments (DEC-6464); B only if the owner counts the split hold as part of the instrument rather than of MIDI.
+- Answered by DEC-6465 (awaiting the owner's confirmation): option A, as written (S8-11): the hold holds the whole keyboard in every key mode, under the rule of one behaviour.
 
 ## 15. Differences from what is built today
 
@@ -648,7 +655,7 @@ What exists is described in `synthesizer-wire-format.html`, `programming-the-syn
 13. Nothing changes in note on, note off, pitch bend, the modulation wheel, volume, all sound off or all notes off; the key modes, assign modes and the low-frequency oscillators (S8-18 to S8-20) are as built. These change, to follow the architecture's common behaviours: reset all controllers sets expression (controller 11) to 127, clears the parameter number selection, and leaves controller 118 and the VCO bend depth alone (S8-13, MIDI-84); controllers 124 to 127, counted as ignored today, act as all notes off (S8-13, MIDI-89); the hold holds both halves in split, where today it holds the lower half only (S8-11, MIDI-87); registered parameter number 0 and controllers 6, 38, 96 to 101 are new (S8-31, MIDI-90); a lost block also clears the parameter number selection (S8-26, MIDI-102).
 
 **The block.**
-14. Today a synth8 block is 1 to 16 slots of four bytes. Under decision A3 it becomes a Standard MIDI File track-event list with a tick of 0.1 millisecond; that change is the architecture document's and is the same for every family. synth8's part of it is only that two whole panels as control changes (84 messages, S8-27) no longer have to fit in 16 slots. The codec code changes only if the architecture's open question 1 is answered as it recommends (S8-29 item f).
+14. Today a synth8 block is 1 to 16 slots of four bytes. Under decision A3 it becomes a Standard MIDI File track-event list with a tick of 0.1 millisecond; that change is the architecture document's and is the same for every family. synth8's part of it is only that two whole panels as control changes (84 messages, S8-27) no longer have to fit in 16 slots. The codec code changes only if the architecture's open question 1 is answered as it recommends (S8-29 item f); DEC-6465 answered the architecture's open question 1 with new codes 12 to 19, codes 3 to 11 retired (awaiting the owner's confirmation), so it changes from 9 to 17.
 
 **The server and the kits.**
 15. Under DEC-6462 the server writes synth8's blocks, its bank images, its OBJECT's tag 7 and its restatements (S8-29); today the kit builds the patches and blocks and repeats program changes (`program-repeater.ts`), and the kit's synth8 code is reduced to the generated types and the calls that send them (MIDI-22).

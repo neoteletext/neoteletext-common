@@ -62,7 +62,7 @@ The architecture document this document follows is `midi-architecture.md` in thi
 - **MIDI form** and **block form.** An ASID message as it would travel on a MIDI cable (`F0 2D … F7`), and the same message as an event in a block (`F0 <length> 2D … F7`, after a delta time).
 - **Passed over and counted.** What a receiver does with something it does not act on: it skips it, changes nothing, and adds one to a counter the port can read. This is the term the audio profile already uses.
 - **PAL clock** and **NTSC clock.** The two frequencies the chip can run at, 985,248 Hz and 1,022,727 Hz (requirement S6581-39).
-- **The family's codec.** The one codec of the audio profile that carries both synthesizers. Its code is 12 under `midi-architecture.md`, MIDI-107, if that document's open question 1 is answered as it recommends (new codes 12 to 19 for the synthesizers, codes 3 to 11 retired, MIDI-108); otherwise it is the present code, 3. This document does not decide between the two; it calls the code "the family's codec" throughout, and "codec 3" only when describing what is built today.
+- **The family's codec.** The one codec of the audio profile that carries both synthesizers. Its code is 12 under `midi-architecture.md`, MIDI-107, if that document's open question 1 is answered as it recommends (new codes 12 to 19 for the synthesizers, codes 3 to 11 retired, MIDI-108); otherwise it is the present code, 3. DEC-6465 answered the architecture's open question 1 with new codes 12 to 19, codes 3 to 11 retired (awaiting the owner's confirmation), so the code is 12; this document calls the code "the family's codec" throughout, and "codec 3" only when describing what is built today.
 - **Stored sound** and **live sound.** A sound sent whole and played by a command, and a sound announced once and fed with blocks as it plays (the audio profile's terms).
 
 Numbers written `0x…` are hexadecimal. Bits are numbered from 0, the least significant.
@@ -73,8 +73,8 @@ Numbers written `0x…` are hexadecimal. Bits are numbered from 0, the least sig
 
 ### 3.1 Identity
 
-**S6581-1.** synth6581 and synth8580 MUST be two kinds of sound a channel program can send, each with its stored sound, its live sound and its blocks message, and both MUST be carried by one codec of the audio profile, the family's codec (section 2: code 12 if `midi-architecture.md`'s open question 1 is answered as recommended, otherwise the present code 3). The kind alone MUST choose which of the two chips plays: a `synth6581` sound plays synth6581 and a `synth8580` sound plays synth8580, and no field of a program's message, and no message inside a block, may choose the other.
-Reason: the owner ruled that each name is its own kind and that no `chip` or `model` field remains for a program to set; variants share their codec and code underneath. DEC-6461 item 3 also said the codec numbers would not change; the architecture document, because decisions A3 and A4 change every synthesizer's block and patch, recommends new codes instead and puts the choice to the owner as its open question 1, which this document follows and does not decide.
+**S6581-1.** synth6581 and synth8580 MUST be two kinds of sound a channel program can send, each with its stored sound, its live sound and its blocks message, and both MUST be carried by one codec of the audio profile, the family's codec (section 2: code 12 if `midi-architecture.md`'s open question 1 is answered as recommended, otherwise the present code 3; DEC-6465 answered the architecture's open question 1 with new codes 12 to 19, codes 3 to 11 retired (awaiting the owner's confirmation), so it is 12). The kind alone MUST choose which of the two chips plays: a `synth6581` sound plays synth6581 and a `synth8580` sound plays synth8580, and no field of a program's message, and no message inside a block, may choose the other.
+Reason: the owner ruled that each name is its own kind and that no `chip` or `model` field remains for a program to set; variants share their codec and code underneath. DEC-6461 item 3 also said the codec numbers would not change; the architecture document, because decisions A3 and A4 change every synthesizer's block and patch, recommends new codes instead and puts the choice to the owner as its open question 1, which this document follows and does not decide. DEC-6465 answered the architecture's open question 1 with new codes 12 to 19, codes 3 to 11 retired (awaiting the owner's confirmation).
 Source: DEC-6461 items 3 and 5; decision A5; `midi-architecture.md`, MIDI-1, MIDI-48 (tag 3), MIDI-107 to MIDI-109 and open question 1.
 Verification: a server test sends a sound of each kind and reads the OBJECT record's chip extension (requirement S6581-39): bit 0 is 0 for `synth6581` and 1 for `synth8580`. A test confirms that no message of the program protocol for these kinds accepts a `chip` or `model` field.
 
@@ -824,27 +824,32 @@ ASID has none: a tune plays the chip by writing registers, and every existing pl
 - *Option B: note messages in the server's program protocol for these kinds*, which the server turns into register updates (MIDI note on and note off, perhaps with a voice and a patch of 25 registers). The receiver and the block form stay ASID. It is a whole instrument design of NeoTeletext's own (voice allocation, which registers a note sets, the hard restart's timing), which DEC-6453 forbids unless it has to be, and every choice in it is one that existing tunes make differently.
 - *Option C: note messages in the block, played by the receiver.* All of option B's design, and the receiver's work and state grow with it; the block is then no longer ASID.
 - *Recommendation:* A. If channel authors need notes, the help belongs in an example program of a channel (as the audio demo channel already has its own player code), not in the protocol, the server or a kit.
+- Answered by DEC-6465 (awaiting the owner's confirmation): option A, as written: no note-playing layer for synth6581 and synth8580 anywhere in NeoTeletext; note help belongs in an example channel program.
 
 **2. Should a sound carry several chips (ASID commands 0x50 to 0x5F)?**
 - *Option A: no* (S6581-20). One sound is one chip; a tune for two chips is two sounds started together on two audio channels. Simple and as built, but two sounds started by two CONTROL records are not guaranteed to start on the same sample.
 - *Option B: yes, up to a stated number of chips in one sound*, with commands 0x50 and above taken. It needs an answer to which kind a sound of a 6581 and an 8580 is, more work for each block, and a larger block bound. Three of the six listed receivers and one of the seven listed senders support these commands.
 - *Recommendation:* A, until a channel needs a tune for more than one chip; then B with the chips' kinds stated in the OBJECT record.
+- Answered by DEC-6465 (awaiting the owner's confirmation): option A, as written: one chip per sound, until a channel needs a tune for more than one chip.
 
 **3. Should command 0x30, write order and timing, be taken?**
 - *Option A: no* (S6581-22). Order and time between writes are given by separate messages at their own ticks, to 0.1 millisecond (about 98 chip cycles on the PAL clock).
 - *Option B: yes, as a setting of the sound in its OBJECT record*, so that a late joiner has it: 56 bytes in an extension, applied to every register data message. Writes could then be spaced to single cycles inside one message, which the receiver can honour only to the nearest sample (about 20.5 chip cycles).
 - *Recommendation:* A. The receiver renders a sample at a time, so most of the resolution command 0x30 offers could not be honoured; revisit if a converted tune is shown to sound wrong for want of it.
+- Answered by DEC-6465 (awaiting the owner's confirmation): option A, as written: command 0x30 is not taken.
 
 **4. Should the clock come from ASID's command 0x31 instead of from the sound's `clock` field and OBJECT record?**
 - *Option A: the OBJECT record and the `clock` field* (S6581-39, as built). Every receiver has the clock before the first block.
 - *Option B: command 0x31's bit 0, in the first block.* It is ASID's own place for it, but a viewer who joins late, or loses the first block, plays at the wrong pitch, and a message in a block could change the clock in the middle of a sound.
 - *Recommendation:* A.
+- Answered by DEC-6465 (awaiting the owner's confirmation): option A, as written: the clock stays in the OBJECT record and the `clock` field.
 
 **5. Is twenty register data messages a block the right bound?**
 - *Option A: 20* (S6581-42): the highest speed command 0x31 names, 16 updates a frame at 50 frames a second, with a quarter more for faster frames; 874 bytes a block at most.
 - *Option B: 16*, exactly that highest speed at 50 frames a second: 702 bytes a block at most (16 messages of 43 bytes, and the start and stop messages' 14). A tune at speed 16 with a frame shorter than 20 milliseconds would not fit.
 - *Option C: more, for example 50*, one update every 0.4 millisecond: 2,164 bytes a block at most (50 messages of 43 bytes, and 14), more than the architecture's largest block of 1,005 bytes (`midi-architecture.md`, MIDI-30), so this option would also need that bound changed, and two and a half times the receiver's worst-case work.
 - *Recommendation:* A.
+- Answered by DEC-6465 (awaiting the owner's confirmation): option A, as written: at most 20 register data messages a block.
 
 **6. How is existing music for this chip to be converted, if at all?**
 The files hold a player program for the original machine's processor (section 3.11). DEC-6428 allows a GPL or proprietary program to be run only in a sandbox "to compare output" when building an emulator (step 4); it does not cover using a program's output as the content a channel sends.
@@ -852,6 +857,7 @@ The files hold a player program for the original machine's processor (section 3.
 - *Option B: capture an existing player's ASID output* in the sandbox and give it times (S6581-60, way 2). Quick, but it needs the owner's decision extending DEC-6428 step 4 to this use, and the player's licence must allow its output to be used so.
 - *Option C: no converter for now.* Authors write registers in their programs, as the audio demo channel does today.
 - *Recommendation:* C now, and A if the owner wants existing music on channels; B only by an explicit decision that names the program and its licence. Whichever is chosen, a converted tune is sent only with the right to send it (S6581-60).
+- Answered by DEC-6465 (awaiting the owner's confirmation): option C, as recommended: no converter of existing chip music for now; a clean-room converter of NeoTeletext's own only if the owner later wants existing music on channels; capturing another player's output only by an explicit owner decision naming the program and its licence.
 
 ---
 

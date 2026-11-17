@@ -569,7 +569,7 @@ Each item exists because no filed document defines it.
 
 ## 17. Open questions for the owner
 
-Three questions of the architecture document bear on this family and are not repeated here: its open question 1 (new codec numbers, 14 for this family and 19 for its banks, or the present code 6 and bank code 11), its open question 5 (pitch bend range by registered parameter number 0 in every family, which S106-26 follows), and its open question 6 (pitch bend at full resolution in every family, which S106-7 follows in place of the Juno-106's eight bits).
+Three questions of the architecture document bear on this family and are not repeated here: its open question 1 (new codec numbers, 14 for this family and 19 for its banks, or the present code 6 and bank code 11; answered by DEC-6465 with new codes 12 to 19, awaiting the owner's confirmation, so 14 and 19), its open question 5 (pitch bend range by registered parameter number 0 in every family, which S106-26 follows), and its open question 6 (pitch bend at full resolution in every family, which S106-7 follows in place of the Juno-106's eight bits).
 
 **1. How is a synth60 patch carried?**
 - *Option A (recommended): the 18 values and three JU-06A controller values* (S106-31). Every byte is an adopted interface's; the 18 values alone are the nearest Juno-106 patch, readable by any Juno-106 tool. 33 bytes as messages.
@@ -577,12 +577,14 @@ Three questions of the architecture document bear on this family and are not rep
 - *Option C: the JU-06A's controller values alone, all 24 that move a synth60 field.* Wholly the JU-06A's, but 72 bytes as messages, and no longer a Juno-106 patch at all.
 - *Option D: no synth60 patch of its own;* synth60 plays Juno-106 patches only, and the three settings are reachable only by live controllers. Simplest, but a stored synth60 sound could not keep its sub-oscillator off, its envelope PWM or its I+II chorus.
 - *Recommendation:* A.
+- Answered by DEC-6465 (awaiting the owner's confirmation): option A, as written: a synth60 patch is the Juno-106's 18 values and the three JU-06A controller values (S106-31).
 
 **2. The JU-06A's value bands are not in the filed chart.**
 Roland's chart names controllers and nothing more. A JU-06A owner's manual or parameter guide may state how each controller's value maps to a slider and which values select which switch position.
 - *Option A:* look for such a document from Roland, file it, and replace S106-23, S106-24 and S106-26 with its figures.
 - *Option B:* approve S106-23, S106-24 and S106-26 as NeoTeletext's own.
 - *Recommendation:* A as a short search by the owner or the main session (this document's author was not permitted to fetch anything), then B if nothing is found. Only the bands and scalings change; the controller numbers and their fields stand.
+- Answered by DEC-6465 (awaiting the owner's confirmation): option A, a search for a Roland JU-06A owner's manual or parameter guide that states its value bands, begun at once; if none is found, S106-23, S106-24 and S106-26 are approved as NeoTeletext's own (option B). The document stands as written meanwhile.
 
 **3. Which performance controls should the instruments gain?**
 The JU-06A recognises, and the instruments modelled have outside their patch, controls synth106 and synth60 lack. For each: portamento time and switch (5, 65; the Juno-106 has them, the Juno-60 cannot); expression (11; a second gain, as controller 7); LFO wave (29; neither instrument modelled has it); LFO trig (30; possibly the Juno-60's stored TRIGGER MODE, which would be a fourth synth60 setting); assignment mode (86; Poly 2 and solo unison from the Juno-106's manual, and the meaning of "(POLY)" and "SOLO" not stated).
@@ -590,19 +592,21 @@ The JU-06A recognises, and the instruments modelled have outside their patch, co
 - *Option B:* add those that the instruments modelled have: portamento on synth106, Poly 2 and solo unison on both via controller 86 (mapping POLY to Poly 1, "(POLY)" to Poly 2, UNISON to solo unison, and SOLO to solo unison too until its meaning is found), and the Juno-60's LFO TRIGGER MODE on synth60.
 - *Option C:* B and also expression as a second gain.
 - *Recommendation:* A for this interface's first build, since each of B's items is new instrument work, not interface work; then B, recorded as its own to-do, because DEC-6453 asks for what a performance needs.
+- Answered by DEC-6465 (awaiting the owner's confirmation): option A, as written: no new performance controls in the interface's first build; the additions of option B become a to-do.
 
 **4. Does a seventh key held steal a voice?**
 The Juno-106 manual says "If 6 keys are simultaneously pressed, no more key will sound" (page 22), printed beneath the Poly 2 paragraph but reading as general. What is built gives a seventh key the voice of the first.
 - *Option A (recommended):* the manual's rule for both modes (S106-34).
 - *Option B:* keep what is built.
 - *Recommendation:* A; it is the only statement in the source.
+- Answered by DEC-6465 (awaiting the owner's confirmation): option A, as written: a seventh key held does not sound, as the Juno-106 manual states (S106-34).
 
 ## 18. Differences from what is built today
 
 What exists is described in `synthesizer-wire-format.html`, `programming-the-synthesizers.html` and synth106's source. Implementing this document changes the following.
 
 **Names and kinds.**
-1. Today the kit and the program protocol have one kind, `juno` (with `juno_live`, `juno_blocks`, `juno_bank`), and a `model` field of `"106"` or `"60"`. They become two kinds, `synth106` and `synth60`, each with its live, blocks and bank forms, and the `model` field goes (DEC-6461 item 3). The record's extension tag 5 (0 for synth106, 1 for synth60) stays as it is (MIDI-48). The family's codec becomes code 14, and its banks the bank codec 19, if the architecture's open question 1 is answered as recommended (MIDI-107 to MIDI-109, retiring codes 3 to 11); otherwise the present code, 6, is kept with the new block contents, and banks keep the present analogue bank code, 11. This document does not decide it.
+1. Today the kit and the program protocol have one kind, `juno` (with `juno_live`, `juno_blocks`, `juno_bank`), and a `model` field of `"106"` or `"60"`. They become two kinds, `synth106` and `synth60`, each with its live, blocks and bank forms, and the `model` field goes (DEC-6461 item 3). The record's extension tag 5 (0 for synth106, 1 for synth60) stays as it is (MIDI-48). The family's codec becomes code 14, and its banks the bank codec 19, if the architecture's open question 1 is answered as recommended (MIDI-107 to MIDI-109, retiring codes 3 to 11); otherwise the present code, 6, is kept with the new block contents, and banks keep the present analogue bank code, 11. DEC-6465 answered the architecture's open question 1 with new codes 12 to 19, codes 3 to 11 retired (awaiting the owner's confirmation), so the codes are 14 and 19. This document does not decide it.
 
 **The patch.**
 2. Today a bank holds 18 raw bytes per patch (`PATCH_BYTES`, `Patch::from_bytes`, `Patch::to_bytes`), the 18 values. A synth106 patch's content stays those 18 values; a bank becomes a bank image of the 24-byte function type `30` messages (MIDI-56, S106-38), and a synth60 bank one of 33-byte patches.

@@ -16,7 +16,7 @@ Which instrument each synthesizer models is said once, in `synthesizers.md` in t
 5. A bank is a stored object holding the adopted interface's own dump bytes, verbatim, or for a synthesizer whose interface has no dump, the list of its control values; a sound names 1 to 10 banks; a program change chooses a patch; a faulty patch is replaced by the family's default and counted, and the server refuses it before it is ever sent (MIDI-54 to MIDI-66).
 6. Where the adopted interfaces differ on a behaviour common to all MIDI instruments (reset all controllers, all notes off, all sound off, the sustain pedal, mode messages, pitch bend range and resolution, volume), one rule holds for every synthesizer: reset all controllers follows the MIDI Association's RP-015 (DEC-6464), and the rest are set here (MIDI-84 to MIDI-92).
 7. The server restates every part's state (bank, program or patch, and every parameter moved since) at least once a second in a live sound, and at the start of every stored sound, so that a viewer who joins late or loses a block is put right (MIDI-93 to MIDI-103).
-8. The synthesizers move to new codec numbers, 12 to 19, and codecs 3 to 11 are retired; this is open question 1, because DEC-6461 item 3 said the codec numbers would not change (MIDI-107 to MIDI-111).
+8. The synthesizers move to new codec numbers, 12 to 19, and codecs 3 to 11 are retired; this is open question 1, because DEC-6461 item 3 said the codec numbers would not change (MIDI-107 to MIDI-111). DEC-6465 answered the architecture's open question 1 with new codes 12 to 19, codes 3 to 11 retired (awaiting the owner's confirmation), amending DEC-6461 item 3.
 9. Standard MIDI Files are read by the server, not the kits (MIDI-112 to MIDI-120).
 10. Every bound the receiver and the server enforce is listed in section 16 (MIDI-121 to MIDI-124), and the eleven synthesizers are tabled in section 17 (MIDI-125).
 
@@ -892,7 +892,7 @@ A viewer may start hearing a live sound at any block (DEC-611: a play joins at t
 
 ## 14. The codecs, their versions and the program protocol
 
-**MIDI-107. The codec numbers.** The event codecs and the bank codec MUST have these codes in the OBJECT record's codec field (open question 1 gives the alternative of keeping 3 to 11):
+**MIDI-107. The codec numbers.** The event codecs and the bank codec MUST have these codes in the OBJECT record's codec field (open question 1 gives the alternative of keeping 3 to 11; DEC-6465 answered the architecture's open question 1 with new codes 12 to 19, codes 3 to 11 retired (awaiting the owner's confirmation)):
 
 | Code | Codec | Blocks |
 |---|---|---|
@@ -1040,7 +1040,7 @@ Everything a receiver reads and everything the server reads from a program is un
 | synth52 | As synth53 | As synth53 | As synth53 | As synth53 | As synth53 | As synth53 | 5 voices | As synth53 |
 | synth51 | As synth53 | As synth53 | As synth53 | As synth53 | As synth53 | As synth53 | 5 voices | As synth53 |
 | synth8 | JUPITER-08 MIDI implementation chart 1.01 | Note on (velocity recognised; synth8 ignores it) and off, polyphonic key pressure (synth8 ignores it), pitch bend, 50 control changes, nine of them recognised only (1, 7, 10, 11, 41, 64, 91, 92, 118); mode 3; **no program change and no system exclusive in the chart** | Control changes: 40 of the 41 the chart marks transmitted (57, "VCO-2 MODE", counted as ignored), plus NeoTeletext's own 107 and 108 (`synth8.md`, S8-16) | 42 control values in `synth8.md`'s order (NeoTeletext's own) | 42 bytes (`synth8.md`, S8-23) | NeoTeletext's own: one bank of 1 to 64 patches, 2,688 bytes at most; program change 0 to 63 on channels 1 and 2 (`synth8.md`, S8-12, S8-29); the chart states no program change and no bank | 8 voices, whole; 4 a half in dual and split (owner's manual, printed pages 3 and 11; `synth8/assign.rs`, `VOICES`) | Basic channel 1 to 16 (chart); synth8: notes on all 16, upper half on channel 1 and lower on channel 2 (`synth8.md`, S8-2) |
-| synth80 | Deckard's Dream MIDI specifications, manual 1.3.0 | Note on and off; channel pressure, polyphonic aftertouch or MPE by a global setting (PDF 45 and 46); program change and bank select by controller 0, values 0 to 2 (PDF 18); controllers 1, 5, 7, 64; pitch bend, its range a global setting of 1 to 99 semitones, default 3 (PDF 60), polyphonic pitch bend in MPE (PDF 15) | Control changes: 75 panel controllers (PDF 71 to 74); controller 120 is glide mode there, moved to controller 3 (`synth80.md`, S80-20; MIDI-86); 12 controllers of NeoTeletext's own, 20 to 31 (S80-18); pitch bend range by RPN 0 (S80-7, MIDI-90) | Control values in `synth80.md`'s order (NeoTeletext's own) | 85 bytes (S80-33) | 128 patches a bank, three banks (PDF 16 to 18); a bank image of 1 to 128 patches, 10,880 bytes at most (S80-41) | 8 voices, or 4 with two cards a voice (PDF 50 and 51; `synth80/mod.rs`, `VOICES` = 8) | One channel 1 to 16; in MPE mode a master channel 1 to 8 and the voices on 9 to 16 (PDF 46); synth80 hears all 16 as one keyboard, as built |
+| synth80 | Deckard's Dream MIDI specifications, manual 1.3.0 | Note on and off; channel pressure, polyphonic aftertouch or MPE by a global setting (PDF 45 and 46); program change and bank select by controller 0, values 0 to 2 (PDF 18); controllers 1, 5, 7, 64; pitch bend, its range a global setting of 1 to 99 semitones, default 3 (PDF 60), polyphonic pitch bend in MPE (PDF 15) | Control changes: 75 panel controllers (PDF 71 to 74), of which 93 and 94, coarse and fine pitch, are taken as performance controllers outside the patch (`synth80.md`, S80-47; DEC-6465, awaiting the owner's confirmation); controller 120 is glide mode there, moved to controller 3 (`synth80.md`, S80-20; MIDI-86); 12 controllers of NeoTeletext's own, 20 to 31 (S80-18); pitch bend range by RPN 0 (S80-7, MIDI-90) | Control values in `synth80.md`'s order (NeoTeletext's own) | 85 bytes (S80-33) | 128 patches a bank, three banks (PDF 16 to 18); a bank image of 1 to 128 patches, 10,880 bytes at most (S80-41) | 8 voices, or 4 with two cards a voice (PDF 50 and 51; `synth80/mod.rs`, `VOICES` = 8) | One channel 1 to 16; in MPE mode a master channel 1 to 8 and the voices on 9 to 16 (PDF 46); synth80 hears all 16 as one keyboard, as built |
 
 - Reason: The brief asks for one table of the eleven, filled from the filed documents and the code, with every unverified cell marked.
 - Source: The cells' sources.
@@ -1085,7 +1085,7 @@ Each item exists because neither MIDI 1.0, Standard MIDI Files 1.0 nor an adopte
 9. **The rules for control maps NeoTeletext defines** (MIDI-78), for families whose interface has none.
 10. **The default patch before any program change** (MIDI-61) and **the default for a faulty patch** (MIDI-63), as built.
 11. **The program's interface to the server**: time in microseconds, named parameters, `until` for live sounds (MIDI-16 to MIDI-20), under DEC-6462.
-12. **The new codec numbers** (MIDI-107), if open question 1 is answered as recommended.
+12. **The new codec numbers** (MIDI-107), if open question 1 is answered as recommended, as DEC-6465 answered the architecture's open question 1 with new codes 12 to 19, codes 3 to 11 retired (awaiting the owner's confirmation).
 
 ---
 
@@ -1096,36 +1096,43 @@ DEC-6461 item 3 says "the codec numbers and the bytes of the records do not chan
 - *Option A: new codes 12 to 19, 3 to 11 retired* (MIDI-107 to MIDI-109). A browser of today ignores the new sounds and stays silent; nothing old is misread. Amends DEC-6461 item 3.
 - *Option B: keep 3 to 11 with the new contents.* No new numbers; a browser of today reads event lists as four-byte slots and plays wrong notes or noise until it is updated.
 - *Recommendation:* A. The requirements are written for it; under B only MIDI-107 to MIDI-109's numbers change.
+- Answered by DEC-6465 (awaiting the owner's confirmation): option A, new codes 12 to 19, codes 3 to 11 retired; it amends DEC-6461 item 3's statement that the codec numbers do not change. MIDI-107 to MIDI-109 stand as written.
 
 **2. How often to restate, and whether a stored sound's start restatement is the server's or the program's.**
 - *Option A* (written): the server restates within every 50 blocks, aiming at 25, and writes block 0's restatement itself, while a family document may require the program to (as synth6581's does).
 - *Option B:* 25 blocks as a hard bound: half a second of wrong timbre at most for a joiner, twice the bytes.
 - *Recommendation:* A, matching DEC-6410 item 12 and the synth6581 document.
+- Answered by DEC-6465 (awaiting the owner's confirmation): option A, as written.
 
 **3. Several banks for one sound.**
 - *Option A* (written): 1 to 10 banks a sound, chosen by bank select or by program range as each interface does.
 - *Option B:* one bank a sound, at most 128 patches: simpler, but DX7 programs 32 to 63, the Prophet-5's groups and Deckard's Dream's banks cannot all be reached as the interfaces reach them.
 - *Recommendation:* A.
+- Answered by DEC-6465 (awaiting the owner's confirmation): option A, as written; for synth7, a second 32-voice dump as its cartridge bank reached by program changes 32 to 63 (`synth7.md`, S7-50).
 
 **4. A restatement made for a viewer who joins.**
 The server could send a connection that joins a live sound one extra event list at once with every part's restatement, instead of waiting up to a second; but a block number has one content for every receiver (MIDI-44), so this needs a new record or a block numbered apart.
 - *Option A* (written): no; the periodic restatement alone, which also serves teletext lines where nothing is per-viewer.
 - *Option B:* design a join restatement in a later version.
 - *Recommendation:* A now; B only if the second is heard as a fault.
+- Answered by DEC-6465 (awaiting the owner's confirmation): option A, as written; reconsidered only if the second of wrong timbre is heard as a fault.
 
 **5. Pitch bend range by RPN 0 in every family** (MIDI-90).
 The owner asked for one rule for common behaviours. No filed interface documents RPN 0; three have no range message at all, and synthD's document is written for option A, stating option B's fixed range of 797 cents.
 - *Option A* (written): RPN 0 in every family beside each interface's own message.
 - *Option B:* each family's own message only; synthD, the Juno-106 and Deckard's Dream keep fixed ranges.
 - *Recommendation:* A: it is MIDI's standard way and the only one that can be the same everywhere. A related question for the synth53 family, whose interface stores the range in each program while MIDI-90 says a program change does not change it, is `synth53-synth52-synth51.md`'s open question 5. `synthd.md`, SD-6, follows option A pending the answer.
+- Answered by DEC-6465 (awaiting the owner's confirmation): option A, as written. The related question of the synth53 family (`synth53-synth52-synth51.md`, open question 5) was answered with its option A, the rule of MIDI-90, against that document's recommendation, because the owner requires one behaviour for all synthesizers in what MIDI defines in common; MIDI-90 therefore gains no exception.
 
 **6. Pitch bend at full resolution everywhere** (MIDI-91).
 - *Option A* (written): all 14 bits in every family, the DX7's and Juno-106's coarser bends listed as departures.
 - *Option B:* each instrument's own resolution, as its interface states.
 - *Recommendation:* A, under the owner's rule of one behaviour.
+- Answered by DEC-6465 (awaiting the owner's confirmation): option A, as written.
 
 **7. The documents to obtain.**
 MIDI 1.0, Standard MIDI Files 1.0 and RP-015 are not filed (section 1.5); every "(to be checked)" waits on them. *Recommendation:* the owner or the main session fetches and files them before any requirement marked so is built.
+- Not answered by DEC-6465: left with the owner (TODO-6466). The MIDI Association publishes these documents, and the MPE specification, as downloads understood to need a signed-in account, and the owner's rules forbid scripting logins; every requirement marked "to be checked" waits on them.
 
 ---
 
