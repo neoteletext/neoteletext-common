@@ -42,6 +42,18 @@
 # is already the cell row of a pointer event.
 # The harness's viewer calls (viewer, privateViewer, remember, forget, grantState,
 # refuseState, restart) are viewer-state.md VS-404's.
+# The commands sent directly (localMidi to sequence) write exactly the lines of
+# docs/command-lines.jsonl, which each kit keeps a copy of and its tests call: a
+# sequence started with no at, or with at null, is written with no at, which is the
+# next tick (RULE-103, RULE-114; TODO-6681 item 4), and at is written only when a
+# time is given. objectPage's object page is the schema's ObjectPageContent (page,
+# s1, global, last, objects), written in that order, its page a number as every
+# call's is (animation.md ANIM-17).
+# Each kit also exports the limits of a page's rule table (page-rules.md RULE-57,
+# REQ-6608) by the engine's names (MAX_RULES, MAX_RECTS and the rest, and
+# TICKS_PER_SECOND), generated from neoteletext_rules::limits at the commit its
+# scripts/check.sh names (LIMITS_FROM) and checked against it: they are constants,
+# not calls, and are not listed here.
 what	typescript	python	message	arguments
 call	sound	sound	sound	to, member
 call	authorLog	author_log	author_log	to, level, text, page
@@ -65,7 +77,7 @@ call	animate	animate	animate	to, page, sub-page, ops
 call	sprites	sprites	sprites	to, page, sub-page, sprites
 call	naplpsObjects	naplps_objects	naplps_objects	to, page, sub-page, objects
 call	spriteSheet	sprite_sheet	sprite_sheet	to, page, sub-page, kind, data, restart
-call	objectPage	object_page	object_page	to, page, sub-page, object page, object sub-page, object
+call	objectPage	object_page	object_page	to, page, sub-page, object page
 call	playTimeline	play_timeline	timeline	to, page, sub-page, timeline, id
 call	stopTimeline	stop_timeline	timeline_stop	to, page, sub-page, id
 call	publish	publish	page, subpages or index, as the kit's sender writes it	owner, page, screen
