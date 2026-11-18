@@ -1,11 +1,12 @@
 # The public calls, handlers, audiences and harness calls of the TypeScript kit
 # (neoteletext-server-ts-protocol) and the Python kit (neoteletext-server-channels
-# kits/python) for program protocol 14: typescript.md TS-2 and python.md PY-18 and PY-19,
-# with the calls of the page rule table (page-rules.md RULE-55) and of animation
-# (animation.md ANIM-19).
+# kits/python) for program protocol 15: typescript.md TS-2 and python.md PY-18 and PY-19,
+# with the calls of the page rule table in its second form (page-rules.md RULE-55,
+# RULE-110, RULE-114) and of animation (animation.md ANIM-17, ANIM-19).
 # Each kit keeps a byte-for-byte copy, pinned by COMMON_FROM in its scripts/check.sh,
 # and its tests compare its public interface with it.
-# Columns, separated by one tab: what (call, handler, audience, harness, timeline or step);
+# Columns, separated by one tab: what (call, handler, audience, harness, timeline, step,
+# builder or modes);
 # typescript,
 # the TypeScript kit's name; python, the Python kit's name (the TypeScript name in
 # snake_case, a handler with on_ before it); message, the protocol message the entry
@@ -20,6 +21,25 @@
 # constructor, whose one option is a keyword argument in Python and a field of the options
 # object in TypeScript), and a step row a method of the step that at and then answer;
 # every step method answers the step itself.
+# A builder row is a function of the kit's package (in Python, of the neoteletext_app
+# module) that only constructs a rule table's object (RULE-55): it checks nothing and
+# sends nothing. A modes row is a method of what the builder modes answers (RULE-110):
+# in answers the condition that the mode set's variable holds the mode's number, joined
+# by and with the condition given, if one is; enter answers the variable command that
+# sets it. Python cannot name a method in, a keyword, so its name there is in_.
+# What each builder answers, as JSON: physicalKey {"physical":c}; characterKey {"char":c};
+# namedKey {"name":n}; level {"of":"sound","channel":n,"property":"level"}; variable
+# {"of":"variable","variable":v}; plus {"plus":k,"variable":v}; row {"plus":k,"row":"p"} and
+# fired {"plus":k,"fired":f}, k 0 when not given; phase
+# {"of":"timer","timer":t,"property":"phase","period":n}; noteOn
+# {"type":"local_midi","channel":c,"message":{"event":"note_on","channel":part,"key":k,"velocity":v}}
+# and noteOff the same with note_off; modes(v, names): in(name)
+# {"read":{"of":"variable","variable":v},"op":"==","value":n}, or with a condition c
+# {"and":[that, c]}, and enter(name) {"type":"variable","op":"set","variable":v,"value":n},
+# n the name's place in names from 0; a name not in names is an error.
+# An input's place in its rule's row set (RULE-37's row) is the input's ruleRow in
+# TypeScript and rule_row in Python, beside its rule, tick and target: an input's row
+# is already the cell row of a pointer event.
 # The harness's viewer calls (viewer, privateViewer, remember, forget, grantState,
 # refuseState, restart) are viewer-state.md VS-404's.
 what	typescript	python	message	arguments
@@ -32,15 +52,22 @@ call	regisLinks	regis_links	regis_links	to, page, sub-page, links
 call	regisCursor	regis_cursor	regis_cursor	to, page, sub-page, drawing
 call	naplps	naplps	naplps	to, page, sub-page, data, restart
 call	measure	measure	measure, measured	page, screen
-call	rules	rules	rules	to, page, table
-call	queryState	query_state	query_state, page_state	connection, page
+call	rules	rules	rules	to, page, sub-page, table
+call	queryState	query_state	query_state, page_state	connection, page, sub-page
+call	localMidi	local_midi	local_midi	to, page, sub-page, channel, message
+call	variable	variable	variable	to, page, sub-page, command
+call	timer	timer	timer	to, page, sub-page, op, timer
+call	report	report	report	to, page, sub-page, value
+call	run	run	run	to, page, sub-page, group
+call	sequence	sequence	sequence	to, page, sub-page, op, sequence, at
 call	frame	frame	frame	to, page, sub-page, body (TypeScript only)
 call	animate	animate	animate	to, page, sub-page, ops
 call	sprites	sprites	sprites	to, page, sub-page, sprites
 call	naplpsObjects	naplps_objects	naplps_objects	to, page, sub-page, objects
-call	spriteSheet	sprite_sheet	sprite_sheet	to, page, kind, data, restart
+call	spriteSheet	sprite_sheet	sprite_sheet	to, page, sub-page, kind, data, restart
+call	objectPage	object_page	object_page	to, page, sub-page, object page, object sub-page, object
 call	playTimeline	play_timeline	timeline	to, page, sub-page, timeline, id
-call	stopTimeline	stop_timeline	timeline_stop	to, page, id
+call	stopTimeline	stop_timeline	timeline_stop	to, page, sub-page, id
 call	publish	publish	page, subpages or index, as the kit's sender writes it	owner, page, screen
 call	publishSubpages	publish_subpages	page, subpages or index, as the kit's sender writes it	owner, page, sub-pages
 call	publishTti	publish_tti	page, subpages or index, as the kit's sender writes it	owner, page, text, titles
@@ -92,7 +119,7 @@ harness	join	join	-	viewer or connection, page
 harness	open	open	-	connection, page, sub-page, query
 harness	close	close	-	connection
 harness	send	send	-	connection, input event
-harness	fire	fire	input or rule_event	connection, rule, event, tick, target
+harness	fire	fire	input or rule_event	connection, rule, event, tick, target, row
 harness	answerState	answer_state	page_state	message, state
 harness	timelineSends	timeline_sends	timeline	connection
 harness	typeText	type_text	-	connection, text
@@ -147,3 +174,17 @@ step	frame	frame	-	object, frame
 step	cycle	cycle	-	object, first, last, period, once
 step	stopCycle	stop_cycle	-	object
 step	reset	reset	-	object
+builder	physicalKey	physical_key	-	character
+builder	characterKey	character_key	-	character
+builder	namedKey	named_key	-	name
+builder	level	level	-	channel
+builder	variable	variable	-	variable
+builder	plus	plus	-	plus, variable
+builder	row	row	-	plus
+builder	fired	fired	-	property, plus
+builder	phase	phase	-	timer, period
+builder	noteOn	note_on	-	channel, part, key, velocity
+builder	noteOff	note_off	-	channel, part, key, velocity
+builder	modes	modes	-	variable, names
+modes	in	in_	-	mode, condition
+modes	enter	enter	-	mode
