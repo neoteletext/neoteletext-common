@@ -82,7 +82,7 @@ The table is not a program. It has no loops, no arithmetic beyond saturating add
 - **Verification.** A test of `neoteletext-rules` with one table that has a rule of every trigger kind writing its own number to a log by `send`: the order of sends in one tick is exactly steps 2 to 5; property test: the same table and the same event script give the same outputs on every run.
 
 **RULE-6 [engine: neoteletext-rules]. No cascade within a tick.**
-- **Statement.** Nothing an action does MUST be visible to any condition, trigger or other action's reading in the same tick. A variable set, a target shown, hidden, moved or given a frame, a timer started or stopped, a rule enabled or disabled, and a sound started or stopped by an action in tick `t` are first seen in the snapshot of tick `t + 1`. A rule therefore cannot fire another rule in the same tick, and a rule that disables itself still completes its own actions. The work of a tick is bounded by the table's size and by `MAX_ACTIONS_PER_TICK` (256): a rule firing whose actions would take the tick's count past that many is dropped whole (a rule's `echo` counts as one action), so that no more than 256 actions ever run in a tick; each firing dropped is counted, and reported once a second at most as a `tick_overrun` fault (RULE-72).
+- **Statement.** Nothing an action does MUST be visible to any condition, trigger or other action's reading in the same tick. A variable set, a target shown, hidden, moved or given a frame, a timer started or stopped, a rule enabled or disabled, and a sound started or stopped by an action in tick `t` are first seen in the snapshot of tick `t + 1`. A rule therefore cannot fire another rule in the same tick, and a rule that disables itself still completes its own actions. The work of a tick is bounded by the table's size and by `MAX_ACTIONS_PER_TICK` (256): once that many actions have run in a tick, further rule firings in that tick are dropped whole, counted, and reported once a second at most as a `tick_overrun` fault (RULE-72).
 - **Reason and source.** DEC-6522 item 14.
 - **Verification.** Tests: rule A sets a variable and rule B's `becomes` on it fires in the next tick, never the same; a rule that disables itself runs all its actions; a table built to fire 64 rules on each of 16 events stops at 256 actions and reports the overrun.
 
@@ -805,6 +805,7 @@ The server encodes each message for receivers as a record in the audio profile's
 | `MAX_STATE_BYTES` | 1,800 | a PAGE_STATE payload |
 
 - The trusted core's constants live in the browser's `protocol` crate: `INPUT_RING` 64, `SEND_WINDOW_TICKS` 4, `SEND_BUDGET` 120 a second, `TIMED_SEND_BUDGET` 20 a second, `QUERY_INTERVAL_TICKS` 60. The server's `MAX_KEPT_TABLES` 64 lives in `teletext-runtime`. The local sound's constants are RULE-62's.
+- `MAX_ACTIONS_PER_TICK` is never passed (RULE-6): a rule firing whose actions would take the tick's count past it is dropped whole, so that no more than 256 actions ever run in a tick, and a rule's `echo` counts as one action.
 - The fixed arrays these size make a decoded table about 76 kilobytes and an evaluator about 91; a microcontroller keeps them in static memory.
 - The worst case of one tick follows from them: 16 events × 64 rules, each a condition of at most 16 nodes, and at most 256 actions; a few tens of thousands of integer operations, far inside a tick on any target the engine supports.
 - **Reason and source.** DEC-6522 item 10; the engine's rule that every constant is defined once (REQ-GEN-014).
@@ -1158,7 +1159,7 @@ The table, its carriage and the music player were built on 18 November 2026 in e
 **The engine's crates (TODO-6558, part A).**
 
 1. **RULE-15.** The statement's formula was followed where its verification line disagreed: a timer started in tick `t` runs since tick `t + 1`, so `after 1` fires at tick `t + 2`. The verification line and the prose of example 3 of section 7.5 now say so.
-2. **RULE-6.** A rule firing whose actions would take the tick past 256 is dropped whole, so that no more than 256 actions ever run; a rule's `echo` counts as one action.
+2. **RULE-6, stated in RULE-57.** A rule firing whose actions would take the tick past 256 is dropped whole, so that no more than 256 actions ever run; a rule's `echo` counts as one action. It is written among RULE-57's limits, and RULE-6's own statement is left as it was, because that statement is being revised for DEC-6580 on another branch.
 3. **RULE-9, RULE-57.** One limit was added: `MAX_POINTER_OBJECTS` (16), the objects the pointer is followed inside at once.
 4. **RULE-9.** `enter` and `leave` fire on any pointer event that carries a position; `move` fires only on a move to another pixel; `held` reads the move's own button mask or a tracked button.
 5. **RULE-20.** The actions that do nothing and are counted are listed case by case.
