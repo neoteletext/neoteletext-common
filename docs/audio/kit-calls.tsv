@@ -6,7 +6,7 @@
 # Each kit keeps a byte-for-byte copy, pinned by COMMON_FROM in its scripts/check.sh,
 # and its tests compare its public interface with it.
 # Columns, separated by one tab: what (call, handler, audience, harness, timeline, step,
-# builder or modes);
+# builder, modes, regis or naplps);
 # typescript,
 # the TypeScript kit's name; python, the Python kit's name (the TypeScript name in
 # snake_case, a handler with on_ before it); message, the protocol message the entry
@@ -54,6 +54,23 @@
 # TICKS_PER_SECOND), generated from neoteletext_rules::limits at the commit its
 # scripts/check.sh names (LIMITS_FROM) and checked against it: they are constants,
 # not calls, and are not listed here.
+# Renderer parity (neoteletext-common docs/renderer-parity.md PAR-38 to PAR-40; the server's
+# schema of neoteletext-app-server 25bc0e7): the audience kept, which only regis,
+# regisLinks, regisCursor, naplps, naplpsObjects, naplpsLinks and naplpsCursor take and
+# writes connections "kept"; regis and naplps take data as bytes, text written a byte a
+# character, or a list of parts, sent as parts; a page description's picture is a field
+# of the describe handler's answer, picture, { kept: sub-code } or { language, data,
+# objects }, not a call. measurePictureText's options are a text part's language and
+# outside. A regis row is a member of the kits' Regis class and a naplps row of their
+# Naplps class (written Regis() and Naplps() for their constructors, which take nothing),
+# each method appending its commands and answering the builder, but parts, which answers
+# the parts regis or naplps takes, and object, which answers a NaplpsObject. An argument
+# written options (a; b) is one argument, an object of those optional fields in
+# TypeScript and keyword arguments in Python; build is a function the builder hands the
+# builder of the contents to. docs/picture-examples.jsonl lists builder calls and the
+# parts they give, as the message carries them, which each kit keeps a copy of and its
+# tests replay: a call's arguments are given as TypeScript takes them, the options last,
+# and its name in TypeScript's form (the Python kit's is its snake_case).
 what	typescript	python	message	arguments
 call	sound	sound	sound	to, member
 call	authorLog	author_log	author_log	to, level, text, page
@@ -76,6 +93,10 @@ call	frame	frame	frame	to, page, sub-page, body (TypeScript only)
 call	animate	animate	animate	to, page, sub-page, ops
 call	sprites	sprites	sprites	to, page, sub-page, sprites
 call	naplpsObjects	naplps_objects	naplps_objects	to, page, sub-page, objects
+call	naplpsLinks	naplps_links	naplps_links	to, page, sub-page, links
+call	naplpsCursor	naplps_cursor	naplps_cursor	to, page, sub-page, object
+call	forgetPicture	forget_picture	forget_picture	page, sub-page
+call	measurePictureText	measure_picture_text	measure_picture_text, measured_picture_text	text, options (language; outside)
 call	spriteSheet	sprite_sheet	sprite_sheet	to, page, sub-page, kind, data, restart
 call	objectPage	object_page	object_page	to, page, sub-page, object page
 call	playTimeline	play_timeline	timeline	to, page, sub-page, timeline, id
@@ -127,6 +148,7 @@ audience	{ connection }	connection_hears	-	connection
 audience	{ page }	page_hears	-	page
 audience	{ connections: [...] }	connections_hear	-	connections
 audience	{ connections: "all" }	everyone_hears	-	-
+audience	{ kept: true }	kept_hears	-	-
 harness	join	join	-	viewer or connection, page
 harness	open	open	-	connection, page, sub-page, query
 harness	close	close	-	connection
@@ -200,3 +222,31 @@ builder	noteOff	note_off	-	channel, part, key, velocity
 builder	modes	modes	-	variable, names
 modes	in	in_	-	mode, condition
 modes	enter	enter	-	mode
+regis	Regis	Regis()	-	-
+regis	erase	erase	-	background
+regis	colour	colour	-	index, red, green, blue
+regis	pen	pen	-	index
+regis	at	at	-	x, y
+regis	line	line	-	x, y
+regis	box	box	-	x, y, width, height, options (fill; pen)
+regis	circle	circle	-	x, y, radius, options (fill)
+regis	text	text	-	text, options (language; outside; size)
+regis	bytes	bytes	-	raw
+regis	drawing	drawing	-	number, attributes (detectable; layer; hover; pressed; label), build
+regis	commit	commit	-	-
+regis	title	title	-	text
+regis	parts	parts	regis	-
+naplps	Naplps	Naplps()	-	-
+naplps	reset	reset	-	-
+naplps	clear	clear	-	-
+naplps	colour	colour	-	index, red, green, blue
+naplps	pen	pen	-	index
+naplps	point	point	-	x, y
+naplps	line	line	-	x, y
+naplps	rect	rect	-	x, y, width, height, options (filled)
+naplps	polygon	polygon	-	points, options (filled)
+naplps	text	text	-	text, options (language; outside)
+naplps	bytes	bytes	-	raw
+naplps	defineMacro	define_macro	-	code, build
+naplps	object	object	naplps_objects	object
+naplps	parts	parts	naplps	-
