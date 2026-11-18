@@ -12,47 +12,55 @@
 #          the name begins `skipped`, and a server told it does as meaning says.
 # refused  value is a message a reader must refuse at the top level of the
 #          stream: a protocol error, closed with close code 4000 (DOC-1919).
-#          Under push protocol 9 that includes a well-formed event of the
+#          Under push protocol 10 that includes a well-formed event of the
 #          viewer's input, which may stand only inside a RULE_EVENT
 #          (docs/page-rules.md RULE-46).
 # record   value is one 42-byte packet 4/31 on data channel 12, service 0,
 #          record id as meaning says, in hexadecimal; meaning is the record.
 #
-# The rows below those are the page rule table's and animation's
-# (docs/page-rules.md RULE-85, docs/animation.md ANIM-23). The engine writes
-# them with `cargo xtask wire-vectors`, and its tests hold that this table
-# has what that prints; they are never typed by hand.
-# rules       value is the body of one RULES record, type 21, in hexadecimal
-#             (RULE-41): the page, the generation, and the table or none.
-#             It decodes, and encodes back to the same bytes.
+# The rows below those are the page rule table's and animation's, in the
+# table's second form at push protocol 10 (docs/page-rules.md RULE-85,
+# docs/animation.md ANIM-23). The engine writes them with
+# `cargo xtask wire-vectors`, and its tests hold that this table has what
+# that prints; they are never typed by hand. Every one is for page 101,
+# sub-code 0001.
+# rules       value is the image of one page's table, in hexadecimal
+#             (RULE-41): a header of twelve bytes, then its rectangles,
+#             rows, rules, groups and sequences. It holds neither its page
+#             nor its sub-code, which the RULES record that carries it
+#             does. It decodes for page 101/0001, and encodes back to the
+#             same bytes.
+# command     value is the body of one command, in hexadecimal: the bytes a
+#             record of that type carries and the bytes a group holds
+#             (RULE-45). The name begins with the record: variable (type
+#             29, RULE-99, each operation with each operand kind), report
+#             (31), run (32) or sequence (33). It reads, and writes back to
+#             the same bytes.
 # rule_event  value is one message of the input stream, a RULE_EVENT
 #             (RULE-46); it reads, and writes back to the same bytes.
 # page_state  the same, a PAGE_STATE (RULE-47).
 # rules_fault the same, a RULES_FAULT (RULE-48).
 # records     value is the packets 4/31 of one record, each 42 bytes in
 #             hexadecimal, fragment 0 first, separated by one space; service
-#             0, record id 0. The name begins with the record: animate (type
-#             23), sprites (24), naplps_objects (25), sheet (26) or frame (27).
+#             0, record id 0. The name begins with the record: rules (type
+#             21, or rules_query, 22), local_midi (28), variable (29), timer
+#             (30), report (31), run (32), sequence (33), animate (23),
+#             sprites (24), naplps_objects (25), sheet (26) or frame (27).
 # object      value is one whole OBJECT record of the audio profile as it is
 #             framed, before it is cut into fragments: version, type, a
 #             two-byte body length, the body and a CRC-32 (RULE-60).
 #
-# The `rules` rows named `rule_35`, `example_1` to `example_6` and
-# `music_player` are the RULES record bodies of page-rules.md's worked
-# examples (RULE-35's, the six of section 7.5 and RULE-93's table), whose
-# JSON is docs/rules-examples.jsonl and the documents themselves. The server
-# writes them: they are, byte for byte, the rows of its
-# crates/teletext-runtime/src/protocol/tests/rules-vectors.tsv, which its
-# test `every_worked_example_is_encoded_as_its_vector` holds to what it
-# encodes with the engine's crate. Each decodes with `neoteletext_rules`
-# and encodes back to the same bytes. The music player's is 1,111 bytes, the
-# longest value of the table.
+# The `rules` rows the server writes are not here yet at this version: the
+# images of page-rules.md's worked examples (`rule_35`, `example_1` to
+# `example_6` and `music_player`), whose names the server turns into
+# numbers. When the server has written them, each is held by the engine's
+# tests to decode for page 101/0001 and to encode back to the same bytes.
 # The `object` row `local_sound_as_the_server_writes_it` is the same sound as
 # `local_sound` with the variant's tag (5, one byte, 0: synth106) before the
 # banks' tag, as the server writes every sound of the synth106 and synth53
 # families: three bytes more, and the same sound to a reader.
-version	input	9	HELLO's and WELCOME's version
-version	subprotocol	neottx.9	Sec-WebSocket-Protocol, asked for and echoed
+version	input	10	HELLO's and WELCOME's version
+version	subprotocol	neottx.10	Sec-WebSocket-Protocol, asked for and echoed
 close	broke_protocol	4000	stop
 close	wrong_version	4001	stop
 close	unnamed_stop	4050	stop
@@ -60,7 +68,7 @@ close	restarting	4100	retry
 close	unnamed_retry	4150	retry
 close	normal	1000	retry
 close	above_the_ranges	4200	retry
-input	hello	ff090980808802	hello version=9 caps=4325376
+input	hello	ff090a80808802	hello version=10 caps=4325376
 input	select_page	ff4003333032	select 302
 input	select_sub_page	ff40083330322f30303032	select 302/0002
 input	select_query	ff40073330323f613d31	select 302?a=1
@@ -82,33 +90,62 @@ refused	select_small_digits	ff4003336130	a spelling the map does not write
 refused	select_query_alone	ff4004613d3132	a query with no page
 refused	select_query_not_pairs	ff40053330323f78	a query that is not pairs
 refused	not_shortest_varint	ff09870080808802	a varint longer than it need be
-record	welcome	a1ead05e000002050007ff0109808088029a45ef400000000000000000000000000000000000000012e8	welcome version=9 caps=4325376 record=0
+record	welcome	a1ead05e000002050007ff010a80808802dde5959000000000000000000000000000000000000000c467	welcome version=10 caps=4325376 record=0
 record	cursor_acknowledges	a1ead05e01000204000801000001ff000000b320a6b5000000000000000000000000000000000000bc7c	cursor page=100 acked=1 none record=1
 record	denied_not_found	a1ead05e0000020c000a01943330322f303030325aa8b1e400000000000000000000000000000000014c	denied 404 302/0002 record=0
 record	denied_channel	a1ead05e0000020c000201f700bc6f39000000000000000000000000000000000000000000000000a49b	denied 503 record=0
 record	redirect_place	a1ead05e0000020b0003333032433dadc00000000000000000000000000000000000000000000000c629	redirect 302 record=0
 record	redirect_keeps_query	a1ead05e0000020b000c3330322f303030323f613d317d98daac00000000000000000000000000005f39	redirect 302/0002?a=1 record=0
 record	redirect_address	a1ead05e0000020b001768747470733a2f2f622e6578616d706c652f6e6577732f440e68930000007caa	redirect https://b.example/news/ record=0
-rules	default_send_all	0101000101010000000c000001010100000000010e00000000000000000001020000000000010e000000000000000000010c00010e0000000000000000000103000000ff00010e0000000000000000000104000000ff00010e000000000000000000010d0000000000010e000000000000000000010501000000010e000000000000000000010601000000010e000000000000000000010502000000010e000000000000000000010602000000010e000000000000000000010f00010e000000000000000000011000010e000000000000000000	the default table of RULE-53 for page 101, generation 1
-rules	default_send_all_wheel	0101000101010000000d000001010100000000010e00000000000000000001020000000000010e000000000000000000010c00010e0000000000000000000103000000ff00010e0000000000000000000104000000ff00010e000000000000000000010d0000000000010e000000000000000000010501000000010e000000000000000000010601000000010e000000000000000000010502000000010e000000000000000000010602000000010e000000000000000000010f00010e000000000000000000011000010e000000000000000000010e00000000010e000000000000000000	the default table of RULE-53 for page 101, generation 1, with the wheel rule
-rules	no_table	010100020100000000000000	page 101, generation 2, no table
-rules	rule_35	010100010101010101010100000000000000000800000004000028012c00c80064010100000001030000006100010100903c6400020000000000000001	page-rules.md RULE-35's example: page 101, generation 1; one variable, one timer, one rectangle, one rule (physical key a plays note 60 on audio channel 0) and one sub-page mask
-rules	example_1	01200001010100000002000001010100000000010e000000000000000000010c00010e000000000000000000	page-rules.md section 7.5 example 1: page 120, generation 1; every key with repeats, and text, are sent
-rules	example_2	0130000101010000000200000103010003000001070100030203040100030000010701000300	page-rules.md section 7.5 example 2: page 130, generation 1; control 3 takes its pressed look while held, and its release is echoed
-rules	example_3	014000010101010100030000000000000000000a0000000500010101000001020000000900020900000000010a00010101000001020000000a00020900ffffffff0a00010b000000000100010e010100000000000000	page-rules.md section 7.5 example 3: page 140, generation 1; the arrow keys change a variable held to 0 to 10, reported one tick later by a timer
-rules	example_4	015000010101000000030000010101000001020000000700010f02000a01fff80000010101000001020000000800010f02000a01000800000309010702000a0200140202010500016400050006020014	page-rules.md section 7.5 example 4: page 150, generation 1; object 10 walks with the arrow keys, and overlapping object 20 plays a sound, hides it and is echoed
-rules	example_5	0160000101010001000300000101070001120200070001001e0001010000000000010a00010b000000025800010e000000000000000000	page-rules.md section 7.5 example 5: page 160, generation 1; object 7 cycles two frames from opening, and ten seconds with no key is sent once
-rules	example_6	0170000101010000000501000109010406000e0000010000050000000001050200320109010406000e0000010000010000000001060200320109010406000e000004000505000000640107020033030109010406000e00000400050400000064010702003300010e02003300010e00000000000000000000020000000000000003	page-rules.md section 7.5 example 6: page 170, generation 1; a synth106 sound's notes and filter field show object 50 and force object 51's look, the wheel on object 51 is sent, and sub-page 0002 switches two rules off
-rules	music_player	0101000101010000002f000001070001020001000164000500010100000001030000006100020100903c640702006502010200000001030000006100020100803c400702006500010100000001030000007700020100903d640702006602010200000001030000007700020100803d400702006600010100000001030000007300020100903e640702006702010200000001030000007300020100803e400702006700010100000001030000006500020100903f640702006802010200000001030000006500020100803f400702006800010100000001030000006400020100904064070200690201020000000103000000640002010080404007020069000101000000010300000066000201009041640702006a020102000000010300000066000201008041400702006a000101000000010300000074000201009042640702006b020102000000010300000074000201008042400702006b000101000000010300000067000201009043640702006c020102000000010300000067000201008043400702006c000101000000010300000079000201009044640702006d020102000000010300000079000201008044400702006d000101000000010300000068000201009045640702006e020102000000010300000068000201008045400702006e000101000000010300000075000201009046640702006f020102000000010300000075000201008046400702006f00010100000001030000006a000201009047640702007002010200000001030000006a000201008047400702007000010100000001030000006b000201009048640702007102010200000001030000006b0002010080484007020071000109010405000001000000000600000004010502012d0109010405000001000000000300000004010602012d0109010405000001000000000600000008010502012e0109010405000001000000000300000008010602012e0109010405000001000000000600000010010502012f0109010405000001000000000300000010010602012f010901040500000100000000060000002001050201300109010405000001000000000300000020010602013001090104050000010000000006000000400105020131010901040500000100000000030000004001060201310109010405000001000000000600000060010502013201090104050000010000000003000000600106020132010901040500000100000000060000008001050201330109010405000001000000000300000080010602013301090104050000010000000006000000c0010502013401090104050000010000000003000000c00106020134010100000001010000003100050100c0000005020191060201920602019306020194010100000001010000003200050100c0010006020191050201920602019306020194010100000001010000003300050100c0020006020191060201920502019306020194010100000001010000003400050100c0030006020191060201920602019305020194	page-rules.md RULE-93, the music player's table: page 101, generation 1; 47 rules, none of which sends
-rule_event	fired	ff4b0e8102010001000000019c00000000	rule 0 fired at tick 412 on=101/0001 generation=1
-rule_event	input_key	ff4b178102010001000000019c01000000ff0181020110610161	rule 0 at tick 412 carries: key press a text=a on=101/0001
-rule_event	value	ff4b1a8102010001000000019c02000000010000000000000000000005	rule 0 at tick 412: variable 0 reads 5
-page_state	answer	ff4c2e8102010000002a0001000023a0000000000000000701000000050101000000120001050000010000000000000029	identifier=42 generation=1 tick=9120 enabled=7 variables=[5] timers=[running 18] values=[sound 0 level = 41] on=101/0001
-rules_fault	tick_overrun	ff4d08810201000302000c	generation=3 fault=tick_overrun count=12 on=101/0001
+rules	default_send_all	020000000c010000001200000000010101000000000000010200000000000000010c0000000103000000ff0000000104000000ff000000010d000000000000000105010000000000010601000000000001050200000000000106020000000000010f000000011000011f00000d01010001000000000000000000	the image of the default table of RULE-53 for page 101/0001
+rules	default_send_all_wheel	020000000d010000001200000000010101000000000000010200000000000000010c0000000103000000ff0000000104000000ff000000010d000000000000000105010000000000010601000000000001050200000000000106020000000000010f0000000110000000010e00000000011f00000d01010001000000000000000000	the image of the default table of RULE-53 for page 101/0001, with the wheel rule
+command	variable_set_constant	0101000101000100000004	set v0 to 4
+command	variable_set_variable	010100010100020000000101	set v0 to 1 plus v1
+command	variable_set_fired	010100010100030000000000	set v0 to 0 plus the firing's key
+command	variable_set_value	010100010100040500000100000000	set v0 to the level of audio channel 0
+command	variable_inc	01010001020000	inc v0
+command	variable_dec	01010001030000	dec v0
+command	variable_add_constant	0101000104000100000004	add 4 to v0
+command	variable_add_variable	010100010400020000000101	add 1 plus v1 to v0
+command	variable_add_fired	010100010400030000000000	add 0 plus the firing's key to v0
+command	variable_sub_constant	0101000105000100000004	sub 4 from v0
+command	variable_sub_variable	010100010500020000000101	sub 1 plus v1 from v0
+command	variable_sub_fired	010100010500030000000000	sub 0 plus the firing's key from v0
+command	variable_toggle	01010001060000	toggle v0
+command	variable_min_constant	0101000107000100000004	hold v0 to at most 4
+command	variable_min_variable	010100010700020000000101	hold v0 to at most 1 plus v1
+command	variable_min_fired	010100010700030000000000	hold v0 to at most 0 plus the firing's key
+command	variable_max_constant	0101000108000100000004	hold v0 to at least 4
+command	variable_max_variable	010100010800020000000101	hold v0 to at least 1 plus v1
+command	variable_max_fired	010100010800030000000000	hold v0 to at least 0 plus the firing's key
+command	variable_wrap	010100010900050000000000000003	wrap v0 within 0 to 3
+command	variable_clear	010100010a0000	clear v0
+command	variable_clear_all	010100010aff00	clear all sixteen variables
+command	report_firing	01010001000000000000000000	report the firing
+command	run_now	0101000101000000000000	run group 1 now
+command	run_at	0101000101010000001518	arm a run of group 1 for page tick 5400
+command	run_after	010100010102000000001e	arm a run of group 1 for 30 ticks after
+command	sequence_stop_all	0101000102ff	stop every sequence
+rule_event	fired	ff4b0f810201000100ff0000019c00000000	rule 0, no row, fired at tick 412 on=101/0001 generation=1
+rule_event	fired_row	ff4b0f810201000102050000019c00000000	rule 2, row 5, fired at tick 412 on=101/0001 generation=1
+rule_event	fired_no_rule	ff4b0f8102010001ffff0000019c00000000	a run no rule made fired at tick 412 on=101/0001 generation=1
+rule_event	input_key	ff4b18810201000100ff0000019c01000000ff0181020110610161	rule 0, no row, at tick 412 carries: key press a text=a on=101/0001
+rule_event	value	ff4b1b810201000100ff0000019c02000000010000000000000000000005	rule 0, no row, at tick 412: variable v0 reads 5
+page_state	answer	ff4c8e018102010000002a0001000023a000000005000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000010000001200000000000000000000000000000000000000000000000000000000000000000000000101000000030000000c010001050000010000000000000029	identifier=42 generation=1 tick=9120 v0=5 t0=running 18 sequences=[running passes 3 position 12] armed=1 targets=[] values=[sound 0 level = 41] on=101/0001
+rules_fault	evaluation_late	ff4d08810201000309000c	generation=3 fault=evaluation_late count=12 on=101/0001
+records	rules_default_send_all	a1ead0020000021500860101000100010100007a0000020000000c0100000012000000000101010094f9 a1ead01500010000000000010200000000000000010c0000000103000000ff0000000104000000ff5e0a a1ead0150002000000010d000000000000000105010000000000010601000000000001050200000025f1 a1ead015000300000106020000000000010f000000011000011f00000d01010001000000000000001cb2 a1ead0490004000007fc8ed4000000000000000000000000000000000000000000000000000000007fdd	page 101 sub 0001 generation 1: the whole image of the rules row default_send_all, in one record
+records	rules_no_table	a1ead05e00000215000c0101000100020000000000005c8b60cc00000000000000000000000000006ad8	page 101 sub 0001 generation 2: no table
+records	rules_query	a1ead05e000002160008010100010000002ae6731f2c0000000000000000000000000000000000001f04	page 101 sub 0001 identifier 42
+records	local_midi	a1ead05e0000021c00080101000100903c641b58ea30000000000000000000000000000000000000d920	page 101 sub 0001: audio channel 0, note on, MIDI channel 1, key 60, velocity 100
+records	variable	a1ead05e0000021d000b0101000101000100000004a11308320000000000000000000000000000000f15	page 101 sub 0001: set v0 to 4
+records	timer	a1ead05e0000021e00060101000101000e48b5f100000000000000000000000000000000000000001761	page 101 sub 0001: start t0
+records	report	a1ead05e0000021f000d01010001010100000000000000b0c4a28c000000000000000000000000004af3	page 101 sub 0001: report variable v0
+records	run	a1ead05e00000220000b010100010103000000001efba99eb9000000000000000000000000000000ac8f	page 101 sub 0001: arm a run of group 1 for the next beat of 30 ticks of t0
+records	sequence	a1ead05e000002210006010100010100ffc0baf2000000000000000000000000000000000000000015e6	page 101 sub 0001: start sequence 0
 records	animate	a1ead05e0000021700140101000102000f02000a01fff8000007010003027774e38d000000000000e7a3	page 101 sub 0001: move object 10 by (-8,0); look control 3 pressed
 records	sprites	a1ead05e000002180012010100010100000a03020005060302010a050678daef0000000000000000d6d5	page 101 sub 0001: sprite 10 shown detectable layer 2 at column 5 row 6, 3 by 2, one frame: local active object 5
 records	naplps_objects	a1ead0020000021900210101000100010100012d01030200006400320040002000000000010000213133 a1ead04900010000206036fd22000000000000000000000000000000000000000000000000000000f70f	page 101 sub 0001 generation 1: macro object 301 at (100,50) 64 by 32, frame macro 2/0, pressed look 2/1
-records	sheet	a1ead05e0000021a001001010100000100000000505b302c305dbfa28a7f00000000000000000000ee84	page 101 ReGIS sheet generation 1 offset 0: P[0,0]
+records	sheet	a1ead05e0000021a0012010100010100000100000000505b302c305dae7e6d3200000000000000004a53	page 101 sub 0001 ReGIS sheet generation 1 offset 0: P[0,0]
 records	frame_begin	a1ead05e0000021b00080101000101000007d084693b0000000000000000000000000000000000008574	page 101 sub 0001 begin identifier 7
 records	frame_end	a1ead05e0000021b00080101000102000007c231c6d5000000000000000000000000000000000000d987	page 101 sub 0001 end identifier 7
 object	local_sound	0201001d010001000000010e070003000003c000010401020804000000030901010e74ec4d	the OBJECT of RULE-61's example: synth106_local handle=1 generation=1 banks=[2], a setup block of 3 bytes
