@@ -638,6 +638,11 @@ Renderer parity (`../renderer-parity.md`, the owner's decision DEC-6638 and the 
 - Source: `kit-calls.tsv`.
 - Verification: The kit's call list test.
 
+**PY-90. The picture builders.** The package MUST export `Regis` and `Naplps`, the builders of PAR-39 and PAR-40 in Python's naming, each method appending its commands and answering the builder, and `parts()` answering the list `regis` or `naplps` takes. `Regis`: `erase(background=None)`, `colour(index, red, green, blue)` (percentages, written `S(M index(H…L…S…))` with the integer hue, lightness and saturation the ReGIS renderer turns back nearest, since the manual's RGB system takes no values), `pen(index)`, `at(x, y)`, `line(x, y)`, `box(x, y, width, height, *, fill=False, pen=None)`, `circle(x, y, radius, *, fill=False)`, `text(text, *, language=None, outside=False, size=None)`, `bytes(raw)`, `drawing(number, build, *, detectable, layer, hover, pressed, label)`, `commit()` and `title(text)`. `Naplps`: `reset()`, `clear()`, `colour(index, red, green, blue)` (intensities 0 to 255), `pen(index)`, `point(x, y)`, `line(x, y)`, `rect(x, y, width, height, *, filled=False)`, `polygon(points, *, filled=False)`, `text(text, *, language=None, outside=False)`, `bytes(raw)`, `define_macro(code, build)` and `object(number, x, y, width, height, **fields)`, coordinates in ANIM-11's 640 by 480 design picture written at the default three-byte precision. Every number is held to the renderers' limits by name, generated from the renderers' files at the commits `scripts/check.sh` names (`REGIS_FROM`, `NAPLPS_FROM`) into `regis_limits.py` and `naplps_limits.py` and checked by the commit gate, and a call outside one raises `ValueError` naming it. The same calls MUST write the TypeScript kit's bytes.
+- Reason: PAR-41 (DEC-6638 row 10.3): a channel in either language has the same means; DEC-6462 (one line from both kits).
+- Source: renderer-parity.md PAR-39 to PAR-41; the VT330/VT340 Programmer Reference Manual, Volume 2; ANSI X3.110-1983; animation.md ANIM-11.
+- Verification: Kit tests of each method's bytes and each refusal; the shared examples of both kits' builders (`picture-examples.jsonl`, once the TypeScript kit publishes it).
+
 ---
 
 ## 5. Worked examples
