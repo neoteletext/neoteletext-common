@@ -586,8 +586,8 @@ The sound messages are defined in [sounds](../PROTOCOL.html#DOC-1972). Sound is 
 
 ```ts
 const chime = opus.sound(chimeSamples(), CHIME_RATE);                  // ffmpegOpus().sound, at start
-context.sound({ connection }, { opus: { handle: 1, generation: 0, ...chime } });
-context.sound({ connection }, { play: { channel: 0, handle: 1, generation: 0 } });
+context.sound({ connection }, { kind: "opus", handle: 1, generation: 0, ...chime });
+context.sound({ connection }, { kind: "play", channel: 0, handle: 1, generation: 0, gain: 100, fade_ms: 0, loop: false, after: false, duck: 0 });
 ```
 
 `to` is `{ connection }`, `{ page }` or `{ connections }`. `ffmpegOpus` needs ffmpeg with libopus on the path. Tests use `fakeOpus` from the testing entry, which the server would refuse.
