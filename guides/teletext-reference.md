@@ -4,7 +4,7 @@ This is a programmer's reference for writing pages. Part 1 lists the teletext fe
 
 To build a channel step by step, read [`creating-a-channel.md`](creating-a-channel.md). To run a server and program it, read [`servers.md`](servers.md). To implement a receiver or a server, read [the protocol document](../PROTOCOL.html), the one definition of the protocol. This guide says what a page author can do, and points at those documents for the wire.
 
-The guide was checked against engine commit `3de0047`, browser commit `e87a652` (which pins engine `97f8fd2`), program protocol 6 and input protocol 7, on 1 November 2026. Every TTI block below was rendered with `neottx`. The **Browser** columns come from the browser's build and its code, not from running it.
+Part 1 and the TTI blocks were checked against engine commit `3de0047`, browser commit `e87a652` (which pins engine `97f8fd2`), on 1 November 2026, and every TTI block below was rendered with `neottx` then. The **Browser** columns come from the browser's build and its code, not from running it. Part 2's sections on live channels, the push WebSocket, typing, controls and the phone keyboard (sections 11.3 and 15 to 22) were brought on 19 November 2026 to program protocol 15 and push protocol 10, the second form of the page rule table, by reading the engine at `33d90896`, the server at `3446386` and the kits at `d3b237e` and `da43bf4` (none of them merged), and were not run again.
 
 ## Contents
 
@@ -1225,7 +1225,7 @@ Every member is optional. An unknown or duplicate member refuses the file and th
 {
   "name": "Example",
   "initial_page": "100",
-  "push": { "input": true },
+  "push": {},
   "services": [
     { "name": "weather", "display_name": "Weather", "channel": "https://weather.example/" }
   ],
@@ -1238,7 +1238,7 @@ Every member is optional. An unknown or duplicate member refuses the file and th
 |---|---|---|
 | `name` | The channel's name, at most 120 characters. Shown outside the page, never in row 0 | The address |
 | `initial_page` | Three decimal digits | `"100"` |
-| `push` | An object, whose presence makes the channel live. Its one member is `input`, true when it takes keys | None |
+| `push` | An object, whose presence makes the channel live. It declares nothing of input: a page asks for input with its rule table (section 16). `push.input` and `push.wheel` are withdrawn, and a receiver reads past them | None |
 | `region` | The default character set group, 0 to 15, for a page that names none | The reader's |
 | `services` | Linked channels, for `name:mpp` links | None |
 | `aliases` | Up to 16: a page number and a target, `name:mpp` or a channel address | None |
@@ -1363,11 +1363,11 @@ A live channel is one whose `channel.ttx` has `push`. A program writes its pages
 
 ```json
 {"channels":[
-  {"folder":"home","name":"NeoTeletext","command":["node","src/main.ts"],"directory":"../my-channel"}
+  {"folder":"home","name":"NeoTeletext","command":["node","src/main.ts"],"directory":"../my-channel","default_rules":"none"}
 ]}
 ```
 
-The protocol is DOC-1964 to DOC-1978 of `PROTOCOL.html`, version 10, with the schema `protocol/schema-10.json`. Every line is checked against it and refused whole if wrong.
+The protocol is DOC-1964 to DOC-1978 of `PROTOCOL.html`, program protocol 15, with the schema `protocol/schema-15.json`, and the rule table's messages DOC-6600 and animation's DOC-6602. Every line is checked against it and refused whole if wrong. `default_rules` says what a page whose program gave it no rule table has: `"none"`, so it sends nothing of what the viewer does, or `"send_all"`, the default table that reports every kind of input, for a channel written before the rule table (section 16).
 
 **A viewer's connection is one browser tab with one selection.** Selecting a page (sub-code 3F7F) brings its first sub-page in ascending sub-code order, which then is the selection. Selecting a sub-page brings that one. **Nothing rotates**: a sub-page changes only when the viewer selects another, or the program redirects them, or the program sends a change. Pages go one sub-page at a time, whole the first time and then as changed rows. The kits do all of this.
 
@@ -1389,7 +1389,7 @@ await runChannel([hello]);
 ```
 
 ```python
-from neoteletext_app.app import App
+from neoteletext_app.app import App, run
 from neoteletext_app.screen import Colour, Screen
 
 class Hello(App):
@@ -1397,27 +1397,28 @@ class Hello(App):
         screen = Screen()
         screen.header("HELLO")
         screen.double_height(2, 0, Colour.YELLOW, "Hello, teletext")
-        self.publish(0x100, screen)
+        self.publish("channel", 0x100, screen)
 
-Hello({0x100: "Hello"}).run()
+run(Hello({0x100: "Hello"}))
 ```
 
 | To | TypeScript | Python |
 |---|---|---|
-| Publish for everyone | `context.publish("channel", page, screen)` | `self.publish(page, screen)` |
-| Publish for one viewer | `context.publish(session, page, screen)` | `self.publish(page, screen, owner=session)` |
+| Publish for everyone | `context.publish("channel", page, screen)` | `self.publish("channel", page, screen)` |
+| Publish for one tab | `context.publish(connection, page, screen)` | `self.publish(connection, page, screen)` |
 | Publish TTI | `context.publishTti(owner, page, text)` | `screen.load_tti(text)`, then `publish` |
-| Change one sub-page | `context.put(owner, page, [{ screen, subcode }])` | No call: publish the whole page, with `subcodes=[...]` to keep its sub-codes |
-| Remove sub-pages | `context.remove(owner, page, [subcode])` | Publish the page without them |
-| Move a viewer | `context.redirect(session, page, sub)`, or an address | `self.redirect(session, page, sub)` |
+| Change one sub-page | `context.put(owner, page, [{ screen, subcode }])` | `self.put(owner, page, [subpage])` |
+| Remove sub-pages | `context.remove(owner, page, [subcode])` | `self.remove(owner, page, [subcode])` |
+| Move a viewer | `context.redirect(connection, page, sub)`, or an address | `self.redirect(connection, page, sub)` |
 | Title a page | `context.title(page, title)` | `self.title(page, title)` |
-| Set a cookie | `context.cookie(connection, name, value, options)` | `self.cookie(...)` |
+| Give a page its rule table | `context.rules(audience, page, sub, table)` | `self.rules(hearer, page, sub, table)` |
+| Know the viewer across tabs | `context.viewer(connection)`, `requestState(connection)` | `self.viewer(connection)`, `self.request_state(connection)` |
 | Send raw packets | `context.packets(audience, bytes)` | `self.packets(hearer, bytes)` |
 | Log to the viewer's console | `context.authorLog(audience, "I", text)` | `self.author_log(hearer, "I", text)` |
 
-An audience is `{ session }`, `{ page }` or `{ connections }`, and a hearer is `session_hears(session)` or `page_hears(page)`.
+An audience is `{ connection }`, `{ page }` or `{ connections }`, and a hearer is `connection_hears(connection)`, `page_hears(page)`, `connections_hear([...])` or `everyone_hears()`.
 
-A page owned by a session is that viewer's alone. The channel's copy is shared, and `release` drops a viewer's own copy.
+A page owned by a connection is that tab's alone. The channel's copy is shared, and `release` drops a tab's own copy. There are no cookies and no server session: a connection lasts until its `gone`, and a viewer known across tabs is the viewer's handle, given only when the viewer gives state ([DOC-1924](../PROTOCOL.html#DOC-1924)).
 
 A selection ends in one of these ways. The kits answer a selection for a page they hold.
 
@@ -1428,7 +1429,7 @@ A selection ends in one of these ways. The kits answer a selection for a page th
 | The message `redirect` | The viewer moves, to a page, or to another channel after a one-second notice |
 | Nothing for 5 seconds | The server sends DENIED 503 itself |
 
-Every selection has an ending. A viewer's query reaches `request`, as `{ path, query, queryText, cookies }`, all untrusted. In Python that is `on_request`.
+Every selection has an ending. A viewer's query reaches `request`, as `{ path, query, queryText }`, all untrusted. In Python that is `on_request`.
 
 **What is not on a live channel:** public object pages and the MOT ([section 5.7](#57-objects)).
 
@@ -1436,9 +1437,9 @@ A live channel's index, given by the program, fills the receiver's list of pages
 
 ## 16. The push WebSocket and the input protocol
 
-[DOC-1781](../PROTOCOL.html#DOC-1781) is the whole upstream protocol. This section is what a page author should know. A kit does all of it.
+[DOC-1781](../PROTOCOL.html#DOC-1781) is the whole upstream protocol, and [the page rule table](../PROTOCOL.html#DOC-6581) how a page asks for input. This section is what a page author should know. A kit does the wire for you; the rule table is yours to write.
 
-**The connection.** A channel's WebSocket is always `<channel>push`: `wss` for `https`, `ws` for `http`. A receiver offers `Sec-WebSocket-Protocol: neottx.7`, sends no `Origin`, and a server refuses anything else (426 and 403). It is one socket a tab, with no compression. Close codes 4000 and 4001 mean stop; 4100 means try again.
+**The connection.** A channel's WebSocket is always `<channel>push`: `wss` for `https`, `ws` for `http`. A receiver offers `Sec-WebSocket-Protocol: neottx.10`, sends no `Origin` and no cookie, and a server refuses anything else (426 and 403). It is one socket a tab, with no compression. Close codes 4000 and 4001 mean stop; 4100 means try again.
 
 **Downstream is teletext.** Binary messages are 42-byte packets. Everything beyond pages travels as records on data channel 12, carried in 4/31 packets (EN 300 708 clause 6.7.3.2):
 
@@ -1449,41 +1450,66 @@ A live channel's index, given by the program, fills the receiver's list of pages
 | 5 | WELCOME | The answer to HELLO |
 | 6 | Index | The channel's magazines and pages |
 | 7 | LOG | A line for the developer console |
-| 8 | SET_COOKIE | One `Set-Cookie` value |
 | 9 | LINKS | A sub-page's Link Extension links |
 | 10 | SUBPAGES | A page's list of sub-pages |
 | 11 | REDIRECT | Moves a viewer |
 | 12 | DENIED | A selection refused |
+| 21 | RULES | A page's rule table, or that it has none |
+| 22 | RULES_QUERY | A question for a page's local state |
+| 23 to 27 | ANIMATE, SPRITES, NAPLPS_OBJECTS, SHEET, FRAME | Animation |
+| 28 to 33 | LOCAL_MIDI, VARIABLE, TIMER, REPORT, RUN, SEQUENCE | A rule table's commands, sent directly |
 
-**Upstream is events.** Any byte but `0xFF` begins raw UTF-8 text. An event is `0xFF`, a type byte, and fields. Every key, click and move goes to the channel; **there are no modes to ask for** ([DOC-1922](../PROTOCOL.html#DOC-1922)), and the channel ignores what it does not use.
+Type 8, SET_COOKIE, is retired: there are no cookies.
+
+**A page asks for its input.** A page (one page number and one sub-code: a sub-page is a page) may carry a rule table, which the server sends before the page at every selection. Each rule binds one to four events (a key, a pointer action on a target, a timer, the page opening or closing, a condition becoming true, a cue in a playing sound) to one group of protocol commands: play a sound or a note on a local sound, show, hide, move or re-look an object, change one of the sixteen variables `v0` to `v15`, start a timer or a sequence, or report to the channel. The receiver handles each event the moment it arrives and applies the group at once, so sound and picture answer the viewer with no round trip. **A page with no table is sent nothing of what the viewer does**: it is still shown, its links work and its sound plays. The full form, with worked examples, is neoteletext-common's `docs/page-rules.md`.
+
+```json
+{"type":"rules","connections":{"connection":7},"page":"101","sub":"0001","table":{
+ "rules":[{"name":"typed","on":[{"event":"key","keys":"any","repeat":true},{"event":"text"}],"do":[{"type":"report"}]}]}}
+```
+
+That table sends the channel every key and every committed text on page 101/0001, and nothing else. A channel written before the rule table is given the server's default table by its `"default_rules": "send_all"` entry (section 15), which reports every kind of input.
+
+**Upstream is events, and the viewer's input travels only inside a report.** An event is `0xFF`, a type byte, and fields; any byte but `0xFF` begins raw UTF-8 text. At the top level go the session's messages, and the reports:
 
 | Type | Event | When |
+|---|---|---|
+| `0x07` | RESIZE | Always 40 by 25 cells; the drawn size or 0 |
+| `0x09` | HELLO | First, once: version 10 and capabilities |
+| `0x40` | SELECT | The tab's selection: `302`, `302/0002`, a query, or empty |
+| `0x45` | RESUME | Continues a lost session |
+| `0x4B` | RULE_EVENT | A REPORT of the page's table: the rule, its row, the page tick, a target, and the input events it reported, or a value |
+| `0x4C` | PAGE_STATE | The answer to a state query |
+| `0x4D` | RULES_FAULT | A fault of the page's table |
+
+The viewer's input events are encoded as before, and appear only in a RULE_EVENT's body; at the top level each is a protocol error that closes the connection:
+
+| Type | Event | Given to the table |
 |---|---|---|
 | `0x01` | KEY | Every press, repeat and release |
 | `0x02` | MOUSE | Press, release, move at most 60 a second, and gone |
 | `0x03` | WHEEL | Over the page, in 1/120ths of a line |
 | `0x04` | PASTE | The whole paste as one event, at most 4,000 bytes |
-| `0x05`, `0x06` | FOCUS_IN, FOCUS_OUT | Keys start and stop going |
-| `0x07` | RESIZE | Always 40 by 25 cells; the drawn size or 0 |
+| `0x05`, `0x06` | FOCUS_IN, FOCUS_OUT | The page gains and loses the keyboard |
 | `0x08` | COMPOSE | An input method's preedit |
-| `0x09` | HELLO | First, once: version 7 and capabilities |
-| `0x40` | SELECT | The tab's selection: `302`, `302/0002`, a query, or empty |
 | `0x43` | HOVER | The pointer enters or leaves a control |
 | `0x44` | TOUCH | Contacts after the first |
-| `0x45` | RESUME | Continues a lost session |
 
-Each event but the focus events, HELLO, RESIZE, SELECT and RESUME carries a stamp: the page and sub-code on screen when it happened. An event stamped with anything but the selection is dropped, except a release.
+Each report is stamped with the page and sub-code on screen when it happened, and the receiver's trusted part builds it itself, from its own copy of an event it gave that page within the last 4 ticks: a table cannot make anything leave that the viewer did not do on that page.
 
-| Input | Bytes |
+| An input event, as a RULE_EVENT carries it | Bytes |
 |---|---|
 | `a` pressed on page 100 | `FF 01 80 02 00 10 61 01 61` |
 | Enter pressed | `FF 01 80 02 00 04 02` |
 | Red (Fastext) pressed | `FF 01 80 02 00 04 5C` |
 | Click at column 10, row 5 | `FF 02 80 02 00 00 00 0A 05` |
 | `é` from an input method | `C3 A9` |
+
+| At the top level | Bytes |
+|---|---|
 | Page 302 selected | `FF 40 03 33 30 32` |
 
-**What a program hears.** The server turns these into typed `input` messages.
+**What a program hears.** The server turns a report into a typed `input` message, which names the rule that reported it (`rule`), the place of the firing row (`row`), its page tick (`tick`) and its target, or into `rule_event` for a report with no input event.
 
 | Event | TypeScript `Input` | Python `Event` |
 |---|---|---|
@@ -1495,24 +1521,25 @@ Each event but the focus events, HELLO, RESIZE, SELECT and RESUME carries a stam
 | Hover | `kind: "hover"`, `action`, `column`, `row` | `event.entered` |
 | Paste | `kind: "paste"`, `text`. Data, never keystrokes | |
 | Focus | `kind: "focus"`, `kind: "blur"` | |
+| The rule | `input.rule`, `input.ruleRow`, `input.tick`, `input.target` | `event.rule`, `event.rule_row`, `event.tick`, `event.target` |
 
 Key names are W3C `KeyboardEvent.key` names. Text is Unicode after the viewer's layout, in logical order and Normalization Form C. **A receiver never translates text into a teletext set**: the channel maps it onto the page's sets and decides what to show for a character they lack. `key` follows the layout and `base` the physical position, so a game's movement keys use `base`.
 
-A key held when the viewer leaves is released by the server and marked `lost`, so a game can tell "let go" from "left". A lost release is no click.
+A key held when the viewer leaves is released by the server and marked `lost`, but only for a press a rule reported, so a game can tell "let go" from "left". A lost release is no click.
 
-**When input goes.** In the browser, keys go to a channel only when `push.input` is true, the session is welcomed, the tab is in front, the window has focus and the viewer is not editing the address. The strip says "Keys go to *host*". The browser's own modifier keeps its keys, Command on macOS and Control-Shift elsewhere. Links stay the browser's on every page. Page selection on a channel that takes input is the channel's: videotex's `*nnn#`, `#` and `*#` are a convention it may implement, and the kits' navigation handles digits and coloured keys for pages that do not use them.
+**When input goes.** In the browser, input of the open page of the active tab is given to that page's table, and leaves only as the table reports it. The browser always keeps for itself a key or click made with its own modifier (Command on macOS, Control-Shift elsewhere), every key of its own strip and dialogs, a press on a link the page declares, which it follows, the wheel over a page with several sub-pages unless a `wheel` rule's target is under the pointer, and everything outside the page. A page in a tab behind another is paused: it evaluates nothing and reports nothing. Page selection on a channel that takes input is the channel's: videotex's `*nnn#`, `#` and `*#` are a convention it may implement, and the kits' navigation handles digits and coloured keys for pages whose tables report them.
 
-`neottx view` is a terminal receiver of the same protocol. Control-] leaves the channel and returns.
+`neottx view` is a terminal receiver of the same protocol: it holds each page's table and evaluates its key, text, focus and timer rules, with no pointer and no sound. Control-] leaves the channel and returns.
 
 ## 17. Typing and forms
 
-**There are no forms in the engine.** The TTI Form Extension was withdrawn on 27 October 2026 (DEC-650), and nothing in a page declares a field. A channel that wants a form draws it and takes the viewer's keys. So a form needs a live channel that takes input: `"push": { "input": true }`.
+**There are no forms in the engine.** The TTI Form Extension was withdrawn on 27 October 2026 (DEC-650), and nothing in a page declares a field. A channel that wants a form draws it and takes the viewer's keys. So a form needs a live channel, and a page whose rule table reports the keys and text the field takes (section 16).
 
 A field works like this:
 
 1. The page draws the field with ordinary characters.
 2. The page places the cursor: `CU,row,column,0,flags` in TTI, `screen.cursor(row, column, CursorFlag.Block)` in TypeScript, `screen.cursor(row, column, block=True)` in Python.
-3. The viewer types. Each key goes to the channel at once.
+3. The viewer types. Each key the page's table reports goes to the channel at once.
 4. The program draws what was typed, on the page, and publishes the changed rows.
 
 **The receiver draws nothing of what is typed.** Provisional echo was withdrawn (engine decision E.134). So a program answers every key by publishing the page.
@@ -1529,11 +1556,12 @@ CU,1,6,0,4
 The third field of `CU` once held the echo width. It is kept in place and written 0. The acknowledgement field is optional and a program never sets it by hand: a channel's server sends the cursor as a record, with the input count.
 
 ```ts
-function input(session, page, input, context) {
+// The page's table reports keys and text: [{ event: "key", keys: "any", repeat: true }, { event: "text" }].
+function input(connection, page, input, context) {
   const text = typed(input);
   if (text !== undefined) {
     name += text;
-    redraw(session, context);      // screen.text(...), screen.cursor(...), context.publish(session, ...)
+    redraw(connection, context);   // screen.text(...), screen.cursor(...), context.publish(connection, ...)
     return true;
   }
   return false;
@@ -1541,17 +1569,17 @@ function input(session, page, input, context) {
 ```
 
 ```python
-async def on_input(self, session, page, event):
+async def on_input(self, connection, page, event, sub):
     if event.typed:
         self.name += event.typed
-        self.redraw(session)        # screen.text(...), screen.cursor(...), self.publish(..., owner=session)
+        self.redraw(connection)     # screen.text(...), screen.cursor(...), self.publish(connection, ...)
         return True
     return False
 ```
 
 Answer true for what the page took. Anything else the kit uses for page selection and following links.
 
-The UI library has this done: `TextField`, `SegmentField`, `MultiTapField`, `Autocomplete`, `Checkbox`, `RadioGroup`, `Switch`, `Slider`, `NumberInput`, `Select`, `Button` and more, in its `docs/components/input.md`.
+The UI library has this done, and writes the page's table for its fields: `TextField`, `SegmentField`, `MultiTapField`, `Autocomplete`, `Checkbox`, `RadioGroup`, `Switch`, `Slider`, `NumberInput`, `Select`, `Button` and more, in its `docs/components/input.md`.
 
 A page still carrying the withdrawn form lines shows its rows alone.
 
@@ -1580,7 +1608,7 @@ OL,20, Yes       No
 OL,26,@|D@AeDKeD␡␡C␡␡C␡␡C␡␡C␡␡C␡␡C␡␡C␡␡C␡␡C␡␡C
 ```
 
-A control is only where a click lands. The click still goes to the channel as MOUSE at its cell. What the control adds is in the receiver, while keys go to the channel:
+A control is only where a click lands, and a target a rule can name, `{"control": n}`. A click on it reaches the channel only when a `press` or `release` rule of the page's table reports it, as MOUSE at its cell with the control named as the target. What the control adds is in the receiver, whether or not the page has a table:
 
 - The pointer is a hand over it.
 - **Hover:** each colour of its cells becomes the same entry of the adjacent CLUT, 0 with 1 and 2 with 3. With Table 30's colours, hover is CLUT 1's half intensity. A page chooses its own hover colours by defining CLUTs 2 and 3 in X/28/0 and drawing from them with Re-mapping 6.
@@ -1616,8 +1644,8 @@ A page can make sound, carried as records on data channel 12. The profile is `do
 
 ```ts
 const opus = ffmpegOpus().sound(samples, 16000);   // Int16Array, needs ffmpeg with libopus
-context.sound({ session }, { opus: { handle: 1, generation: 0, ...opus } });
-context.sound({ session }, { play: { channel: 0, handle: 1, generation: 0, gain: 80 } });
+context.sound({ connection }, { opus: { handle: 1, generation: 0, ...opus } });
+context.sound({ connection }, { play: { channel: 0, handle: 1, generation: 0, gain: 80 } });
 ```
 
 Python's `sound_object`, `play` and `stop` send PCM, and `neoteletext_app.sound` makes tones, noise and chimes, which reach a microcontroller and not a desktop receiver. The UI library has `sound`, `tone`, streams and an `AudioPlayer` (`docs/audio.md`).
@@ -1655,10 +1683,10 @@ Any phone camera reads it. `Screen.load_tti` in Python, and `Picture` or `QrPane
 
 | | |
 |---|---|
-| In the browser | From its panel. The phone's keys go to the page, or choose pages, as the viewer's own |
-| On any channel from a terminal | `neottx keyboard wss://example.org/push` shows a QR and sends what is typed on the phone to the push WebSocket. `--pin` pairs with a PIN, `--qr-page` and `--qr-output` write the QR as a page |
+| In the browser | From its panel. The phone's keys are given to the open page's rule table, or choose pages, as the viewer's own |
+| On any channel from a terminal | `neottx keyboard wss://example.org/push` shows a QR, holds the rule table of the page the channel sends, and sends what is typed on the phone inside the reports its rules make. `--pin` pairs with a PIN, `--qr-page` and `--qr-output` write the QR as a page |
 
-A phone's text goes as raw text, and its named keys as their functional codes, with colour keys 92 to 97. It carries no modifiers. **A page needs nothing to take a phone's keys.** They arrive as `typed(input)` as any others. One phone at a time; whoever scans the code has the keyboard.
+A phone's text goes as raw text, and its named keys as their functional codes, with colour keys 92 to 97. It carries no modifiers. **A page needs nothing more to take a phone's keys** than to take the viewer's own: a table that reports keys and text. They arrive as `typed(input)` as any others. One phone at a time; whoever scans the code has the keyboard.
 
 ## 22. Other additions
 
@@ -1668,7 +1696,7 @@ A phone's text goes as raw text, and its named keys as their functional codes, w
 
 **Author log lines.** `LG,level,text` in TTI, `I`, `W` or `E`, reaches the developer console, and `neottx -v` prints it. A program uses `authorLog`, up to 200 bytes.
 
-**Cookies.** RFC 6265bis, scoped to the channel's folder, with names starting `_` kept for the server. A program sees the cookies the connection opened with, and sets them with `cookie`. How a viewer logs in is not designed.
+**No cookies; viewer state.** NeoTeletext has no cookies and no server session ([DOC-1924](../PROTOCOL.html#DOC-1924)). A connection is one tab, until its `gone`. A channel that needs to know a viewer across tabs asks for state (`requestState`); when the viewer agrees, the browser proves a key it made for that channel alone, and the program is given an opaque handle (`viewer`). A program may use it only to provide what the viewer asked for on that channel. How a viewer logs in is not designed.
 
 **Redirects.** A program's `redirect`, a REDIRECT record, is the only thing that moves a viewer. A redirect to another channel shows a notice for one second. The viewer's own choice overrides it.
 
