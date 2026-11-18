@@ -406,7 +406,28 @@ What this work adds that reads outside input or holds memory for it, and what bo
 | 11 | Static channel files carry oversized pictures | engine, browser | `MAX_PICTURE_STREAM_BYTES` when written; the browser's existing record and renderer bounds when read (PAR-8, PAR-36) |
 | 12 | Kept content reaches a viewer who should not see it | server | A kept picture is content a program publishes to everyone who selects that page, as `publish` is; a program that wants a viewer's own picture names connections, as today (PAR-16) |
 
-No finding is left open; none needs an entry in `UNSOLVEDSECURITYISSUES/`.
+When this section was written no finding was left open. The review of the code as built, below, found three mitigations that do not hold in full; they are open security issues, each an rdm to-do in the repository that must fix it.
+
+### 19.1 Review of the code as built, 19 November 2026 (PAR-45; DEVELOPMENT.md section 14)
+
+Read against: the server's branch `parity` at ec189ce, the engine's branch `parity` at 42297736 (with its pins moved to 6efa8fef), the ReGIS renderer's branch `parity-2` at 9c1a162, the NAPLPS renderer's branch `parity-2` at 016a83c, and the browser's branch `parity` at 9732d46. The engine's `THREAT-MODEL.md` ("Renderer parity's threats", threats 4, 5 and 11) and the browser's `docs/security-analysis.md` (threats 7, 8, 9 and 11) record their own parts; both were read against the code and need no correction.
+
+| # | Mitigation as built | Result |
+|---|---|---|
+| 1 | `teletext_runtime::kept` refuses at `MOST_KEPT_STREAM_BYTES`, `MOST_KEPT_PICTURES` and `MOST_KEPT_COST` with `kept_over_limit`, never evicting; tested at each bound | **Open (TODO-6836).** The cost counts a stream's reader as at most the stream's bytes, which is false for NAPLPS: `naplps::Validator` holds up to about 1.85 MB (its own documentation, measured at 1,761,280 bytes), most of it from DRCS and texture definitions of seven bytes each, so 512 kept NAPLPS pictures of about 700 bytes can hold some 820 MB against a counted cost under 1 MB. The list of appended message lengths (8 bytes a message) and the ReGIS reader's fixed state are not counted either, and nothing bounds the sum of per-connection readers (PAR-23) across a channel. |
+| 2 | `channel/fallback.rs`: one drawing a picture in `FALLBACK_INTERVAL_MS`, `MOST_FALLBACK_RENDERS_PER_SECOND` a channel, one shared drawing for a kept picture; each drawing bounded by `WORK_CAP` and `MAX_PROCESSED_BYTES`; tested | Holds as stated. The worst time of one drawing of a 1 MiB stream is not measured, so what twenty a second cost a processor is not known (TODO-6839, a measurement owed). |
+| 3 | `MOST_KEPT_STREAM_BYTES` a connection and `MOST_FALLBACK_POOL_BYTES` a channel for streams kept for the fallback, dropped with the author's log; tested | Holds. |
+| 4 | `MAX_PART_CHARACTERS`, `MOST_PICTURE_PARTS` and the asserted `MAX_REGIS_PART_BYTES` and `MAX_NAPLPS_PART_BYTES` (engine and server); tested | Holds. |
+| 5 | The encoder writes only the 55 provided sets; the ReGIS renderer's `L` refuses alphabets past 3 (test `the_load_command_refuses_a_provided_alphabet`); provided glyphs are bounded to 16 by 32 and set numbers below 55; random-input tests draw through the provided alphabets | Holds for ReGIS and for text parts. The row's wording is too strong for NAPLPS: a NAPLPS page MAY define its own characters with DEF DRCS, which the owner allows (the DRCS ban is the teletext renderer's, REQ-2196), bounded by the NAPLPS renderer's DRCS limits; that bound is part of finding 1. |
+| 6 | The server reads every stream with the receiver's reader (`regis::Validator`, `naplps::Validator`) before sending or keeping it | **Open in part (TODO-6837, TODO-6838).** A refused append to a kept picture makes the server read the whole kept stream again (`KeptPicture::reread`), up to 1 MiB for a line of a few dozen bytes, with no rate bound. The NAPLPS validator's equality with `Terminal` is tested on fixed streams only; PAR-15's random-input property test does not exist. |
+| 7 | The browser's broker reads a chosen font only within `MAX_REGIS_FONT_BYTES` or `MAX_NAPLPS_FONT_BYTES` (checked before reading), asserted equal to the renderers' bounds; a decoder started for it alone parses it | Holds. |
+| 8 | NAPLPS object links go through the trusted core's `Links` with the destination shown, the dwell time and the question before leaving; tested | Holds. |
+| 9 | The trusted core sends the interface only rectangles from its own pick record; Enter follows only the focused link by the click's checks; Enter or Space on a non-link is a press and release at its centre | Holds. |
+| 10 | A description's picture is drawn only for an awaited `describe` (after the `not_awaited` check), within the description bounds; explicit bytes at most `MOST_DESCRIPTION_PICTURE_BYTES` | Holds. |
+| 11 | `neottx convert` refuses a picture over `MAX_PICTURE_STREAM_BYTES`; the browser's fetcher takes a page file up to `MAX_PICTURED_PAGE_FILE` and passes it in pieces of one message (DEC-6817), no message bound raised | Holds. |
+| 12 | `"kept"` is accepted only by the seven picture messages and `naplps_objects` (the schema's `PictureAudience`) | Holds. |
+
+None of the open findings is in the ReGIS renderer, so none is written in that repository's `UNSOLVEDSECURITYISSUES/`.
 
 ---
 
