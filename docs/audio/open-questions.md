@@ -212,6 +212,7 @@ The filed manual (software version 1.0, 2003) names controllers 1 and 7 only. DE
 - *Option C: adopt another instrument's interface for the same panel* (the maker's reissues, which take MIDI for notes, pitch bend and modulation only); nothing of it is filed.
 - *Recommendation:* A first, as a short search by the owner or the main session; B if no edition with a panel map can be filed.
 - *Answered (DEC-6465):* Search for and file a later edition of the Voyager manual with a panel controller map (option A), begun at once; if none is found, synthd.md section 7 is approved as NeoTeletext's own (option B).
+- *Closed on 18 November 2026:* the search filed two later manuals that print the map, the combined user's manual for operating system 3.4 (2008; map on printed pages 76 to 78, chart on printed page 89) and the Rack Mount Edition's manual for software 2.6 (2005; printed pages 53, 54 and 58), in `minimoog/manuals/`. `synthd.md` now follows the Voyager's map for every control the two panels share (section 6 reproduces it with its readings: the 3.4 switch bands 0 to 63 off and 64 to 127 on, where 2.6 prints 0 to 64 and 65 to 127; the pedal destination, controller 72, read with 2.6's list; oscillator 3's frequency pair read as 12 and 44, not 45), and its patch is 60 values, the Voyager's 46 controllers in ascending order and NeoTeletext's own 14 (SD-17, SD-22). The earlier map of NeoTeletext's own is withdrawn.
 - *Argued in:* sections 6 and 7 and section 14 question 1.
 
 **24. If a Voyager map is adopted, how are the controls only synthD has controlled?**
@@ -221,6 +222,7 @@ They are MODULATION MIX, the two modulation switches, WHITE / PINK, the two KEYB
 - *Option C: fold each onto the nearest Voyager control*, where meanings then differ, and MODULATION MIX and WHITE / PINK have nothing to fold onto.
 - *Recommendation:* A for the controls with no counterpart (MODULATION MIX, the two modulation switches, WHITE / PINK); C only where the Voyager's control has the same purpose and the bands can be stated exactly, decided control by control once the map is in hand.
 - *Answered (DEC-6465):* Only if question 23 finds a map: controllers of NeoTeletext's own for the controls only synthD has (option A), folding onto a Voyager control only where its purpose and bands are the same.
+- *Closed on 18 November 2026:* the DECAY switch folds onto the Voyager's RELEASE SWITCH (88) and oscillator 3's LO onto its 3 FREQ switch (80), each of the same purpose and bands. The rest take, by the rule of `synthd.md` SD-17 (c), the lowest of the numbers that MIDI 1.0's Table III and the Voyager's map both leave unused (89, 90 and 102 to 119), in the order of today's patch: TUNE 89 and 90 (a pair), MODULATION MIX 102, oscillator 1's LO/HI 103, oscillator 1 WAVEFORM 104, oscillator 2's LO/HI 105, oscillator 2 WAVEFORM 106, oscillator 3 WAVEFORM 107, the main output VOLUME 108 (the Voyager's 7 being the common layer's gain), OSCILLATOR MODULATION 109, WHITE / PINK 110, FILTER MODULATION 111, KEYBOARD CONTROL 1 112 and 2 113. The Voyager's WAVE and KB AMOUNT pairs, which have no printed bands, are not folded onto, and with every other Voyager controller for a control synthD lacks they are counted as ignored (SD-17, table F).
 - *Argued in:* section 10 and section 14 question 2.
 
 **25. Should reset all controllers turn synthD's GLIDE switch off?**
@@ -290,6 +292,7 @@ The filed chart says only "Model: JUPITER-08", "Date: October 1st, 2026", "Versi
 - *Recommendation:* A: the bands of six selectors and the meanings of controllers 41 and 57 depend on it, and changing bands after patches exist breaks them.
 - *Answered (DEC-6465):* Search for and file the rest of the JUPITER-08 reference manual and Roland's JP-08 Boutique chart and parameter list, and revise synth8.md sections 7 and 9 to them before the interface is built (option A), begun at once.
 - *What follows if nothing is found:* DEC-6465 does not say; its answers 32 and 33 keep `synth8.md`'s readings until question 31's documents say otherwise.
+- *Answered in part on 18 November 2026:* the text of fifteen pages of the JUPITER-08's reference manual is filed (`jupiter-8/manuals/roland-jupiter-08-reference-manual-v1.00-panel-and-midi-pages.txt`). The JUPITER-08 is Roland's Boutique sound module of 2026, played with the K-25m keyboard, of 32 voices, with two parts and a step sequencer, not the 2015 JP-08. The manual gives every parameter's range and positions, the System chart (program change selects a sequencer pattern; no system exclusive) and the meanings of controllers 41 and 57, but no controller value bands. `synth8.md` sections 7 and 9 were revised to it: selector bands are an even division of 0 to 127 into the manual's positions in its order (six for LFO WAVE FORM, VCO-1 RANGE and both oscillators' WAVEFORM, with the positions the Jupiter-8 lacks folded to the nearest it has), the VCF SLOPE switch takes the manual's order, and the default patch's bytes 9, 10, 15 and 21 changed. Roland's chart for the 2015 JP-08 is not filed; the comparison of its controller numbers waits on a search under way.
 - *Argued in:* section 14 question 1.
 
 **32. What do controllers 41 "BEND PITCH" and 57 "VCO-2 MODE" do?**
@@ -297,6 +300,7 @@ The filed chart says only "Model: JUPITER-08", "Date: October 1st, 2026", "Versi
 - *Option B:* 41 is a pitch-bend range in semitones and 57 is VCO-2's NORMAL / LOW FREQ switch.
 - *Recommendation:* A. Option B's 57 would give one switch two controllers (63 is "VCO-2 LO FREQ"), and the semitone reading of 41 is in no filed document; under either option registered parameter number 0 also sets the range (S8-31; question 5).
 - *Answered (DEC-6465):* synth8's controller 41 is the VCO bend depth and controller 57 is ignored (option A), until question 31's documents say otherwise.
+- *Settled by the reference manual on 18 November 2026:* controller 41 is the JUPITER-08's "Bend Pitch", 0 to 1200, "the variable pitch range for the pitch bend", read as cents: synth8's VCO bend depth, as answered. Controller 57 is the JUPITER-08's "VCO-2 Mode", "NORMAL, LO FREQ": synth8 takes it as the VCO-2 NORMAL / LOW FREQ switch (patch byte 12), and controller 63, "VCO-2 LO FREQ", is VCO-2 RANGE's value in LO FREQ, which moves synth8's one VCO-2 RANGE knob as 62 does. DEC-6465 answer 32's reading of 57 is replaced (option B's reading of 57, without its semitone reading of 41).
 - *Argued in:* section 14 question 2 and S8-14.
 
 **33. Should the five modulation sliders and VCA LFO MOD keep their inverted half?**
@@ -304,6 +308,7 @@ The filed chart says only "Model: JUPITER-08", "Date: October 1st, 2026", "Versi
 - *Option B:* each is centred at 64, 0 to 63 being the inverted half, as the correspondence table's range suggests.
 - *Recommendation:* A, or B if question 31's documents show the controllers are centred.
 - *Answered (DEC-6465):* synth8's modulation sliders and VCA LFO MOD drop the inverted half (option A), unless question 31's documents show the controllers are centred.
+- *Confirmed by the reference manual on 18 November 2026:* no controller is centred (LFO Mod, Pit Env Depth and Filter Mod 0 to 100; Flt Env Depth and Flt Key Follow 0 to 127; VCA LFO MOD 0 to 3); option A stands unchanged.
 - *Argued in:* section 14 question 3 and S8-21.
 
 **34. Should the bender panel's other three depths (VCF bend, LFO VCO, LFO VCF) have controllers?**
@@ -388,5 +393,5 @@ These were raised as questions and are now answered; each document keeps the que
 
 1. **File the maker's data-format document for the DX7's packed voice** (`synth7.md`, section 16 question 1). Answered by the filed TX7 manual (printed pages 35 to 44; the packed voice on page 44, section 4-8) and the DX7 II manual (Add-11); `synth7.md` section 10 was checked against them byte for byte and agrees.
 2. **Take the DX7's 32-voice dump in a block as well as a bank** (`synth7.md`, section 16 question 2). Answered by `midi-architecture.md`, MIDI-28, MIDI-50, MIDI-51 and MIDI-58: it travels only as a bank.
-3. **Controller 7 as synthD's panel VOLUME knob, or beside it** (`synthd.md`, section 14 question 3). Answered by `midi-architecture.md`, MIDI-82 and MIDI-92: a gain on the part's output, separate from the patch's volume, by one law, subject to the owner's approval of the architecture.
+3. **Controller 7 as synthD's panel VOLUME knob, or beside it** (`synthd.md`, section 14 question 3). Answered by `midi-architecture.md`, MIDI-82 and MIDI-92: a gain on the part's output, separate from the patch's volume, by one law, subject to the owner's approval of the architecture. The Voyager's map, filed since, makes 7 and 39 its MASTER VOLUME's pair; the architecture's rule still governs, and synthD's panel VOLUME takes NeoTeletext's controller 108 (`synthd.md`, SD-10, SD-17).
 4. **Controller 120: Deckard's Dream's glide mode, or all sound off** (`synth80.md`, section 16 question 3). Answered by `midi-architecture.md`, MIDI-9 and MIDI-86: controller 120 is all sound off in every synthesizer, and synth80 takes glide mode on controller 3 (S80-20), subject to the owner's approval of the architecture.
