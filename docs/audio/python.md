@@ -599,6 +599,45 @@ Program protocol 15 (`../page-rules.md` RULE-34, `../animation.md` ANIM-21; the 
 - Source: page-rules.md RULE-53; build plan of 18 November 2026, section 9.
 - Verification: The channel's tests pass on the protocol 15 kit with no change to `hackaday/src`.
 
+### 4.10 Renderer parity: kept pictures, NAPLPS links and cursor, text parts, measuring text and public pictures
+
+Renderer parity (`../renderer-parity.md`, the owner's decision DEC-6638 and the choices of DEC-6760) adds new messages and optional fields to program protocol 15 without raising its version (that document's section 7 introduction): the Python kit takes the server's schema of the commit that builds them, `protocol/schema-15.json` at 25bc0e7, as PY-2 says. rdm requirement REQ-6773 (PAR-41) carries what the kit gives; the requirements below say how. Every call that concerns a picture takes the page number and the sub-code, because a sub-page is exactly a page (DEC-6599): what the server keeps, it keeps for the page and sub-code together.
+
+**PY-83. The generator and the schema of renderer parity.** The schema writes `regis` and `naplps` as one object whose `oneOf` holds only two `required` lists (`data`, or `parts`). The generator MUST make such a message, tagged by its `type`, one `TypedDict` with both keys optional, which one is present held by validation (PY-35); the choice of sources of PY-74 stays the untagged amounts' alone.
+- Reason: The message is one message whose bytes are given one of two ways (PAR-21), not a union of two messages.
+- Source: `schema-15.json` at 25bc0e7; PY-9, PY-74.
+- Verification: A generator test; the commit gate's check that the generated module is what the generator makes of the copy.
+
+**PY-84. The kept audience.** The kit MUST offer the hearer `kept_hears()`, written `"connections": "kept"` once, which the seven picture calls (`regis`, `regis_links`, `regis_cursor`, `naplps`, `naplps_objects`, `naplps_links`, `naplps_cursor`) take, and which every other call refuses by raising `ValueError` naming itself before anything is written (PAR-16). The kit keeps nothing of a kept picture: the server keeps it, sends it to every connection showing that page and sub-code and to every connection that selects it later, and refuses what passes its bounds (`kept_over_limit`, `wrong_picture_language`, to `on_refused`).
+- Reason: PAR-16, PAR-17; DEC-6462 item 3 (the kit is thin).
+- Source: renderer-parity.md PAR-16 to PAR-18.
+- Verification: Kit tests that the seven write `"kept"` and that another call raises naming itself; a test that the schema refuses `"kept"` in another message.
+
+**PY-85. The new picture calls.** The kit MUST offer, each writing one message for each chunk of the hearers' connections (or once for `kept_hears()`) and checking nothing beyond the schema: `naplps_links(to, page, sub, links)`, each link `NaplpsLink(object=n, target=t)` (the schema's `ObjectLink`); `naplps_cursor(to, page, sub, object)`, 0 for none; and `forget_picture(page, sub)`, which names no connections (PAR-19, PAR-20). `regis` and `naplps` MUST take, beside the bytes they take today, a list of parts, each bytes (or for `regis` text, written a byte a character, PY-78) or `PictureText(text, language=None, outside=False)`, written as `parts` in the place `data` takes, each part `{"data": ...}` or `{"text": ...}` with `language` written only when given and `outside` only when true (PAR-21). The server writes each text part in the language's provided character sets and refuses one it cannot show (`text_unshown`, unless `outside`).
+- Reason: PAR-19 to PAR-21, PAR-41.
+- Source: renderer-parity.md PAR-19 to PAR-21.
+- Verification: Kit tests that each call writes exactly its message, that parts outside the schema's bounds (none, 65, an empty text, 1,001 characters) raise `ProtocolError`, and that the schema refuses both `data` and `parts` and neither.
+
+**PY-86. Measuring a text part.** The kit MUST offer `async def measure_picture_text(text, *, language=None, outside=False) -> ServerMessageMeasuredPictureText`, which writes `measure_picture_text` with a request number of the kit's own count (1 to 4,294,967,295, then 1 again), `language` and `outside` only when given, and answers with the server's `measured_picture_text` of that number (`cells`, `regis_bytes`, `naplps_bytes`, `sets` by the engine's `FONT_SETS` names and `stand_ins`), or raises `MeasureRefused` carrying the server's `refused` of that number; such a refusal reaches no handler (PAR-22, as PY-29).
+- Reason: PAR-22 (DEC-6638 row 5.4: a program lays out text by its measured width).
+- Source: renderer-parity.md PAR-22.
+- Verification: Kit tests of an answer and a refusal.
+
+**PY-87. A public page's picture.** `PageDescription` MUST take `picture`: `PictureKept(sub)`, the kept picture of the described page with that sub-code, or `PictureBytes(language, data, objects=None)`, `language` `"regis"` or `"naplps"`; the kit writes it after `content`, `objects` only when given (PAR-26). The server refuses what its own rules refuse (`not_kept`, `invalid_regis`, `invalid_naplps`, `unknown_field` for `objects` with ReGIS).
+- Reason: PAR-26 (DEC-6638 rows 11.1 and 11.2).
+- Source: renderer-parity.md PAR-26.
+- Verification: Kit tests of both forms and of a description with no picture.
+
+**PY-88. Which drawing or object an event concerned.** `Event` MUST carry a pick's `drawing` (0 for none), its place within the drawing (`x`, `y`), its place in the picture (`picture_x`, `picture_y`) and `commits`, and a drawing hover's `drawing`, `leave` and `commits`, read from the schema's `InputEventPick` and `InputEventDrawingHover`; `picked` answers the drawing a pick found, or `None`. Its `target` is the schema's `RuleTarget` (PY-77), and `target_object` answers `n` of `{"object": n}`, the ReGIS drawing or NAPLPS object a pointer rule's target was, or `None` (PAR-41; RULE-37, RULE-46). renderer-parity.md writes such a target `{"kind": "object", "number": n}`; the schema writes it `{"object": n}`, and the kit follows the schema.
+- Reason: PAR-41: a program can tell which drawing or object a pointer event concerned.
+- Source: renderer-parity.md PAR-41; page-rules.md RULE-37.
+- Verification: Kit tests of a pick, a drawing hover and a target.
+
+**PY-89. The call list.** `kit-calls.tsv` lists the calls of PY-84 to PY-86 for both kits; an argument written `options: language and outside` is the TypeScript call's one options object and the Python call's keyword arguments of those names, so that each kit counts its own.
+- Reason: PY-19: one list holds both kits' calls.
+- Source: `kit-calls.tsv`.
+- Verification: The kit's call list test.
+
 ---
 
 ## 5. Worked examples
