@@ -155,7 +155,7 @@ Each term is used in this sense throughout.
 - **Gesture.** An input event from the viewer (a key, a click, typed text) received on the connection in question. A state request is honoured only shortly after one (VS-212).
 - **Stateless client.** A client that never holds a key: it answers every challenge with STATE_NONE.
 - **Push connection.** The channel's WebSocket on which pages and records come down and input goes up (the input protocol, DOC-1923, DOC-1951 to DOC-1961). It is the only place this mechanism travels.
-- **Push protocol.** The binary protocol on the push connection, agreed in HELLO and WELCOME (DEC-1447). Today it is input protocol version 2. This design makes it version 3.
+- **Push protocol.** The binary protocol on the push connection, agreed in HELLO and WELCOME (DEC-1447). Today it is version 7 (`neoteletext_input::limits::VERSION`, WebSocket subprotocol `neottx.7`). This design makes it version 8 (subprotocol `neottx.8`), the engine's next version (DEC-6477).
 - **Program protocol.** The JSON protocol between the server and a channel's program (`crates/teletext-runtime/src/protocol.rs`). Today it is version 12. This design makes it version 13.
 
 ---
@@ -300,11 +300,11 @@ Each requirement in this section is a requirement of neoteletext-common (the pro
 
 ### 4.1 Version and order
 
-**VS-201. Push protocol version 3.**
-- **Statement.** The state messages MUST be part of push protocol version 3, agreed in HELLO and WELCOME (DEC-1447); a server that speaks version 3 MUST refuse a HELLO of version 2, and a receiver that speaks version 3 MUST close a connection whose WELCOME names version 2. Version 3 MUST NOT carry a SET_COOKIE record, and its receivers MUST NOT send or accept a `Cookie` or `Set-Cookie` header on the push upgrade or on any fetch. There MUST be no capability that turns state off at the protocol level: a client that keeps no state answers STATE_NONE.
+**VS-201. Push protocol version 8.**
+- **Statement.** The state messages MUST be part of push protocol version 8, the version after the engine's 7 (`neoteletext_input::limits::VERSION`), with the WebSocket subprotocol `neottx.8`, agreed in HELLO and WELCOME (DEC-1447); a server that speaks version 8 MUST refuse a HELLO of version 7, and a receiver that speaks version 8 MUST close a connection whose WELCOME names version 7. Version 8 MUST NOT carry a SET_COOKIE record, and its receivers MUST NOT send or accept a `Cookie` or `Set-Cookie` header on the push upgrade or on any fetch. There MUST be no capability that turns state off at the protocol level: a client that keeps no state answers STATE_NONE.
 - **Reason.** One protocol, no fallback: a downgrade to a version with cookies would undo the design (DPoP section 11.3: a server must not accept proofs without a nonce once it has issued one; the same holds for falling back to cookies). Input protocol version 1 was retired outright in the same way (DEC-1458).
-- **Source.** Owner's decision 1; DEC-1458; RFC 9449 section 11.3.
-- **Verification.** Tests: a version 2 HELLO is refused; a WELCOME of version 2 is refused by the engine's agent; no request the browser or `neottx` sends carries a `Cookie` header, and a `Set-Cookie` in a response is ignored.
+- **Source.** Owner's decision 1; DEC-1458; RFC 9449 section 11.3; DEC-6477 (the engine's next version, 8, in place of the 3 first written here, which assumed the engine was at version 2).
+- **Verification.** Tests: a version 7 HELLO is refused; a WELCOME of version 7 is refused by the engine's agent; no request the browser or `neottx` sends carries a `Cookie` header, and a `Set-Cookie` in a response is ignored.
 
 **VS-202. When the exchange happens.**
 - **Statement.** On every push connection, the server MUST send STATE_CHALLENGE (with `create` clear) immediately after WELCOME, before any page; the receiver MUST answer it with STATE_PROOF (when it holds a key for the channel) or STATE_NONE before it sends SELECT; and the server MUST hold the program's `connected` event (which it already holds for the first SELECT, REQ-1471) until the answer arrives or `STATE_ANSWER_MS` *(recommended 10,000 ms, open question Q12)* passes, in which case the connection has no viewer. Later in the connection, the server MAY send further challenges only as VS-205 and VS-212 allow.
@@ -317,7 +317,7 @@ Each requirement in this section is a requirement of neoteletext-common (the pro
 **VS-203. Exactly what is signed.**
 - **Statement.** A proof's signature MUST be the Ed25519 signature (RFC 8032 section 5.1.6, pure Ed25519, no context, no prehash) of exactly this byte string, and of nothing else:
   1. the 27 ASCII bytes `NeoTeletext viewer state v1` followed by one zero byte (domain separation);
-  2. one byte, the push protocol version, 3;
+  2. one byte, the push protocol version, 8 (the engine's `neoteletext_input::limits::VERSION`, used by name, so that the signed byte follows the version);
   3. one byte, the algorithm number, 1 for Ed25519;
   4. one byte, the lifetime, 0 for a visit key and 1 for a remembered key;
   5. the 32 bytes of the challenge;
@@ -331,23 +331,23 @@ Each requirement in this section is a requirement of neoteletext-common (the pro
 
 ### 4.3 The messages
 
-All lengths are fixed except where a bound is named; a message of any other length, or with any value not listed, is a protocol error, and the connection is closed with the existing protocol-error close. Record types are allocated in DOC-1951's table; control messages from the receiver use the input protocol's 0xFF-prefixed control form (DEC-1444), with type numbers allocated in the documentation item that defines them. Type 8 (SET_COOKIE) is retired and never reused.
+All lengths are fixed except where a bound is named; a message of any other length, or with any value not listed, is a protocol error, and the connection is closed with the existing protocol-error close. Record types are allocated in DOC-1951's table, and are the engine's next free ones: 13 is kept for the CHANNEL record (REQ-3581) and 14 to 17 are REGIS, DRAWING_LINKS, REGIS_CURSOR and NAPLPS, so the state records take 18 to 20 (DEC-6477). Control messages from the receiver use the input protocol's 0xFF-prefixed extension form (DEC-1444: `0xFF`, the type, the length, the payload), with the types 0x48 to 0x4A, the next after DRAWING_HOVER (0x47), allocated in the documentation item that defines them. Type 8 (SET_COOKIE) is retired and never reused.
 
 **VS-204. The messages, field by field.**
-- **Statement.** Push protocol version 3 MUST define exactly these state messages:
+- **Statement.** Push protocol version 8 MUST define exactly these state messages:
 
   | Direction | Message | Carried as | Fields, in order | Bytes |
   |---|---|---|---|---|
-  | server to receiver | STATE_CHALLENGE | Record type 13, one or more fragments | `challenge`: 32 bytes; `create`: one byte, 0 or 1 | 33 |
-  | server to receiver | STATE_END | Record type 14 | `key_id`: 32 bytes, the key identifier (VS-302) of the key to delete | 32 |
-  | server to receiver | STATE_KEEP_OFFER | Record type 15 | none | 0 |
-  | receiver to server | STATE_PROOF | Control message | `algorithm`: one byte, 1; `lifetime`: one byte, 0 or 1; `public_key`: 32 bytes; `signature`: 64 bytes | 98 |
-  | receiver to server | STATE_NONE | Control message | `reason`: one byte: 0 `no_key` (no key for this channel and none asked to be made), 1 `declined` (the viewer blocked or refused), 2 `stateless` (the client never keeps state), 3 `forgotten` (the key in use on this connection has just been forgotten), 4 `no_gesture` (asked to create without a recent gesture) | 1 |
-  | receiver to server | STATE_OFFER | Control message | none | 0 |
+  | server to receiver | STATE_CHALLENGE | Record type 18, one or more fragments | `challenge`: 32 bytes; `create`: one byte, 0 or 1 | 33 |
+  | server to receiver | STATE_END | Record type 19 | `key_id`: 32 bytes, the key identifier (VS-302) of the key to delete | 32 |
+  | server to receiver | STATE_KEEP_OFFER | Record type 20 | none | 0 |
+  | receiver to server | STATE_PROOF | Extension type 0x48 | `algorithm`: one byte, 1; `lifetime`: one byte, 0 or 1; `public_key`: 32 bytes; `signature`: 64 bytes | 98 |
+  | receiver to server | STATE_NONE | Extension type 0x49 | `reason`: one byte: 0 `no_key` (no key for this channel and none asked to be made), 1 `declined` (the viewer blocked or refused), 2 `stateless` (the client never keeps state), 3 `forgotten` (the key in use on this connection has just been forgotten), 4 `no_gesture` (asked to create without a recent gesture) | 1 |
+  | receiver to server | STATE_OFFER | Extension type 0x4A | none | 0 |
 
   The receiver MUST answer each STATE_CHALLENGE with exactly one STATE_PROOF or STATE_NONE; MAY send STATE_NONE `forgotten` and STATE_OFFER unprompted, at most once in each `STATE_OFFER_INTERVAL_MS` *(recommended 10,000 ms)*; and MUST delete its key for the channel on STATE_END only when the key's identifier equals `key_id`.
-- **Reason.** These are the research's `StateChallenge`, `StateProof`, `StateNone`, `StateEnd` and `StateKeepRequest` (research section 4.5), with `StateKeepRequest` renamed STATE_KEEP_OFFER because it asks nothing of the browser, and with STATE_OFFER added so that a tab that learns of a new key can be challenged (VS-111). `key_id` in STATE_END stops a delayed STATE_END from deleting a newer key made after a reset.
-- **Source.** Owner's decisions 2 and 4; research section 4.5.
+- **Reason.** These are the research's `StateChallenge`, `StateProof`, `StateNone`, `StateEnd` and `StateKeepRequest` (research section 4.5), with `StateKeepRequest` renamed STATE_KEEP_OFFER because it asks nothing of the browser, and with STATE_OFFER added so that a tab that learns of a new key can be challenged (VS-111). `key_id` in STATE_END stops a delayed STATE_END from deleting a newer key made after a reset. The record types and extension types are the engine's next free ones, as its branch `viewer-state` builds them (commit `793039e5`), a compile-time check there refusing any clash.
+- **Source.** Owner's decisions 2 and 4; research section 4.5; DEC-6477 (types 18 to 20 in place of the 13 to 15 first written here, which the engine already uses).
 - **Verification.** Tests of every encoder and reader in the engine (which the browser and the server both use, as the engine's records are used today); a fuzz target `state_records` on the receiver's reader and `state_messages` on the server's; the wire vectors.
 
 **VS-205. Challenges: fresh, single, bounded.**
@@ -448,6 +448,8 @@ Each requirement in this section is a requirement of neoteletext-app-server unle
 
 ### 5.3 Program protocol 13
 
+Program protocol 13 is one version holding both this mechanism's messages (VS-351 to VS-354) and the synthesizers' sound messages of `audio/server.md` (its SRV-1 to SRV-48), released in one schema, `protocol/schema-13.json`, and one deployment (DEC-6477 answer 3; `audio/server.md` SRV-2). No message type, `kind`, field, server message or `Rule` value of either has two meanings: this section adds the server messages `viewer_began`, `viewer_left`, `state_refused`, `viewers_reset` and `gone`, the program messages `request_state`, `end_state` and `offer_remember`, and the `Rule` values `has_viewer`, `no_gesture` and `unknown_viewer` (VS-353); `audio/server.md` adds the server message `sound_built` and the `Rule` values of its SRV-51, none of which is among these.
+
 **VS-351. What a program is told.**
 - **Statement.** Program protocol 13 MUST make these changes to the server's messages to a program, and no others for this mechanism:
   1. `connected` carries `connection`, `request`, `selection`, `path`, `query`, and `viewer`: a handle (a string of exactly 32 characters `0` to `9` and `a` to `f`) or null, and `remembered`: a boolean, false when `viewer` is null; it no longer carries `session` or `cookies`.
@@ -470,7 +472,7 @@ Each requirement in this section is a requirement of neoteletext-app-server unle
 - **Verification.** Tests of each request and each refusal; a test that a `cookie` message is refused as an unknown type.
 
 **VS-353. Refusing a program that asks for what the viewer has not given.**
-- **Statement.** The server MUST refuse, with a typed refusal naming the rule (as `protocol/check.rs` refuses today): `request_state` for a connection that is not open, that already has a viewer, or that fails VS-212; `end_state` for a handle the channel's table does not hold; `offer_remember` as VS-352 says; and any message naming a handle in a field the protocol does not define. A program MUST never be able to choose, set or extend a handle, a key or a lifetime.
+- **Statement.** The server MUST refuse, with a typed refusal naming the rule (as `protocol/check.rs` refuses today), each with the `Rule` value given: `request_state` for a connection that is not open (the existing `unknown_connection`), that already has a viewer (`has_viewer`), or that fails VS-212 (`no_gesture`); `end_state` for a handle the channel's table does not hold (`unknown_viewer`); and any message naming a handle in a field the protocol does not define (the existing `unknown_field`). `offer_remember` is answered as VS-352 says, by `state_refused`. A program MUST never be able to choose, set or extend a handle, a key or a lifetime.
 - **Reason.** A program is untrusted input to the server (REQ-1475); the mechanism's guarantees hold only if the server refuses what the viewer has not given.
 - **Source.** Owner's decisions 4 and 6; REQ-1475.
 - **Verification.** Tests for each refusal.
@@ -506,7 +508,7 @@ Requirements VS-401 to VS-404 apply equally to the TypeScript kit (neoteletext-s
 - **Verification.** Kit tests in both languages: two tabs of one viewer are two connections with one viewer; a closed tab's state ends at its `gone`.
 
 **VS-404. The test harness's fake viewers.**
-- **Statement.** Each kit's test harness MUST let a test name fake viewers with fixed handles (for example `const alice = harness.viewer("alice")`, whose handle is a fixed 32-character value derived from the name), connect a named viewer on any number of connections (`harness.join(alice, page)` twice is "alice in two tabs"), connect a connection with no viewer, make a viewer remembered or not, simulate a reset (`harness.forget(alice)`, after which `alice` joins with a new handle and `viewerLeft` is sent on her open connections: "after a reset"), simulate a private window (`harness.privateViewer("alice")`, a different handle from `alice`), simulate `requestState` granted or refused with each reason, and simulate a server restart (connection numbers start again; handles do not change). The same scenarios MUST be available in the Python harness with the same names.
+- **Statement.** Each kit's test harness MUST let a test name fake viewers with fixed handles (for example `const alice = harness.viewer("alice")`, whose handle is a fixed 32-character value derived from the name), connect a named viewer on any number of connections (`harness.join(alice, page)` twice is "alice in two tabs"), connect a connection with no viewer, make a viewer remembered or not (`harness.remember(alice, true)`), simulate a reset (`harness.forget(alice)`, after which `alice` joins with a new handle and `viewerLeft` is sent on her open connections: "after a reset"), simulate a private window (`harness.privateViewer("alice")`, a different handle from `alice`), simulate `requestState` granted (`harness.grantState(connection)`) or refused with each reason (`harness.refuseState(connection, reason)`), and simulate a server restart (`harness.restart()`: connection numbers start again; handles do not change). The same scenarios MUST be available in the Python harness with the same names in `snake_case` (`viewer`, `join`, `remember`, `forget`, `private_viewer`, `grant_state`, `refuse_state`, `restart`), as neoteletext-common's `docs/audio/kit-calls.tsv` lists them.
 - **Reason.** Owner's decision 6: tests use named fake viewers with fixed handles, "alice in two tabs", "after a reset", "a private window".
 - **Source.** Owner's decision 6.
 - **Verification.** Each harness's own tests; the library's tests use it.
@@ -594,13 +596,13 @@ Each requirement says which repository it belongs to.
 ### 9.1 Requirements
 
 **VS-601. One cut-over, no compatibility shim (neoteletext-common).**
-- **Statement.** The change MUST be made as one planned cut-over: push protocol 3 and program protocol 13 replace versions 2 and 12 outright; no release of any repository MUST accept both cookies and keys, and the server's dual-run of the research's section 4.13 MUST NOT be built.
+- **Statement.** The change MUST be made as one planned cut-over: push protocol 8 and program protocol 13 replace versions 7 and 12 outright; no release of any repository MUST accept both cookies and keys, and the server's dual-run of the research's section 4.13 MUST NOT be built.
 - **Reason.** DEVELOPMENT.md section 2.1 forbids compatibility shims; the owner's decision 1 removes cookies entirely; one owner controls every part, so there is no installed base to wait for (research section 4.13). The cost is that every viewer's existing cookie state (a poll ballot, kept choices, a language) is lost once.
 - **Source.** Owner's decision 1; DEVELOPMENT.md section 2.1.
 - **Verification.** Review of each repository's release; tests of VS-201.
 
 **VS-602. The order of change.**
-- **Statement.** The repositories MUST change in this order, each by its own process, each step committed through its gates: (1) neoteletext-common: the documentation items, the wire vectors and the proposal decision; (2) the engine: the state records and messages, push protocol 3 in the agent, `StateSigner`, `--identity`, and the removal of the cookie module, the SET_COOKIE record, `persist_cookies`, `CookieStorage` and (open question Q11) the `dbsc` feature; (3) the server: program protocol 13, verification, handles, the removal of the session cookie and the server session (VS-354), RESUME, and the Cloudflare host's equivalents; (4) the browser: the pin moved to the engine's commit, the key store, the viewer's controls, and the removal of every cookie mechanism of section 1.5; (5) the TypeScript kit and (6) the Python kit, each speaking protocol 13; (7) the component library; (8) the channels: demosite, uicomponentsdemo, home-www.neoteletext.com and hackaday (library releases), audiodemo, naplpsdemo and regisdemo (per-connection state ending at `gone`), and the old Python Hackaday channel (its poll); and (9) one deployment of the server and every channel together, because a program speaking protocol 12 cannot run under a server speaking 13.
+- **Statement.** The repositories MUST change in this order, each by its own process, each step committed through its gates: (1) neoteletext-common: the documentation items, the wire vectors and the proposal decision; (2) the engine: the state records and messages, push protocol 8 in the agent, `StateSigner`, `--identity`, and the removal of the cookie module, the SET_COOKIE record, `persist_cookies`, `CookieStorage` and (open question Q11) the `dbsc` feature; (3) the server: program protocol 13, verification, handles, the removal of the session cookie and the server session (VS-354), RESUME, and the Cloudflare host's equivalents; (4) the browser: the pin moved to the engine's commit, the key store, the viewer's controls, and the removal of every cookie mechanism of section 1.5; (5) the TypeScript kit and (6) the Python kit, each speaking protocol 13; (7) the component library; (8) the channels: demosite, uicomponentsdemo, home-www.neoteletext.com and hackaday (library releases), audiodemo, naplpsdemo and regisdemo (per-connection state ending at `gone`), and the old Python Hackaday channel (its poll); and (9) one deployment of the server and every channel together, because a program speaking protocol 12 cannot run under a server speaking 13.
 - **Reason.** Each step depends on the one before (the browser pins the engine; the kits copy the server's schema); the deployment must be atomic because the kits stop a program whose protocol differs (`streams.ts` lines 39 to 66).
 - **Source.** DEVELOPMENT.md sections 2.2 and 11.
 - **Verification.** The to-dos of section 9.3, each closed with its commit; the deployment's check that every channel's program reports protocol 13.
@@ -663,7 +665,7 @@ A thief of the viewer's disk or backups; malware running as the viewer; someone 
 | 14 | **Storage exhaustion**: a flood of fresh identities | Server: table bounded (VS-303) and new identities per address bounded (VS-304). Library: per-handle bounds and idle expiry (VS-405). Browser: keys bounded at `MOST_KEYS_PER_JAR` (3,000, the cookie total's bound) and the key file at `MAX_KEY_FILE_BYTES` (4 MiB: 3,000 entries of at most 523 + 32 + 24 bytes, encoded, with room). | A distributed attacker with many addresses can fill the server's table, which evicts least recently seen viewers; they reprove on their next connection and lose nothing (VS-303). |
 | 15 | **Timing side channels** | Signing and verification use constant-time implementations (`ring`'s; the server's library chosen under Q7 must be constant-time); no secret is compared by the server. The core's answer time does not depend on whether a key exists, because the core answers STATE_NONE after the same path. | Whether a key exists is visible anyway from the answer itself, by design. |
 | 16 | **Malformed messages** | Every message has a fixed length and enumerated values (VS-204); fuzz targets on every reader: the receiver's state records, the server's state messages, the core's fetcher messages, the key file and the identity file. | Ordinary fuzzing residual. |
-| 17 | **Downgrade between protocol versions** | Version 2 refused both ways (VS-201); the version is signed (VS-203); no fallback to cookies exists in any client. | None. |
+| 17 | **Downgrade between protocol versions** | Version 7 refused both ways (VS-201); the version is signed (VS-203); no fallback to cookies exists in any client. | None. |
 | 18 | **Bounce tracking**: a channel only passed through in a redirect gains state | A key is made only after a gesture on a shown page (VS-104). | None. |
 | 19 | **Copied profile** | Sealed under the secret store; a copy without it yields no keys (VS-118). | A copy with the secret store (a whole-machine migration) duplicates keys. Accepted until hardware keys (section 12). |
 | 20 | **Abuse**: a viewer makes fresh identities to vote again | Rate limit per address (VS-304); polls labelled per visit or per browser, not per person; sign-in where one per person matters. | Not solved, by design: a reset that cannot be undone is the point of the reset (owner's decision 9). |
@@ -798,7 +800,7 @@ Each with its options and a recommendation.
 ### 14.1 neoteletext-renderer-teletext (the engine)
 
 - **Removed:** the cookie module and its submodules; `agent/cookies.rs`; `Set-Cookie` reading in `fetch.rs` and `push.rs`; the `Cookie` header on the push handshake; the SET_COOKIE record (`records/cookie.rs`) and its handling in `push_data.rs`; `persist_cookies`; `CookieStorage`; the `cookies` feature in `xtask` builds; and, under Q11, `dbsc` with `agent/bound.rs` and its tests and fuzz target. Constants `MAX_COOKIE_AGE_DAYS`, `DEFAULT_COOKIES_PER_HOST`, `DEFAULT_COOKIES_TOTAL`, `MAX_COOKIE_NAME_VALUE` and `MAX_COOKIE_ATTRIBUTE_VALUE` go with it.
-- **Added:** records 13 to 15 and the receiver's control messages of VS-204, with readers, writers and fuzz targets; push protocol 3 in HELLO and WELCOME; `MAX_CHANNEL_IDENTITY_BYTES` and the signed-bytes builder of VS-203 (one implementation, used by the browser and the server); the `StateSigner` port trait; `neottx --identity` (VS-502); wire vectors.
+- **Added:** records 18 to 20 and the receiver's extension messages 0x48 to 0x4A of VS-204, with readers, writers and fuzz targets; push protocol 8 in HELLO and WELCOME (subprotocol `neottx.8`); `MAX_CHANNEL_IDENTITY_BYTES` and the signed-bytes builder of VS-203 (one implementation, used by the browser and the server); the `StateSigner` port trait; `neottx --identity` (VS-502); wire vectors.
 - **Changed:** `neottx`, `neottx keyboard` and the firmware test image answer STATE_NONE `stateless`.
 
 ### 14.2 neoteletext-browser
@@ -832,7 +834,7 @@ Each with its options and a recommendation.
 ### 14.7 rdm records that this design supersedes or changes (for the main session)
 
 - **Superseded:** DOC-1924 and DOC-1957 (replaced by new documentation items); DOC-2312 and DOC-2032; the browser's REQ-879, REQ-715, REQ-880 to REQ-889, REQ-3398, REQ-3400, REQ-3924, REQ-4152, REQ-4153, REQ-4847, REQ-3929, REQ-2902, REQ-3537 and DEC-955 (decision 62), DEC-1765, TODO-1248; the engine's REQ-495, REQ-5156 to REQ-5171, REQ-2657, REQ-2658, REQ-2660, REQ-3668, REQ-502, DEC-559, DEC-628 and (under Q11) REQ-506, DEC-634, TODO-1209; the server's REQ-1040, REQ-2963, DEC-2024 items 3 and 4, DEC-2145, TODO-4900, DEC-5583, TODO-2055 item 3; the library's REQ-2217; demosite's REQ-3838, REQ-3186 and DEC-2234.
-- **Revised:** DOC-1951 (record types 13 to 15, type 8 retired), DOC-1968 and DOC-1970 (program protocol 13), DOC-1863 and REQ-1883 and REQ-515 (the boundary is for keys, not cookies); DEC-910 item 1, DEC-1527 item 4, DEC-6443 items 2 and 3, REQ-714 and REQ-1471 item 9; REQ-1057 and REQ-1058 and DEC-2463 items 4 to 6 (keyed by handle); REQ-2218 item 5.
+- **Revised:** DOC-1951 (record types 18 to 20 added, the table completed with types 13 to 17, which the engine already uses, and type 8 retired), the input protocol's documentation item of extension events (types 0x48 to 0x4A), DOC-1968 and DOC-1970 (program protocol 13), DOC-1863 and REQ-1883 and REQ-515 (the boundary is for keys, not cookies); DEC-910 item 1, DEC-1527 item 4, DEC-6443 items 2 and 3, REQ-714 and REQ-1471 item 9; REQ-1057 and REQ-1058 and DEC-2463 items 4 to 6 (keyed by handle); REQ-2218 item 5.
 - **Done by this design once built:** TODO-6463; TODO-6444 (item 1 by RESUME, item 2 by `gone`); TODO-6445.
 
 ---
@@ -849,6 +851,9 @@ Each with its options and a recommendation.
 8. **The library's store is not atomic**, against owner's decision 9 (VS-406).
 9. **Cloudflare host gaps:** no `Origin` check (section 10.5 item 1), no cookies passed to programs (TODO-4900), one session key and no rotation.
 10. **`reached_securely`** (the engine's REQ-SEC-007 as the browser answers it) is computed from cookie jars; with no cookies it needs another source or withdrawal.
+11. **The push protocol's number** (settled by DEC-6477). This document first said the push protocol was version 2 and made it 3; the engine's is version 7 (`neoteletext_input::limits::VERSION`, subprotocol `neottx.7`), so this design makes it 8 (VS-201, VS-203), as the engine's branch `viewer-state` builds it (commit `af9f6b5d`).
+12. **The record types** (settled by DEC-6477). This document first allocated record types 13 to 15, which the engine already uses (13 kept for CHANNEL, 14 REGIS, 15 DRAWING_LINKS); the state records take the next free types, 18 to 20, and the receiver's messages the extension types 0x48 to 0x4A (VS-204), as the engine's branch `viewer-state` builds them (commit `793039e5`).
+13. **One program protocol 13 with the synthesizers** (settled by DEC-6477 answer 3). `audio/server.md` defines the synthesizers' sound messages in the same version; section 5.3 states the names each adds, none shared.
 
 ---
 

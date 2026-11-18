@@ -1,0 +1,112 @@
+# The public calls, handlers, audiences and harness calls of the TypeScript kit
+# (neoteletext-server-ts-protocol) and the Python kit (neoteletext-server-channels
+# kits/python) for program protocol 13: typescript.md TS-2 and python.md PY-18 and PY-19.
+# Each kit keeps a byte-for-byte copy, pinned by COMMON_FROM in its scripts/check.sh,
+# and its tests compare its public interface with it.
+# Columns, separated by one tab: what (call, handler, audience or harness); typescript,
+# the TypeScript kit's name; python, the Python kit's name (the TypeScript name in
+# snake_case, a handler with on_ before it); message, the protocol message the entry
+# writes or reads, or - for none; arguments, in order, by meaning, or - for none.
+# A TypeScript handler's trailing context argument has no Python counterpart (a Python
+# handler is a method of App), and the Python kit takes the page entries as its App's
+# constructor argument, written App(pages): the two structural differences PY-18 allows.
+# The harness's viewer calls (viewer, privateViewer, remember, forget, grantState,
+# refuseState, restart) are viewer-state.md VS-404's.
+what	typescript	python	message	arguments
+call	sound	sound	sound	to, member
+call	authorLog	author_log	author_log	to, level, text, page
+call	log	log	log	text
+call	packets	packets	packets	to, packets
+call	regis	regis	regis	to, page, sub-page, data, restart
+call	regisLinks	regis_links	regis_links	to, page, sub-page, links
+call	regisCursor	regis_cursor	regis_cursor	to, page, sub-page, drawing
+call	naplps	naplps	naplps	to, page, sub-page, data, restart
+call	measure	measure	measure, measured	page, screen
+call	publish	publish	page, subpages or index, as the kit's sender writes it	owner, page, screen
+call	publishSubpages	publish_subpages	page, subpages or index, as the kit's sender writes it	owner, page, sub-pages
+call	publishTti	publish_tti	page, subpages or index, as the kit's sender writes it	owner, page, text, titles
+call	put	put	page, subpages or index, as the kit's sender writes it	owner, page, sub-pages
+call	remove	remove	page, subpages or index, as the kit's sender writes it	owner, page, sub-codes
+call	release	release	page, subpages or index, as the kit's sender writes it	connection, page
+call	title	title	index	page, title
+call	titleOf	title_of	-	page
+call	redirect	redirect	redirect	connection, page or address, sub-page
+call	deny	deny	denied	connection, status
+call	connection	connection	-	-
+call	now	now	-	-
+call	epochMs	epoch_ms	-	-
+call	limits	limits	start, read	-
+call	languages	languages	start, read	-
+call	wakeAt	wake_at	-	at in milliseconds
+call	wakeIn	wake_in	-	delay in milliseconds
+call	random	random	-	-
+call	below	below	-	bound
+call	requestState	request_state	request_state	connection
+call	endState	end_state	end_state	viewer
+call	offerRemember	offer_remember	offer_remember	connection
+call	viewer	viewer	connected and viewer_began, read	connection
+call	remembered	remembered	connected and viewer_began, read	connection
+handler	pages	App(pages)	-	the channel's page entries
+handler	start	on_start	start	-
+handler	joined	on_joined	connected	connection
+handler	request	on_request	connected and selected, read	connection, page, request
+handler	opened	on_opened	selected	connection, page
+handler	leftPage	on_left_page	selected or left	connection, page
+handler	input	on_input	input	connection, page, input event, sub-page
+handler	wake	on_wake	-	-
+handler	gone	on_gone	gone	connection
+handler	stats	on_stats	stats	stats
+handler	describe	describe	describe	page
+handler	refused	on_refused	refused	refusal
+handler	soundBuilt	on_sound_built	sound_built	report
+handler	viewerBegan	on_viewer_began	viewer_began	connection, viewer, remembered
+handler	viewerLeft	on_viewer_left	viewer_left	connection
+handler	stateRefused	on_state_refused	state_refused	connection, reason
+handler	viewersReset	on_viewers_reset	viewers_reset	-
+audience	{ connection }	connection_hears	-	connection
+audience	{ page }	page_hears	-	page
+audience	{ connections: [...] }	connections_hear	-	connections
+audience	{ connections: "all" }	everyone_hears	-	-
+harness	join	join	-	viewer or connection, page
+harness	open	open	-	connection, page, sub-page, query
+harness	close	close	-	connection
+harness	send	send	-	connection, input event
+harness	typeText	type_text	-	connection, text
+harness	typeKeys	type_keys	-	connection, text
+harness	paste	paste	-	connection, text
+harness	key	key	-	connection, key, action
+harness	press	press	-	connection, key
+harness	click	click	-	connection, button, column, row
+harness	mouse	mouse	-	connection, action, button, column, row
+harness	move	move	-	connection, buttons, column, row
+harness	hover	hover	-	connection, action, column, row
+harness	clickLeft	click_left	-	connection, column, row
+harness	stats	stats	-	stats
+harness	wheel	wheel	-	connection, dy, column, row
+harness	advance	advance	-	milliseconds
+harness	runUntil	run_until	-	milliseconds
+harness	describe	describe	-	page
+harness	publications	publications	-	-
+harness	sharedPublications	shared_publications	-	page
+harness	sharedPages	shared_pages	-	page
+harness	ownPages	own_pages	-	connection, page
+harness	title	title	-	page
+harness	shared	shared	-	page
+harness	own	own	-	connection, page
+harness	seen	seen	-	connection, page
+harness	at	at	-	connection
+harness	cursor	cursor	-	connection
+harness	redirects	redirects	-	connection
+harness	addressRedirects	address_redirects	-	connection
+harness	sounds	sounds	sound	connection
+harness	soundsOfKind	sounds_of_kind	sound	connection, kind
+harness	soundsToEveryone	sounds_to_everyone	sound	-
+harness	refuse	refuse	refused	message, path, rule, detail
+harness	report	report	sound_built	message, report
+harness	restart	restart	start	-
+harness	viewer	viewer	-	name
+harness	privateViewer	private_viewer	-	name
+harness	remember	remember	-	viewer, remembered
+harness	forget	forget	viewer_left	viewer
+harness	grantState	grant_state	viewer_began	connection
+harness	refuseState	refuse_state	state_refused	connection, reason
