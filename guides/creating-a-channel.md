@@ -2,15 +2,18 @@
 
 This guide takes a programmer who has never heard of teletext from nothing to a published channel. You will write pages by hand, put them on a web host, then write a program that serves live pages, in TypeScript and in Python. It takes you through each step. For depth, read [`servers.md`](servers.md) on the server and the kits, and [`teletext-reference.md`](teletext-reference.md) on everything a page can do.
 
-The examples were run for this guide on a local machine, and the output is what the tools printed, with the local ports written as `8000` and `8090`. Three kinds of command were not run, and the guide marks them: release builds, anything on a public host or behind TLS, and anything in the NeoTeletext browser. It was checked on 1 and 2 November 2026 against these commits:
+The examples were run for this guide on a local machine, and the output is what the tools printed, with the local ports written as `8000` and `8090`. Three kinds of command were not run, and the guide marks them: release builds, anything on a public host or behind TLS, and anything in the NeoTeletext browser.
+
+Sections 12 to 15, the live channel, describe program protocol 15 and push protocol 10, with the page rule table, and were checked on 19 November 2026 against these commits, none of them merged or deployed then:
 
 | What | Commit or version |
 |---|---|
-| `neottx`, from `neoteletext-renderer-teletext` | `fecedf4` |
-| `teletext-server`, from `neoteletext-app-server` | `cce8d80` |
-| TypeScript kit | 6.0.0 |
-| UI library | 12.0.0 |
-| Python kit, in `neoteletext-server-channels` | `7a2f3e5` |
+| `neottx`, from `neoteletext-renderer-teletext`, branch `rules-2` | `24b6a96a` |
+| `teletext-server`, from `neoteletext-app-server`, branch `protocol-15` | `3446386` |
+| TypeScript kit, branch `protocol-15` | 18.0.0, `3ae7b21` |
+| Python kit, in `neoteletext-server-channels`, branch `protocol-15` | 0.1.0, `0b9df38` |
+
+The other sections were checked on 1 and 2 November 2026 against `neottx` at `fecedf4` and `teletext-server` at `cce8d80`.
 
 What a viewer sees was checked with `neottx view`, the terminal receiver. Where the browser matters, the guide says what its code does. Section 19 lists what is not built yet.
 
@@ -666,33 +669,35 @@ A live channel is a program. The Rust server speaks the teletext wire to viewers
 
 - **One program serves every viewer.** It never handles a socket or a packet.
 - **The server keeps no pages.** It asks your program for each one. The kits keep what you publish, and answer those questions for you.
-- **A connection is one tab,** with one selection. A **session** is one viewer, across their tabs and reconnections, for 5 minutes after the last one closes.
+- **A connection is one tab,** with one selection, from its opening until `gone`. Two tabs of one viewer are two connections. There is no session that spans connections and no cookie: when a channel needs to know that two connections are one viewer, it asks for viewer state, and the connection then carries the viewer's handle (section 14).
+- **A page sends nothing until it asks.** Each page gives the browser a rule table, which says which keys, clicks and other events reach your program. A page with no table sends no input at all. The server keeps no table either, so your program sends a page's table every time a connection selects it.
 
 The server answers only a few addresses for each channel: `channel.ttx`, which it writes for you, the WebSocket at `push`, and a small web page. It serves no files. A live channel has no `contents.txt` or `.tti` files. Your program gives the contents as a list of pages, and may read `.tti` files itself to publish them.
 
-`channel.ttx` is generated, with your channel's name, initial page `100` and `"push":{"input":true}`. You do not write it, and at this commit neither of those last two can be changed. So your first page must be 100, and every key the viewer presses goes to your program.
+`channel.ttx` is generated, with your channel's name and its initial page, 100 unless the channels file says `initial_page`.
 
-Here are the first lines between the server and the program of section 13, shortened. The server said:
-
-```text
-{"type":"start","protocol":6,"epoch_ms":1793537341654,"standard":{...},"budgets":{...}}
-{"type":"connected","connection":1,"session":1836582237850624,"request":1,"cookies":[],"selection":null,"path":null,"query":null}
-{"type":"selected","connection":1,"request":2,"path":"200","page":"200","sub":"3F7F","query":null}
-{"type":"input","connection":1,"page":"200","sub":"0000","lost":false,"event":{"kind":"key","action":"press","key":"ArrowUp","text":null,"base":null}}
-```
-
-The program answered:
+Here are the first lines between the server and the program of section 13, shortened. They are written from the server's schema, `protocol/schema-15.json`, not pasted from a run. The server says:
 
 ```text
-{"type":"reply","connection":1,"request":1,"magazines":[...],"selected":{"page":"100","sub":"0000","rows":[...],...}}
-{"type":"page","connections":[1],"request":2,"page":{"page":"200","sub":"0000","rows":[...],...}}
+{"type":"start","protocol":15,"epoch_ms":1795000000000,"standard":{...},"budgets":{...},"languages":[...]}
+{"type":"connected","connection":1,"request":1,"selection":{"page":"200","sub":"3F7F"},"path":"200","query":null,"viewer":null,"remembered":false}
+{"type":"input","connection":1,"page":"200","sub":"0000","lost":false,"rule":"step","row":null,"tick":149,"target":null,"event":{"kind":"key","action":"press","key":"ArrowUp",...}}
+{"type":"gone","connection":1}
 ```
 
-The kits do all of that. To write a program without one, DOC-1964 to DOC-1978 of PROTOCOL.html are the whole protocol, and [`servers.md`](servers.md) section 2.16 has a program with no kit.
+The program answers:
+
+```text
+{"type":"rules","connections":[1],"page":"200","sub":"0000","table":{"rules":[...]}}
+{"type":"reply","connection":1,"request":1,"magazines":[...],"selected":{"page":"200","sub":"0000","rows":[...],...}}
+{"type":"page","connections":[1],"request":null,"page":{"page":"200","sub":"0000","rows":[...],...}}
+```
+
+The kits do all of that but the table, which is yours. To write a program without one, DOC-1964 to DOC-1978 of PROTOCOL.html are the whole protocol, and [`servers.md`](servers.md) section 2.16 has a program with no kit.
 
 ## 13. A live channel, step by step
 
-The same channel twice, in TypeScript and Python. It has a shared front page, a clock that changes by itself, and a page of each viewer's own that answers their keys.
+The same channel twice, in TypeScript and Python. It has a shared front page, a clock that changes by itself, and a page each tab has a copy of that answers its keys.
 
 Work in the folder above `news`.
 
@@ -702,11 +707,11 @@ cd ..
 
 ### TypeScript
 
-The kit is a built tarball, not on a registry. Take it from any channel's `vendor/`, such as `neoteletext-server-channel-home-www.neoteletext.com/vendor/`, or make one with `scripts/release.sh` in `neoteletext-server-ts-protocol`. `KITS` below is that folder.
+The kit is a built tarball, not on a registry. Take it from any channel's `vendor/`, or make one with `scripts/release.sh` in `neoteletext-server-ts-protocol`, which leaves it in that repository's `tmp/release/`. `KITS` below is that folder.
 
 ```sh
 mkdir -p hello-ts/vendor
-cp "$KITS"/neoteletext-server-ts-protocol-6.0.0.tgz hello-ts/vendor/
+cp "$KITS"/neoteletext-server-ts-protocol-18.0.0.tgz hello-ts/vendor/
 cat > hello-ts/package.json <<'EOF'
 {
   "name": "hello-channel",
@@ -714,24 +719,42 @@ cat > hello-ts/package.json <<'EOF'
   "type": "module",
   "engines": { "node": ">=22.18.0" },
   "dependencies": {
-    "neoteletext-server-ts-protocol": "file:vendor/neoteletext-server-ts-protocol-6.0.0.tgz"
+    "neoteletext-server-ts-protocol": "file:vendor/neoteletext-server-ts-protocol-18.0.0.tgz"
   }
 }
 EOF
 (cd hello-ts && npm install --ignore-scripts --no-audit --no-fund)
 ```
 
-`hello-ts/main.ts`:
+`hello-ts/hello.ts` is the channel:
 
-```ts hello-ts/main.ts
+```ts hello-ts/hello.ts
 // A live channel: a shared front page, a clock that changes by itself, and
-// a page of each viewer's own that answers their keys.
-import { type Application, type Context, type Input, Colour, Key, Screen, pressed, runChannel } from "neoteletext-server-ts-protocol";
+// a page of each tab's own that answers its keys. main.ts runs it.
+import { type Application, type Context, type Input, Colour, Key, Screen, namedKey, physicalKey, pressed } from "neoteletext-server-ts-protocol";
+import type { RuleTable } from "neoteletext-server-ts-protocol/protocol";
 
 const FRONT = 0x100;
 const CLOCK = 0x101;
 const COUNTER = 0x200;
+const SUB = 0;
 const SECOND_MS = 1000;
+
+// A page sends nothing until its table asks. These two rules report the
+// digits and the coloured keys, which the kit selects pages by.
+const NAVIGATION: RuleTable["rules"] = [
+  { name: "digits", on: { event: "key", keys: [..."0123456789"].map(physicalKey) }, do: [{ type: "report" }] },
+  {
+    name: "colours",
+    on: { event: "key", keys: ["F1", "F2", "F3", "F4", "ColorF0Red", "ColorF1Green", "ColorF2Yellow", "ColorF3Blue"].map(namedKey) },
+    do: [{ type: "report" }],
+  },
+];
+const PAGE_TABLE: RuleTable = { rules: NAVIGATION };
+// The counter also reports Up and Down, held or not.
+const COUNTER_TABLE: RuleTable = {
+  rules: [...NAVIGATION, { name: "step", on: { event: "key", keys: [namedKey("ArrowUp"), namedKey("ArrowDown")], repeat: true }, do: [{ type: "report" }] }],
+};
 
 function front(): Screen {
   const screen = new Screen();
@@ -757,12 +780,13 @@ function counter(count: number): Screen {
   const screen = new Screen();
   screen.header("HELLO");
   screen.doubleHeight(2, 0, Colour.Green, `Count ${count}`);
-  screen.text(6, 0, "Up and Down change it. Only you see it.");
+  screen.text(6, 0, "Up and Down change it. Only this tab");
+  screen.text(7, 0, "sees it.");
   screen.indexLink(FRONT);
   return screen;
 }
 
-class Hello implements Application {
+export class Hello implements Application {
   readonly #counts = new Map<number, number>();
 
   pages() {
@@ -776,6 +800,7 @@ class Hello implements Application {
   start(context: Context): void {
     context.publish("channel", FRONT, front());
     context.publish("channel", CLOCK, clock(context));
+    context.publish("channel", COUNTER, counter(0));
     context.wakeIn(SECOND_MS);
   }
 
@@ -784,30 +809,39 @@ class Hello implements Application {
     context.wakeIn(SECOND_MS);
   }
 
-  opened(session: number, page: number, context: Context): void {
+  opened(connection: number, page: number, context: Context): void {
+    // The server keeps no table: send the page's at every selection.
+    context.rules({ connection }, page, SUB, page === COUNTER ? COUNTER_TABLE : PAGE_TABLE);
     if (page === COUNTER) {
-      context.publish(session, COUNTER, counter(this.#counts.get(session) ?? 0));
+      context.publish(connection, COUNTER, counter(this.#counts.get(connection) ?? 0));
     }
   }
 
-  input(session: number, page: number, input: Input, context: Context): boolean {
-    if (page !== COUNTER) {
+  input(connection: number, page: number, input: Input, context: Context): boolean {
+    if (page !== COUNTER || input.rule !== "step") {
       return false;
     }
     const step = pressed(input, Key.Up) ? 1 : pressed(input, Key.Down) ? -1 : 0;
     if (step === 0) {
       return false;
     }
-    const count = (this.#counts.get(session) ?? 0) + step;
-    this.#counts.set(session, count);
-    context.publish(session, COUNTER, counter(count));
+    const count = (this.#counts.get(connection) ?? 0) + step;
+    this.#counts.set(connection, count);
+    context.publish(connection, COUNTER, counter(count));
     return true;
   }
 
-  ended(session: number): void {
-    this.#counts.delete(session);
+  gone(connection: number): void {
+    this.#counts.delete(connection);
   }
 }
+```
+
+`hello-ts/main.ts` runs it:
+
+```ts hello-ts/main.ts
+import { runChannel } from "neoteletext-server-ts-protocol";
+import { Hello } from "./hello.ts";
 
 await runChannel([new Hello()]);
 ```
@@ -815,14 +849,16 @@ await runChannel([new Hello()]);
 The things to notice:
 
 - Page numbers are hexadecimal: `0x100`, not `100`.
-- `publish("channel", ...)` makes one shared copy for everyone. `publish(session, ...)` makes one viewer's own, which that viewer sees in place of the channel's.
-- Publishing a page again is how a page changes. You send the whole page and the server sends each viewer only the rows that changed.
+- **The table.** `opened` sends each page's table, because the server keeps none and a page without one sends nothing. `digits` and `colours` report the keys a television remote has. The kit uses what they report to move, as a remote does: three digits select a page, and the coloured keys and F1 to F4 follow the page's `fastext` links. The counter's table adds `step`, which reports Up and Down. A click on a page's Fastext prompt needs no rule: the browser follows a link it can see by itself. `ownsDigits` and `ownsColourKeys` in `pages()` keep those keys for your page.
+- `publish("channel", ...)` makes one shared copy for everyone. `publish(connection, ...)` makes one tab's own, which that tab sees in place of the channel's.
+- Publishing a page again is how a page changes. You send the whole page and the server sends each tab only the rows that changed.
 - `pages()` is the channel's list of pages. A page not in it cannot be published.
-- `input` returns `true` when it took the key. Otherwise the kit uses it to move: three digits select a page, the coloured keys and F1 to F4 follow the page's `fastext` links, and a click on a printed page number or a row 24 prompt follows it. `ownsDigits` and `ownsColourKeys` in `pages()` keep those keys for your page.
+- `input` gets only what a rule reported, with the rule's name in `input.rule`, and returns `true` when it took the key.
+- `gone` is the connection closing. Forget what you kept for it.
 
 ### Python
 
-The kit is in `neoteletext-server-channels/kits/python`, and has no dependencies. It is thin: it exists for the old Hackaday channel, so choose TypeScript for new work.
+The kit is in `neoteletext-server-channels/kits/python`, the package `neoteletext_app`, and is the TypeScript kit's equal, call for call. It depends on `jsonschema` and the four packages it needs, each pinned in its `pyproject.toml`, for checking every message against the schema.
 
 ```sh
 mkdir -p hello-py
@@ -833,27 +869,45 @@ version = "0.1.0"
 requires-python = ">=3.13"
 dependencies = ["neoteletext-app"]
 
+[dependency-groups]
+dev = ["pytest"]
+
 [tool.uv.sources]
 neoteletext-app = { path = "$PYTHON_KIT" }
 EOF
 ```
 
-`PYTHON_KIT` is the path of `kits/python`. `hello-py/main.py`:
+`PYTHON_KIT` is the path of `kits/python`. `hello-py/hello.py`:
 
-```python hello-py/main.py
-"""A live channel: a shared front page, a clock, and a page of each viewer's own."""
+```python hello-py/hello.py
+"""A live channel: a shared front page, a clock, and a page of each tab's own. main.py runs it."""
 
-import asyncio
 import datetime
 
-from neoteletext_app.app import App
+from neoteletext_app import named_key, physical_key
+from neoteletext_app.app import App, connection_hears
+from neoteletext_app.copies import CHANNEL
 from neoteletext_app.event import Event
+from neoteletext_app.protocol_types import RuleTable
 from neoteletext_app.screen import Colour, Screen
 
 FRONT = 0x100
 CLOCK = 0x101
 COUNTER = 0x200
-SECOND = 1.0
+SUB = 0
+SECOND_MS = 1000
+
+# A page sends nothing until its table asks. These two rules report the
+# digits and the coloured keys, which the kit selects pages by.
+COLOUR_KEYS = ["F1", "F2", "F3", "F4", "ColorF0Red", "ColorF1Green", "ColorF2Yellow", "ColorF3Blue"]
+NAVIGATION = [
+    {"name": "digits", "on": {"event": "key", "keys": [physical_key(digit) for digit in "0123456789"]}, "do": [{"type": "report"}]},
+    {"name": "colours", "on": {"event": "key", "keys": [named_key(key) for key in COLOUR_KEYS]}, "do": [{"type": "report"}]},
+]
+PAGE_TABLE: RuleTable = {"rules": NAVIGATION}
+# The counter also reports Up and Down, held or not.
+STEP = {"name": "step", "on": {"event": "key", "keys": [named_key("ArrowUp"), named_key("ArrowDown")], "repeat": True}, "do": [{"type": "report"}]}
+COUNTER_TABLE: RuleTable = {"rules": [*NAVIGATION, STEP]}
 
 
 def front() -> Screen:
@@ -868,10 +922,10 @@ def front() -> Screen:
     return screen
 
 
-def clock() -> Screen:
+def clock(epoch_ms: int) -> Screen:
     screen = Screen()
     screen.header("HELLO")
-    now = datetime.datetime.now(datetime.UTC)
+    now = datetime.datetime.fromtimestamp(epoch_ms / SECOND_MS, datetime.UTC)
     screen.coloured(2, 0, Colour.CYAN, now.isoformat(timespec="seconds"))
     screen.index_link(FRONT)
     return screen
@@ -881,7 +935,8 @@ def counter(count: int) -> Screen:
     screen = Screen()
     screen.header("HELLO")
     screen.double_height(2, 0, Colour.GREEN, f"Count {count}")
-    screen.text(6, 0, "Up and Down change it. Only you see it.")
+    screen.text(6, 0, "Up and Down change it. Only this tab")
+    screen.text(7, 0, "sees it.")
     screen.index_link(FRONT)
     return screen
 
@@ -892,49 +947,60 @@ class Hello(App):
         self.counts: dict[int, int] = {}
 
     async def on_start(self) -> None:
-        self.publish(FRONT, front())
-        self.publish(CLOCK, clock())
-        self.ticking = asyncio.create_task(self.tick())
+        self.publish(CHANNEL, FRONT, front())
+        self.publish(CHANNEL, CLOCK, clock(self.epoch_ms()))
+        self.publish(CHANNEL, COUNTER, counter(0))
+        self.wake_in(SECOND_MS)
 
-    async def tick(self) -> None:
-        while True:
-            await asyncio.sleep(SECOND)
-            self.publish(CLOCK, clock())
+    async def on_wake(self) -> None:
+        self.publish(CHANNEL, CLOCK, clock(self.epoch_ms()))
+        self.wake_in(SECOND_MS)
 
-    async def on_open(self, session: int, page: int) -> None:
+    async def on_opened(self, connection: int, page: int) -> None:
+        # The server keeps no table: send the page's at every selection.
+        self.rules(connection_hears(connection), page, SUB, COUNTER_TABLE if page == COUNTER else PAGE_TABLE)
         if page == COUNTER:
-            self.publish(COUNTER, counter(self.counts.get(session, 0)), session)
+            self.publish(connection, COUNTER, counter(self.counts.get(connection, 0)))
 
-    async def on_input(self, session: int, page: int, event: Event) -> bool:
-        if page != COUNTER:
+    async def on_input(self, connection: int, page: int, event: Event, sub: int) -> bool:  # noqa: ARG002
+        if page != COUNTER or event.rule != "step":
             return False
         step = 1 if event.pressed_key("ArrowUp") else -1 if event.pressed_key("ArrowDown") else 0
         if step == 0:
             return False
-        self.counts[session] = self.counts.get(session, 0) + step
-        self.publish(COUNTER, counter(self.counts[session]), session)
+        self.counts[connection] = self.counts.get(connection, 0) + step
+        self.publish(connection, COUNTER, counter(self.counts[connection]))
         return True
 
-    async def on_close(self, session: int) -> None:
-        self.counts.pop(session, None)
+    async def on_gone(self, connection: int) -> None:
+        self.counts.pop(connection, None)
+```
 
+`hello-py/main.py` runs it with the kit's `run`:
 
-Hello().run()
+```python hello-py/main.py
+from neoteletext_app.app import run
+
+from hello import Hello
+
+run(Hello())
 ```
 
 ```sh
 (cd hello-py && uv sync)
 ```
 
+The differences from TypeScript: an application is a subclass of `App`, given its pages and their sections; every handler is `async` and named `on_...`; the program answers through `self`, and names its audience with `connection_hears`, `page_hears`, `connections_hear` or `everyone_hears`. `App.run` is not how a program starts: it is the rule table's `run` command, which runs a group of a page's table at once. A program starts with the module's `run(app)`.
+
 ### Run them
 
-The **channels file** tells the server what to serve. A `directory` is taken from the file's own folder, and a `folder` is letters, digits, `-` and `_`. It becomes the address, so do not use one that looks like a page number, `contents` or `wall`.
+The **channels file** tells the server what to serve. A `directory` is taken from the file's own folder, and a `folder` is letters, digits, `-` and `_`. It becomes the address, so do not use one that looks like a page number, `contents` or `wall`. `default_rules` is what a page has when your program sent it no table: `"none"`, the default, sends nothing, and `"send_all"` sends every event, for a channel written before the rule table. Write `"none"` and give every page its table.
 
 ```sh
 cat > channels.json <<'EOF'
 {"channels":[
-  {"folder":"hello","name":"Hello","command":["node","main.ts"],"directory":"hello-ts"},
-  {"folder":"hellopy","name":"Hello from Python","command":["uv","run","--frozen","--no-dev","python","main.py"],"directory":"hello-py"}
+  {"folder":"hello","name":"Hello","command":["node","main.ts"],"directory":"hello-ts","default_rules":"none"},
+  {"folder":"hellopy","name":"Hello from Python","command":["uv","run","--frozen","--no-dev","python","main.py"],"directory":"hello-py","default_rules":"none"}
 ]}
 EOF
 ```
@@ -946,8 +1012,8 @@ teletext-server --listen 127.0.0.1:8090 --origin http://127.0.0.1:8090 --channel
 ```
 
 ```text
-INFO teletext_server: serving version="0.1.0" listen=127.0.0.1:8090 origin="http://127.0.0.1:8090" channels="hello, hellopy"
 INFO program: the program started channel="hello" program="node"
+INFO teletext_server: serving version="0.1.0" listen=127.0.0.1:8090 origin="http://127.0.0.1:8090" channels="hello, hellopy"
 INFO program: the program started channel="hellopy" program="uv"
 ```
 
@@ -962,26 +1028,86 @@ channel     http://127.0.0.1:8090/hello/
 entry file  read: "Hello"
 initial     page 100
 said        connecting
-handshake   accepted: neottx.7
-protocol    input protocol 7, WELCOME received
-selection   100: a page in 309 ms
-selection   101: a page in 5 ms
-selection   200: a page in 300 ms
-selection   8FC: DENIED 404 for "8FC" in 6 ms
+handshake   accepted: neottx.10
+protocol    input protocol 10, WELCOME received
+selection   100: a page in 320 ms
+selection   101: a page in 308 ms
+selection   200: a page in 309 ms
+selection   8FC: DENIED 404 for "8FC" in 5 ms
 result      no fault
 ```
 
-`DENIED 404` for `8FC` is the channel doing the right thing. `DENIED 503` is a fault: your program did not answer within 5 seconds, or is not running. `probe` then exits with an error. You can meet this right after starting the server, before your program is ready: one run here got `selection 100: DENIED 503: the channel's program did not answer` for that reason, and the same probe passed a moment later.
+The Python channel answered the same. `DENIED 404` for `8FC` is the channel doing the right thing. `DENIED 503` is a fault: your program did not answer within 5 seconds, or is not running. `probe` then exits with an error. You can meet this right after starting the server, before your program is ready.
 
-Then try it by hand. Press F2, then Up:
+Then try it by hand:
 
 ```
-neottx view http://127.0.0.1:8090/hello/ --allow-local 127.0.0.1
+neottx view http://127.0.0.1:8090/hello/200 --allow-local 127.0.0.1
 ```
 
-This was driven through a pseudo-terminal, with both programs. Up and Down changed the count, F1 and F2 followed the links, digits selected pages, and the clock changed by itself. `neottx view` sends every key to the channel, so `q` does not quit. Press Control-] to take the keys back.
+This was driven through a pseudo-terminal, with both programs: Up raised the count and Down lowered it. `neottx view` holds each page's table as the browser does and sends only what it reports, so `q` does not quit. Press Control-] to take the keys back. Open it at the counter's address, as here: `neottx view` sends no selection before its first page arrives, so the server answers it with the initial page before it has the selection, and the table your program sends for that first page does not reach it (section 19).
 
 **To change a program,** stop it and the server starts it again, at once if it had run for 5 seconds or more. Anything it wrote to standard error goes to the server's log. Never print to standard output: that is the protocol, and a stray line is refused.
+
+**Test it without a server.** Each kit has a harness that drives a program as the server does. `hello-ts/hello.test.ts`:
+
+```ts hello-ts/hello.test.ts
+import assert from "node:assert/strict";
+import { test } from "node:test";
+
+import { Key } from "neoteletext-server-ts-protocol";
+import { Harness, shows } from "neoteletext-server-ts-protocol/testing";
+import { Hello } from "./hello.ts";
+
+const COUNTER = 0x200;
+
+test("the counter sends its table and counts Up for its own tab", () => {
+  const harness = new Harness([new Hello()]);
+  const first = harness.join(harness.viewer("alice"), COUNTER);
+  const second = harness.join(harness.viewer("alice"), COUNTER);
+  const tables = harness.sent.filter((sent) => sent["type"] === "rules");
+  assert.equal(tables.length, 2, "one table for each tab's selection");
+  harness.fire(first, "step", { kind: "key", action: "press", key: Key.Up, mods: 0, text: null, base: null } as never);
+  assert.ok(shows(harness.own(first, COUNTER), "Count 1"));
+  assert.ok(shows(harness.own(second, COUNTER), "Count 0"), "the other tab has its own count");
+  harness.close(first);
+  assert.deepEqual(harness.errors, []);
+});
+```
+
+`hello-py/test_hello.py`, with `pytest` added to the project's `dev` group:
+
+```python hello-py/test_hello.py
+from neoteletext_app.testing import Harness
+
+from hello import COUNTER, Hello
+
+
+def test_the_counter_sends_its_table_and_counts_up_for_its_own_tab() -> None:
+    harness = Harness(Hello())
+    first = harness.join(harness.viewer("alice"), COUNTER)
+    second = harness.join(harness.viewer("alice"), COUNTER)
+    assert len([sent for sent in harness.sent if sent["type"] == "rules"]) == 2
+    harness.fire(first, "step", {"kind": "key", "action": "press", "key": "ArrowUp", "mods": 0, "text": None, "base": None})
+    assert any(b"Count 1" in row for row in harness.own(first, COUNTER))
+    assert any(b"Count 0" in row for row in harness.own(second, COUNTER))
+    harness.close(first)
+```
+
+`harness.fire` gives the program what a rule's firing reports, as the browser sends it. Run on 19 November 2026, Node 24.21.0 and Python 3.14.4:
+
+```
+$ node --test hello.test.ts
+✔ the counter sends its table and counts Up for its own tab (23.668127ms)
+ℹ tests 1
+ℹ pass 1
+ℹ fail 0
+$ uv run pytest -q test_hello.py
+.                                                                        [100%]
+1 passed in 0.12s
+```
+
+[`servers.md`](servers.md) section 3.2 has more on tests.
 
 ## 14. More of what a live page can do
 
@@ -991,8 +1117,8 @@ First write a page in French and one in Russian, for it to publish:
 
 ```sh
 mkdir -p more-ts/vendor
-cp hello-ts/vendor/*.tgz hello-ts/package.json more-ts/
-mv more-ts/*.tgz more-ts/vendor/
+cp hello-ts/vendor/*.tgz more-ts/vendor/
+cp hello-ts/package.json more-ts/
 (cd more-ts && npm install --ignore-scripts --no-audit --no-fund)
 printf 'Bonjour à tous\nÇa coûte 5 €, déjà vu\n' > more-ts/fr.txt
 printf 'Привет, мир\n' > more-ts/ru.txt
@@ -1000,9 +1126,11 @@ neottx write-text --set french --page 500 more-ts/fr.txt more-ts/500.tti
 neottx write-text --set russian-bulgarian --page 501 more-ts/ru.txt more-ts/501.tti
 ```
 
-`more-ts/main.ts`:
+`more-ts/more.ts`, run by a `main.ts` like the first channel's:
 
-```ts more-ts/main.ts
+```ts more-ts/more.ts
+// Sub-pages, other languages, a query, viewer state, sound, a mosaic, a
+// redirect and a public page. main.ts runs it.
 import { readFileSync } from "node:fs";
 import {
   type Application,
@@ -1011,15 +1139,18 @@ import {
   type Input,
   type PageDescription,
   type PageRequest,
+  type Viewer,
   Colour,
   Key,
   Screen,
   Sixels,
   clicked,
   ffmpegOpus,
+  namedKey,
+  physicalKey,
   pressed,
-  runChannel,
 } from "neoteletext-server-ts-protocol";
+import type { RuleTable } from "neoteletext-server-ts-protocol/protocol";
 
 const FRONT = 0x100;
 const STORY = 0x400;
@@ -1028,14 +1159,34 @@ const RUSSIAN = 0x501;
 const SEARCH = 0x600;
 const CHIME = 0x700;
 const PICTURE = 0x701;
+const SUB = 0;
+const FIRST_STORY_SUB = 1;
+const HEXADECIMAL = 16;
 const SOUND = { handle: 1, generation: 0 };
 const SOUND_RATE = 8000;
 const SOUND_SAMPLES = SOUND_RATE / 4;
 const TONE_HZ = 440;
 const TONE_LEVEL = 8000;
+const FULL_GAIN = 100;
 const SIXELS_WIDE = 20;
 const SIXELS_HIGH = 12;
-const AN_HOUR_S = 3600;
+
+const NAVIGATION: RuleTable["rules"] = [
+  { name: "digits", on: { event: "key", keys: [..."0123456789"].map(physicalKey) }, do: [{ type: "report" }] },
+  {
+    name: "colours",
+    on: { event: "key", keys: ["F1", "F2", "F3", "F4", "ColorF0Red", "ColorF1Green", "ColorF2Yellow", "ColorF3Blue"].map(namedKey) },
+    do: [{ type: "report" }],
+  },
+];
+const PAGE_TABLE: RuleTable = { rules: NAVIGATION };
+// The chime's page reports Enter, x and a press of the mouse anywhere on it.
+const CHIME_TABLE: RuleTable = {
+  rules: [
+    ...NAVIGATION,
+    { name: "chime", on: [{ event: "key", keys: [namedKey("Enter"), physicalKey("x")] }, { event: "press", target: "page" }], do: [{ type: "report" }] },
+  ],
+};
 
 function page(title: string, line: string): Screen {
   const screen = new Screen();
@@ -1065,8 +1216,9 @@ function cross(): Screen {
   return screen;
 }
 
-class More implements Application {
+export class More implements Application {
   readonly #queries = new Map<number, string>();
+  readonly #chimes = new Map<Viewer, number>();
   #encoded: EncodedOpus | undefined;
 
   pages() {
@@ -1089,51 +1241,72 @@ class More implements Application {
       { screen: page("Part two", "The rain fell."), title: "Part two" },
       { screen: page("Part three", "The end."), title: "Part three" },
     ]);
-    // Languages: a TTI file keeps its character set. `Screen` has no call for one.
+    // Languages: a TTI file keeps its character set.
     context.publishTti("channel", FRENCH, readFileSync("500.tti", "utf8"));
     context.publishTti("channel", RUSSIAN, readFileSync("501.tti", "utf8"));
-    context.publish("channel", CHIME, page("Press Enter for a chime", "Or click anywhere."));
+    context.publish("channel", SEARCH, page("Reads its address", "Open 600?q=teletext"));
+    context.publish("channel", CHIME, page("Press Enter for a chime", "Or click anywhere. x goes back."));
     context.publish("channel", PICTURE, cross());
     // Sound: encoded once, here, and sent to each viewer who opens the page.
     this.#encoded = ffmpegOpus().sound(tone(), SOUND_RATE);
   }
 
-  // Every selection comes here first, with the address's query and the cookies.
-  request(session: number, selected: number, request: PageRequest | null): void {
-    if (selected === SEARCH && request !== null) {
-      this.#queries.set(session, request.query["q"] ?? "nothing");
+  // Every selection comes here first, with the address's query: a step to
+  // another sub-page too, which is another page with a table of its own.
+  request(connection: number, selected: number, request: PageRequest | null, context: Context): void {
+    if (request === null) {
+      return;
     }
+    if (selected === SEARCH) {
+      this.#queries.set(connection, request.query["q"] ?? "nothing");
+    }
+    // The server keeps no table: send the sub-page's at every selection.
+    const [, asked] = request.path.split("/");
+    const sub = asked === undefined ? (selected === STORY ? FIRST_STORY_SUB : SUB) : Number.parseInt(asked, HEXADECIMAL);
+    context.rules({ connection }, selected, sub, selected === CHIME ? CHIME_TABLE : PAGE_TABLE);
   }
 
-  opened(session: number, opened: number, context: Context): void {
+  opened(connection: number, opened: number, context: Context): void {
     if (opened === SEARCH) {
-      context.publish(session, SEARCH, page("You asked for", this.#queries.get(session) ?? "nothing"));
+      context.publish(connection, SEARCH, page("You asked for", this.#queries.get(connection) ?? "nothing"));
     }
     if (opened === CHIME && this.#encoded !== undefined) {
-      context.sound({ session }, { opus: { ...SOUND, ...this.#encoded } });
+      context.sound({ connection }, { kind: "opus", ...SOUND, ...this.#encoded });
     }
   }
 
-  input(session: number, on: number, input: Input, context: Context): boolean {
-    if (on === CHIME && (pressed(input, Key.Enter) || clicked(input))) {
-      context.sound({ session }, { play: { channel: 0, ...SOUND, page: CHIME } });
-      context.log(`chime for session ${session}`);
-      context.authorLog({ session }, "I", "chime played", CHIME);
-      const connection = context.connection();
-      if (connection !== null) {
-        context.cookie(connection, "chimed", "yes", { maxAge: AN_HOUR_S, sameSite: "Strict" });
-      }
+  input(connection: number, on: number, input: Input, context: Context): boolean {
+    if (on !== CHIME || input.rule !== "chime") {
+      return false;
+    }
+    if (pressed(input, "x")) {
+      context.redirect(connection, FRONT);
       return true;
     }
-    if (on === CHIME && pressed(input, "x")) {
-      context.redirect(session, FRONT);
+    if (pressed(input, Key.Enter) || clicked(input)) {
+      context.sound({ connection }, { kind: "play", channel: 0, ...SOUND, gain: FULL_GAIN, fade_ms: 0, loop: false, after: false, duck: 0 });
+      context.authorLog({ connection }, "I", "chime played", CHIME);
+      const viewer = context.viewer(connection);
+      if (viewer === null) {
+        // The press is the viewer's act that a state request needs.
+        context.requestState(connection);
+      } else {
+        const chimes = (this.#chimes.get(viewer) ?? 0) + 1;
+        this.#chimes.set(viewer, chimes);
+        context.publish(connection, CHIME, page("Press Enter for a chime", `You have chimed ${chimes} times.`));
+      }
       return true;
     }
     return false;
   }
 
-  ended(session: number): void {
-    this.#queries.delete(session);
+  viewerBegan(connection: number, viewer: Viewer, remembered: boolean, context: Context): void {
+    context.log(`connection ${connection} has a viewer, remembered ${remembered}`);
+    this.#chimes.set(viewer, this.#chimes.get(viewer) ?? 0);
+  }
+
+  gone(connection: number): void {
+    this.#queries.delete(connection);
   }
 
   // What a web visitor may see of a page. Nothing, unless you say so here.
@@ -1141,44 +1314,48 @@ class More implements Application {
     return asked === FRONT ? { public: true, title: "More", text: "A channel of examples." } : null;
   }
 }
-
-await runChannel([new More()]);
 ```
 
-`more.py`, in `hello-py` beside `main.py`, does the same in Python. Copy `500.tti` beside it first.
+`more.py`, in `hello-py` beside `hello.py`, does some of the same in Python. Copy `500.tti` beside it first.
 
 ```sh
 cp more-ts/500.tti hello-py/
 ```
 
 ```python hello-py/more.py
-"""Sub-pages, another language, a query and a redirect."""
+"""Sub-pages, another language, a query, a redirect and a public page."""
 
 from pathlib import Path
-from typing import Any
 
-from neoteletext_app.app import App, PageDescription
+from neoteletext_app import named_key
+from neoteletext_app.app import App, PageDescription, PageRequest, Subpage, connection_hears, run
+from neoteletext_app.copies import CHANNEL
 from neoteletext_app.event import Event
+from neoteletext_app.protocol_types import RuleTable
 from neoteletext_app.screen import Colour, Screen
+
+from hello import NAVIGATION
 
 FRONT = 0x100
 STORY = 0x400
 FRENCH = 0x500
 SEARCH = 0x600
+SUB = 0
+FIRST_STORY_SUB = 1
+HEXADECIMAL = 16
+
+PAGE_TABLE: RuleTable = {"rules": NAVIGATION}
+# The search page also reports Enter, which goes back to the front page.
+BACK = {"name": "back", "on": {"event": "key", "keys": [named_key("Enter")]}, "do": [{"type": "report"}]}
+SEARCH_TABLE: RuleTable = {"rules": [*NAVIGATION, BACK]}
 
 
 def page_of(title: str, line: str) -> Screen:
-    screen = Screen(title=title)
+    screen = Screen()
     screen.header("MORE")
     screen.coloured(1, 0, Colour.YELLOW, title)
     screen.text(3, 0, line)
     screen.index_link(FRONT)
-    return screen
-
-
-def from_file(file: str) -> Screen:
-    screen = Screen()
-    screen.load_tti(Path(file).read_text(encoding="utf-8"))
     return screen
 
 
@@ -1188,29 +1365,41 @@ class More(App):
         self.queries: dict[int, str] = {}
 
     async def on_start(self) -> None:
-        self.publish(FRONT, page_of("More", "See 400, 500 and 600"))
-        self.publish(STORY, [page_of("Part one", "A dark and stormy night."), page_of("Part two", "The rain fell.")])
-        self.publish(FRENCH, from_file("500.tti"))
+        self.publish(CHANNEL, FRONT, page_of("More", "See 400, 500 and 600"))
+        story = [Subpage(page_of("Part one", "A dark and stormy night."), title="Part one"), Subpage(page_of("Part two", "The rain fell."), title="Part two")]
+        self.publish_subpages(CHANNEL, STORY, story)
+        self.publish_tti(CHANNEL, FRENCH, Path("500.tti").read_text(encoding="utf-8"))
+        self.publish(CHANNEL, SEARCH, page_of("Reads its address", "Open 600?q=teletext"))
 
-    async def on_request(self, session: int, page: int, request: dict[str, Any] | None) -> None:
-        if page == SEARCH and request is not None:
-            self.queries[session] = request["query"].get("q", "nothing")
-
-    async def on_open(self, session: int, page: int) -> None:
+    async def on_request(self, connection: int, page: int, request: PageRequest | None) -> None:
+        if request is None:
+            return
         if page == SEARCH:
-            self.publish(SEARCH, page_of("You asked for", self.queries.get(session, "nothing")), session)
+            self.queries[connection] = request["query"].get("q", "nothing")
+        # The server keeps no table: send the sub-page's at every selection.
+        _, _, asked = request["path"].partition("/")
+        sub = int(asked, HEXADECIMAL) if asked else FIRST_STORY_SUB if page == STORY else SUB
+        self.rules(connection_hears(connection), page, sub, SEARCH_TABLE if page == SEARCH else PAGE_TABLE)
 
-    async def on_input(self, session: int, page: int, event: Event) -> bool:
-        if page == SEARCH and event.pressed_key("Enter"):
-            self.redirect(session, FRONT)
+    async def on_opened(self, connection: int, page: int) -> None:
+        if page == SEARCH:
+            self.publish(connection, SEARCH, page_of("You asked for", self.queries.get(connection, "nothing")))
+
+    async def on_input(self, connection: int, page: int, event: Event, sub: int) -> bool:  # noqa: ARG002
+        if page == SEARCH and event.rule == "back" and event.pressed_key("Enter"):
+            self.redirect(connection, FRONT)
             return True
         return False
+
+    async def on_gone(self, connection: int) -> None:
+        self.queries.pop(connection, None)
 
     def describe(self, page: int) -> PageDescription | None:
         return PageDescription(title="More", text="A channel of examples.") if page == FRONT else None
 
 
-More().run()
+if __name__ == "__main__":
+    run(More())
 ```
 
 Add both to `channels.json`, restart the server and probe them:
@@ -1218,10 +1407,10 @@ Add both to `channels.json`, restart the server and probe them:
 ```sh
 cat > channels.json <<'EOF'
 {"channels":[
-  {"folder":"hello","name":"Hello","command":["node","main.ts"],"directory":"hello-ts"},
-  {"folder":"hellopy","name":"Hello from Python","command":["uv","run","--frozen","--no-dev","python","main.py"],"directory":"hello-py"},
-  {"folder":"more","name":"More","command":["node","main.ts"],"directory":"more-ts"},
-  {"folder":"morepy","name":"More from Python","command":["uv","run","--frozen","--no-dev","python","more.py"],"directory":"hello-py"}
+  {"folder":"hello","name":"Hello","command":["node","main.ts"],"directory":"hello-ts","default_rules":"none"},
+  {"folder":"hellopy","name":"Hello from Python","command":["uv","run","--frozen","--no-dev","python","main.py"],"directory":"hello-py","default_rules":"none"},
+  {"folder":"more","name":"More","command":["node","main.ts"],"directory":"more-ts","default_rules":"none"},
+  {"folder":"morepy","name":"More from Python","command":["uv","run","--frozen","--no-dev","python","more.py"],"directory":"hello-py","default_rules":"none"}
 ]}
 EOF
 ```
@@ -1231,103 +1420,45 @@ neottx probe http://127.0.0.1:8090/more/ --allow-local 127.0.0.1 --select 400 --
 ```
 
 ```text
-selection   100: a page in 326 ms
-selection   400: a page in 13 ms
-selection   400/0002: a page in 301 ms
-selection   500: a page in 7 ms
-selection   501: a page in 301 ms
-selection   600?q=teletext: a page in 7 ms
-selection   700: a page in 335 ms
-selection   701: a page in 6 ms
-selection   8FC: DENIED 404 for "8FC" in 7 ms
+selection   100: a page in 320 ms
+selection   400: a page in 308 ms
+selection   400/0002: a page in 307 ms
+selection   500: a page in 307 ms
+selection   501: a page in 307 ms
+selection   600?q=teletext: a page in 309 ms
+selection   700: a page in 345 ms
+selection   701: a page in 309 ms
+selection   8FC: DENIED 404 for "8FC" in 5 ms
 result      no fault
 ```
 
-**Sub-pages.** `publishSubpages` numbers them by place: one sub-page is 0000, and 2 to 79 are 0001 to 0079. In Python, give `publish` a list. To change one sub-page without the others, use `put` and `remove`, which name sub-codes, or `subcodes=` in Python. A page's sub-page list reaches the receiver by itself, and the title of each is what you gave. The viewer steps with the browser's controls, and each step comes to your program as a new selection. `neottx view` cannot step a live page yet: `probe --select 400/0002` shows the sub-page is served.
+`morepy` answered 400/0002, 500 and `600?q=teletext` the same. Both programs' harness tests, `more.test.ts` and `test_more.py`, passed: the chime asks for viewer state and then counts, the search page reads its query, Enter on it redirects to 100, and a step to sub-page 0002 is sent that sub-page's table.
 
-**Languages.** `Screen` writes English only, and folds any other character to its nearest: `é` becomes `e`, and what it cannot fold becomes `?`. It has no call that sets a character set. For any other language, write the page with `neottx write-text`, then publish the file: `publishTti` in TypeScript, `load_tti` in Python, which keeps the `OL,28` line and any X/26 marks. If the words change as the program runs, run `neottx write-text` from the program.
+**The table, page by page.** Every page here sends one in `request`, which comes for every selection, a step to another sub-page included, and carries the place selected in `path`. A sub-page is a page of its own for the table: 400/0002 has its own, and its own sixteen variables, so a page of several sub-pages sends a table for each one the viewer reaches. A rule binds up to four triggers to one group of commands: here a key trigger (`event: "key"`, a key set, `repeat` for held keys) and a press of the mouse anywhere on the page (`event: "press"`, `target: "page"`). Its group here is one `report` command, which sends what fired to your program. A group can also play a sound, set a variable, start a timer or animate, at once in the browser with no round trip; [`servers.md`](servers.md) section 2.8 and the protocol's part on the page rule table say how.
 
-**Input.** Your program is sent every key, click, wheel turn and pointer move on the page on screen, whether it wants them or not. Ignore what you do not use. A key has an `action`, `press`, `repeat` or `release`, and a `key`, a W3C `KeyboardEvent.key` name such as `ArrowUp`, `Enter` or `a`. A mouse event has a `column` and a `row`. A release with `lost` set means the key never came up, because the viewer left. Not every receiver reports releases: `neottx view` does not, except in a terminal with the Kitty keyboard protocol. A typed character is `typed(input)` or `character(input)` in TypeScript, and `event.typed` or `event.character` in Python. Draw what the viewer types on the page yourself, because the receiver draws nothing. `screen.cursor` places a cursor. In the browser, some keys never reach you: those with the browser's modifier, Command on macOS and Control-Shift elsewhere. Reference section 17 covers forms, and [DOC-1933](../PROTOCOL.html#DOC-1933) covers when a page is focused for input.
+**Sub-pages.** `publishSubpages` numbers them by place: one sub-page is 0000, and 2 to 79 are 0001 to 0079. In Python it is `publish_subpages`, with a list of `Subpage`. To change one sub-page without the others, use `put` and `remove`, which name sub-codes. A page's sub-page list reaches the receiver by itself, and the title of each is what you gave. The viewer steps with the browser's controls, and each step comes to your program as a new selection. `neottx view` cannot step a live page yet: `probe --select 400/0002` shows the sub-page is served.
 
-**Links.** Use `fastext` for the coloured keys: the kit follows those. `keyLink`, `numberLink` and `textLink` are the program's `LN`, `LK` and `LT`. They travel with the sub-page as a LINKS record, and the browser acts on them. But the kit does not follow `keyLink` on a key press, and `neottx view` does not read LINKS records yet, so F1 did nothing on a page that had only a `keyLink`. Use them for what `fastext` cannot carry: links that leave the channel, and links on the page's own text.
+**Languages.** `Screen` writes English only, and folds any other character to its nearest: `é` becomes `e`, and what it cannot fold becomes `?`. For any other language, write the page with `neottx write-text`, then publish the file with `publishTti`, `publish_tti` in Python, which keeps the `OL,28` line and any X/26 marks. If the words change as the program runs, run `neottx write-text` from the program.
+
+**Input.** Your program hears only what a rule of the page's table reported, never every key. A key has an `action`, `press`, `repeat` or `release`, and a `key`, a W3C `KeyboardEvent.key` name such as `ArrowUp`, `Enter` or `a`. A mouse event has a `column` and a `row`. A release with `lost` set means the key never came up, because the viewer left; the server gives one only for a press a rule reported. Not every receiver reports releases: `neottx view` does not, except in a terminal with the Kitty keyboard protocol. A typed character is `typed(input)` or `character(input)` in TypeScript, and `event.typed` or `event.character` in Python. Draw what the viewer types on the page yourself, because the receiver draws nothing. `screen.cursor` places a cursor. In the browser, some keys never reach you: those with the browser's modifier, Command on macOS and Control-Shift elsewhere. Reference section 17 covers forms, and [DOC-1933](../PROTOCOL.html#DOC-1933) covers when a page is focused for input.
+
+**Links.** Use `fastext` for the coloured keys: the kit follows those when a rule reports them, and the browser follows a click on the prompt by itself. `keyLink`, `numberLink` and `textLink` are the program's `LN`, `LK` and `LT`. They travel with the sub-page as a LINKS record, and the browser acts on them itself, so a press on one never reaches the page's table. `neottx view` does not read LINKS records yet. Use them for what `fastext` cannot carry: links that leave the channel, and links on the page's own text.
 
 **Query.** The address `https://host/more/600?q=teletext` carries a query with the selection. It arrives in `request` before the page opens, and it goes with that one selection. It is untrusted: it comes from the viewer. Quote the page in your `--select` as above, and a shell will leave the `?` alone.
 
-**Each viewer's own page.** Publish to `session` in place of `"channel"`. Forget the session in `ended`, which comes 5 minutes after the viewer goes. A restart of your program loses what it held in memory.
+**Each tab's own page.** Publish to the connection in place of `"channel"`. Forget it in `gone`, which comes when the tab closes. A restart of your program loses what it held in memory, and the server then sends each page the empty or the default table until your program sends its own again.
 
-**Redirects.** `context.redirect(session, page)` moves the viewer to a page. Given an address, it moves them to another channel, after the receiver's notice of one second.
+**The same viewer across tabs: viewer state.** NeoTeletext has no cookies. When a channel needs to know that two connections are one viewer, such as for a poll's one vote, choices kept or a language, it calls `requestState(connection)`, `request_state` in Python, after the viewer acted on the page: the chime's press is that act. The browser makes a key for this one channel, if the viewer allows it, and proves it on the channel's own connection, and your program hears `viewerBegan` with the viewer's handle, or `stateRefused` with the reason. From then on `context.viewer(connection)` is the handle, the same on every tab of that viewer on this channel and meaningless anywhere else; `connected` carries it for a later connection of the same viewer while the browser keeps the key, which is until it closes unless the viewer chose to be remembered. `offerRemember` asks the browser to offer that choice, and `endState` ends a viewer's state. Use a handle only to give the viewer what they asked for on this channel, never for advertising, profiling or sharing, and say on your privacy page what you keep. `neottx` keeps no viewer key: it answers every request that it keeps no state, so a state request in `neottx view` is refused with `stateless`.
 
-**Cookies.** `context.cookie(connection, name, value, options)` sets one, and the server refused nothing. A cookie is scoped to the channel's folder. Your program sees cookies in `request.cookies`, from when the connection opened, so one you set arrives on the next connection. Names starting `_` are the server's. `neottx` keeps no cookies between runs, so reading one back was not seen.
+**Redirects.** `context.redirect(connection, page)` moves the viewer to a page. Given an address, it moves them to another channel, after the receiver's notice of one second.
 
 **Logs.** `context.log` writes to the server's log, and standard error does too. `context.authorLog` sends a line to the viewer's developer console.
 
 **Sound.** Section 16.
 
-**The UI library.** `neoteletext-server-ts-ui-components` is the way to build anything with forms, lists or menus. A page is a tree of components, as in React, with state and key handlers, and the library draws it and routes the keys. This ran as written, and Enter raised the count. It needs both tarballs in `package.json`, the kit's and `neoteletext-server-ts-ui-components-12.0.0.tgz`:
-
-```ts ui-ts/main.ts
-import { Colour, Key, runChannel } from "neoteletext-server-ts-protocol";
-import { type Child, Component, ComponentChannel, Frame, h, isPress, type KeyEvent, Text } from "neoteletext-server-ts-ui-components";
-
-class Counter extends Component<object, { readonly count: number }> {
-  override state = { count: 0 };
-
-  override focusable(): boolean {
-    return true;
-  }
-
-  override render(): Child {
-    return h(Text, { text: `Pressed ${this.state.count} times` });
-  }
-
-  override onKey(event: KeyEvent): boolean {
-    if (!isPress(event, Key.Enter)) {
-      return false;
-    }
-    this.setState({ count: this.state.count + 1 });
-    return true;
-  }
-}
-
-await runChannel([
-  new ComponentChannel([
-    {
-      page: 0x100,
-      title: "Hello",
-      perViewer: true,
-      root: () => h(Frame, { title: "Hello", background: Colour.Blue, prompts: [["Index", 0x100]] }, h(Counter, {})),
-    },
-  ]),
-]);
-```
+**The UI library.** `neoteletext-server-ts-ui-components` is the way to build anything with forms, lists or menus. A page is a tree of components, as in React, with state and key handlers, and the library draws it, writes each page's rule table from the components on it, and routes what it reports. A channel on the library writes no table of its own. Read [`servers.md`](servers.md) section 2.14 and the library's own documents; this guide does not repeat them.
 
 Read real channels to see how far this goes. `neoteletext-server-channel-home-www.neoteletext.com` is the smallest, a set of pages of words. `-demosite` and `-uicomponentsdemo` show every feature, and `-hackaday` is a large site over a dataset.
-
-**Tests.** The TypeScript kit has a harness that drives a channel as the server does, with no server. Run it with `node --test`:
-
-```ts hello-ts/hello.test.ts
-import assert from "node:assert/strict";
-import { test } from "node:test";
-import { type Application, Colour, Screen } from "neoteletext-server-ts-protocol";
-import { Harness, shows } from "neoteletext-server-ts-protocol/testing";
-
-const hello: Application = {
-  pages: () => [{ page: 0x100, title: "Hello" }],
-  start(context) {
-    const screen = new Screen();
-    screen.doubleHeight(2, 0, Colour.Yellow, "Hello, teletext");
-    context.publish("channel", 0x100, screen);
-  },
-};
-
-test("the page says hello", () => {
-  const harness = new Harness([hello]);
-  harness.join(1, 0x100);
-  assert.ok(shows(harness.shared(0x100), "Hello, teletext"));
-});
-```
-
-[`servers.md`](servers.md) section 3.2 has more, and a probe of your own in code.
 
 ## 15. Publishing a live channel
 
@@ -1342,9 +1473,12 @@ teletext-server --listen 127.0.0.1:8090 --origin https://teletext.example.org --
 | `--listen` | Where it accepts connections. `0.0.0.0:8090` by default |
 | `--origin` | The address viewers reach it at. It goes in the `neottx://` link of the small web page |
 | `--channels` | The channels file |
-| `--state` | Where it keeps the session cookie's keys and its figures across a restart. Without it, sessions end at a restart |
+| `--state` | Where it keeps the secret it makes viewers' handles from, and its figures, across a restart. Without it the secret lasts one run, so every viewer has a new handle after a restart |
 | `--admin-listen` | Where `/metrics`, `/healthz`, `/readyz` and `/stats.json` are served. Keep it private |
 | `--log-format` | `auto`, `json` or `text`. `RUST_LOG` chooses which events |
+| `--trusted-proxy` | The address of the proxy in front, whose `X-Forwarded-For` then names each viewer's address for the bound on new viewers |
+
+`teletext-server rotate-viewer-secret --state DIRECTORY` makes a new secret for the next start: every channel then forgets every viewer, and each program is told `viewers_reset`. Do it only after a breach.
 
 A channel in the folder `mine` is then at `https://teletext.example.org/mine/`. Put a proxy in front that passes WebSocket upgrades and the `Host` header. The project's own deployment uses Caddy, in `deploy/ionos/` in the server's repository. This block has the same form as those files, and was not run for this guide:
 
@@ -1356,9 +1490,9 @@ teletext.example.org {
 
 The project never sends `Strict-Transport-Security`: `http` and `ws` are supported on purpose.
 
-A viewer's connection is `wss://teletext.example.org/mine/push`. It is on the same origin as the channel, always. A proxy that refuses the upgrade makes a channel unreachable, because there is no fallback to HTTP. A WebSocket from a web page's script is refused with 403, as it carries an `Origin` header, and one that does not offer the subprotocol `neottx.7` gets 426.
+A viewer's connection is `wss://teletext.example.org/mine/push`. It is on the same origin as the channel, always. A proxy that refuses the upgrade makes a channel unreachable, because there is no fallback to HTTP. A WebSocket from a web page's script is refused with 403, as it carries an `Origin` header, and one that does not offer the subprotocol `neottx.10` gets 426.
 
-A program can also run as a service of its own and connect to the server through a Unix socket, so it outlives a restart: `{"folder":"mine","name":"Mine","socket":"sockets/mine.sock"}`. [`servers.md`](servers.md) section 1.8 covers this and systemd.
+A program can also run as a service of its own and connect to the server through a Unix socket, so it outlives a restart: `{"folder":"mine","name":"Mine","socket":"sockets/mine.sock","default_rules":"none"}`. [`servers.md`](servers.md) section 1.8 covers this and systemd.
 
 Then, from outside:
 
@@ -1370,15 +1504,15 @@ neottx probe https://teletext.example.org/mine/
 
 ### What a web browser sees
 
-The server answers a web browser by itself. You do nothing. This is from the `hello` channel above, with `--origin https://teletext.example.org`:
+The server answers a web browser by itself. You do nothing. This is from the `hello` channel above, run locally:
 
 | Request | Answer |
 |---|---|
-| `/hello/`, `/hello/contents`, `/hello/wall` | 200, a small web page naming the channel, with an "Open in NeoTeletext" link to `neottx://https://teletext.example.org/hello/` and a "Get NeoTeletext" link |
+| `/hello/`, `/hello/contents`, `/hello/wall` | 200, a small web page naming the channel, with an "Open in NeoTeletext" link to `neottx://` and the channel's address, and a "Get NeoTeletext" link |
 | `/hello/100`, `/hello/100/0002`, `/hello/1fe` | 200, the same page, its link naming that place |
 | `/hello` | 308 to `/hello/` |
 | `/hello/100/` | 308 to `/hello/100` |
-| `/hello/channel.ttx` | 200, `application/json` |
+| `/hello/channel.ttx` | 200, `application/json`: `{"name":"Hello","initial_page":"100","push":{}}` |
 | `/hello/push` | 426 without a WebSocket upgrade |
 | `/hello/100.tti`, `/hello/contents.txt`, `/hello/902`, `/` | 404 |
 
@@ -1386,7 +1520,7 @@ That page runs no script and shows nothing of your pages. A page's own address h
 
 **A page is public only if your program says so,** page by page. When a web visitor or a search engine comes to a page's address, the server asks your program with `describe`, which carries the page number and nothing else. So the answer cannot depend on a viewer: it goes to everyone for a minute. Add a `describe` method, as both programs in section 14 did for page 100. The server then answers that address with the page's title, a picture of the page, the offer to open it, and the text you gave, hidden and declared for search engines. All of it is readable by anyone. A `PageSpec` in the UI library has a `describe()` of its own.
 
-The picture is drawn from the channel's copy of the page, so a page published only to sessions cannot be public. A program that does not answer within 2 seconds is taken to have said no. [DOC-1975](../PROTOCOL.html#DOC-1975) has the rest.
+The picture is drawn from the channel's copy of the page, so a page published only to connections cannot be public. A program that does not answer within 2 seconds is taken to have said no. [DOC-1975](../PROTOCOL.html#DOC-1975) has the rest.
 
 ## 16. Sound
 
@@ -1396,9 +1530,9 @@ The picture is drawn from the channel's copy of the page, so a page published on
 | Live, Python | The kit has only `sound_object`, PCM encoded by the server as IMA ADPCM. Desktop and phone receivers do not play it |
 | Static | No sound a desktop browser plays. `neottx sound` writes IMA ADPCM or PCM packets for microcontroller receivers, not Opus |
 
-The desktop browser plays Opus and nothing else. In a live channel a sound has two steps, as in section 14. You send the sound once to a viewer, with a `handle`, and it is stored. Then a `play` command names the handle, on one of four channels, and may give a gain, a fade and a loop. A sound with a `page` plays only while that page is open. Send it in `opened`, because in `joined` the connection does not exist yet. A sound is at most two minutes; `opusLive` and `opusPackets` stream one.
+The desktop browser plays Opus and nothing else. In a live channel a sound has two steps, as in section 14. You send the sound once to a viewer, with a `handle`, and it is stored. Then a `play` command names the handle, on one of four channels, and may give a gain, a fade and a loop. A sound with a `page` plays only while that page is open. Send it in `opened`, because in `joined` the connection has no page yet. A sound is at most two minutes; `opusLive` and `opusPackets` stream one.
 
-At these commits the server accepted the sound and the `play` command and refused nothing: after page 700 was opened and Enter pressed, `/stats.json` showed `"sound_records":3` and `"refused":0`. No receiver that plays sound was run, so nobody heard it. The demo site's `src/pages/audio/` plays real sounds.
+On 2 November 2026, at the first edition's commits, the server accepted the sound and the `play` command and refused nothing: after page 700 was opened and Enter pressed, `/stats.json` showed `"sound_records":3` and `"refused":0`. No receiver that plays sound was run, so nobody heard it. A sound is a member of the kit's `sound` call with its `kind`: `{ kind: "opus", handle, generation, ...encoded }` stores one, and `{ kind: "play", channel, handle, generation, gain, fade_ms, loop, after, duck }` plays it, as section 14 does. The demo site's `src/pages/audio/` plays real sounds.
 
 For a static channel, `neottx sound --page 100 chime.wav chime.t42` turns a 16-bit WAVE file into packets, and `cat` adds them to a page's `NNN.t42`. A channel with such a page opens normally, but what it does depends on a receiver built with IMA ADPCM, which the desktop builds leave out.
 
@@ -1440,7 +1574,7 @@ For each page it tries `NNN.tti`, then `NNN.t42`. On a live channel, it fetches 
 
 **`neottx://`** is a link that opens the receiver. It wraps a whole address and adds nothing: `neottx://https://example.org/news/102`. `neottx` follows it too. The browser registers the scheme with the operating system when it is installed. Inside your own pages, links stay plain addresses.
 
-**A channel's identity** is its origin and folder, compared exactly. A folder inside a channel's folder is a different channel, and shares nothing with it, unless it is named by a page number. Cookies, links and redirects stop at that boundary. Going from one channel to another is "leaving", and the receiver says so.
+**A channel's identity** is its origin and folder, compared exactly. A folder inside a channel's folder is a different channel, and shares nothing with it, unless it is named by a page number. Viewer state, links and redirects stop at that boundary: a viewer's handle on one channel says nothing of them on another. Going from one channel to another is "leaving", and the receiver says so.
 
 **A folder on your own computer.** The browser's code opens a local folder as a channel by the same rules, and each local file as its own channel, so you can try pages before you upload them. That was not run. `neottx` does not open folders: it takes one file at a time.
 
@@ -1475,11 +1609,11 @@ Each of these is written somewhere as the plan, or is a gap you will meet.
 | `presentation` in `channel.ttx` | [DOC-2037](../PROTOCOL.html#DOC-2037) describes it. The reader refuses it as an unknown member |
 | `M.pag`, `NNN.ep1` | [DOC-2034](../PROTOCOL.html#DOC-2034) and [DOC-2039](../PROTOCOL.html#DOC-2039) describe them. There are no magazine lists or EP1 pages in a channel |
 | A tool that builds a channel | [DOC-2034](../PROTOCOL.html#DOC-2034) describes one in `neottx`. There is no such command (TODO-1224): use `convert`, `contents`, `html` and `cat` |
-| Choosing a live channel's first page | The server always says `initial_page` 100 and `input` true |
 | `neottx text`, `show`, `render` and `list` on a live channel | They send no selection, so they see only the initial page (TODO-1529). Use `probe --select` and `view` |
 | LINKS and SUBPAGES records in `neottx view` | Not used, so `keyLink` does nothing there, and Left and Right do not step a live page (TODO-1529) |
 | `LK` lines and aliases in `neottx view` | Typing the number did not follow them |
-| Logging in | Sessions exist, identity does not. A program sees only a session number |
+| Logging in | Not built. A viewer is known to a channel only by viewer state's handle, and only after the viewer allows it |
+| A live channel's first page in `neottx view` | `neottx view` sends no selection before its first page, so the table a program sends for the initial page does not reach it, and that page sends nothing: open a page by its address (section 13) |
 | Opus in the Python kit | Not built (TODO-1310) |
 | Levels 2.5 and 3.5 on a live channel | Packets X/26 to X/28 go with a sub-page through TTI. How object pages reach a receiver is not designed (TODO-2023 item 7) |
 | The Cloudflare host | Its code exists and has never run |
