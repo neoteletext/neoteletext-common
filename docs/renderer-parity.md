@@ -416,6 +416,7 @@ No finding is left open; none needs an entry in `UNSOLVEDSECURITYISSUES/`.
 - **REQ-6668** says a mark's composition with a letter "is not offered" for NAPLPS pages; the server's text parts compose a mark by writing it over its letter with APB (PAR-5), which is a way of writing a page, not a renderer feature, and leaves REQ-6668 true for what a renderer does.
 - **TODO-6680** (NAPLPS joining) is closed by PAR-14.
 - **DEC-6366's exclusion** of the component library is superseded, as DEC-6638 item 2 already says (PAR-42).
+- **REQ-1473** says a connection that opens after a message was sent receives none of it unless the program sends it again, and **REQ-6533** that nothing of animation is kept for a later viewer. The audience `"kept"` (PAR-16) is the exception to the first, and a NAPLPS object's definition sent to it is page content kept as the stream is, while animation operations are still never kept. Both requirements are to be revised to say so, by the server's build (TODO-6777 step 9).
 
 ---
 
@@ -446,16 +447,28 @@ Recorded in rdm as one decision, for the owner's confirmation.
 
 | Record | Repository | What |
 |---|---|---|
-| one requirement | neoteletext-renderer-teletext | Sections 2 to 4 are three requirements: PAR-1 and PAR-2; PAR-3 to PAR-6; PAR-7 to PAR-11 |
-| one requirement | neoteletext-renderer-regis | Section 5: PAR-12, PAR-13 |
-| one requirement | neoteletext-renderer-naplps | Section 6: PAR-14, PAR-15 |
-| four requirements | neoteletext-app-server | Sections 7, 8, 9 and 10 |
-| two requirements | neoteletext-browser | Sections 11 and 12 |
-| one requirement | neoteletext-server-ts-protocol | Section 13 |
-| one requirement | neoteletext-server-channels | Section 14 |
-| one requirement | neoteletext-server-ts-ui-components | Section 15 |
-| one requirement | neoteletext-common | Section 16 |
-| one decision | neoteletext-common | Section 21, for the owner's confirmation |
-| one to-do each | every repository above | Its build, in the order of section 18 |
-
-The record numbers are listed in the build plan and in TODO-6639's successors once made.
+| DEC-6760 | neoteletext-common | Section 21's choices, for the owner's confirmation; decides every requirement below, as DEC-6638 does |
+| REQ-6761 | neoteletext-renderer-teletext | Section 2: PAR-1, PAR-2 |
+| REQ-6762 | neoteletext-renderer-teletext | Section 3: PAR-3 to PAR-6 |
+| REQ-6763 | neoteletext-renderer-teletext | Section 4: PAR-7 to PAR-11 |
+| REQ-6764 | neoteletext-renderer-regis | Section 5: PAR-12, PAR-13 |
+| REQ-6765 | neoteletext-renderer-naplps | Section 6: PAR-14, PAR-15 |
+| REQ-6766 | neoteletext-app-server | Section 7: PAR-16 to PAR-19 |
+| REQ-6767 | neoteletext-app-server | Section 8: PAR-20 to PAR-23 |
+| REQ-6769 | neoteletext-app-server | Section 9: PAR-24, PAR-25 |
+| REQ-6768 | neoteletext-app-server | Section 10: PAR-26 |
+| REQ-6770 | neoteletext-browser | Section 11: PAR-27 to PAR-30 |
+| REQ-6771 | neoteletext-browser | Section 12: PAR-31 to PAR-37 |
+| REQ-6772 | neoteletext-server-ts-protocol | Section 13: PAR-38 to PAR-40 |
+| REQ-6773 | neoteletext-server-channels | Section 14: PAR-41 |
+| REQ-6774 | neoteletext-server-ts-ui-components | Section 15: PAR-42 |
+| REQ-6775 | neoteletext-common | Section 16: PAR-43 to PAR-46 |
+| TODO-6776 | neoteletext-renderer-teletext | The engine's build |
+| TODO-6777 | neoteletext-app-server | The server's build, with the revisions of REQ-1473 and REQ-6533 |
+| TODO-6778 | neoteletext-browser | The browser's build |
+| TODO-6779 | neoteletext-renderer-regis | The ReGIS renderer's build |
+| TODO-6780 | neoteletext-renderer-naplps | The NAPLPS renderer's build, closing TODO-6680 |
+| TODO-6781 | neoteletext-server-ts-protocol | The TypeScript kit's build |
+| TODO-6782 | neoteletext-server-channels | The Python kit's build |
+| TODO-6783 | neoteletext-server-ts-ui-components | The component library's build |
+| TODO-6784 | neoteletext-common | Documentation items, wire vectors, the security review, the end-to-end check, and the close of TODO-6639 |
