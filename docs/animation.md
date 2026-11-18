@@ -3,6 +3,7 @@
 | | |
 |---|---|
 | **Status** | Specification of 18 November 2026, written while the owner was away, for building at once. The owner's decision is DEC-6524; what this document decides beyond it is listed in section 12 and recorded in rdm as items 17 to 27 of DEC-6525, for the owner's confirmation. |
+| **Second form** | Revised on 18 November 2026 with page-rules.md for the owner's decisions DEC-6587 (a rule runs a group of protocol commands; everything local dropped at a disconnect) and DEC-6599 (a sub-page is exactly a page). Section 15 lists every change this document took from them. |
 | **Asked for by** | The owner, 18 November 2026, of twenty ideas for animation: "drop 8 11 12 14 18 and DO ALL THE REST OF THE 20 IDEAS CREATE REQUIREMENTS". |
 | **Companion** | `page-rules.md` (requirements RULE-n): the rule table, whose actions and collision conditions act on the objects this document defines, and which shares this document's clock. |
 | **Repositories it changes** | neoteletext-renderer-teletext (the engine), neoteletext-renderer-regis, neoteletext-renderer-naplps, neoteletext-browser, neoteletext-app-server, neoteletext-server-ts-protocol and neoteletext-server-channels (the kits), and the test channels. |
@@ -27,7 +28,7 @@ Requirements are numbered `ANIM-n`, each naming in brackets the repository that 
 | 14 Sprite sheets as page assets | ANIM-17 |
 | 15 A timeline in the kits, and image sequences | ANIM-19, ANIM-18 |
 
-Every integer in a record is big-endian. The record frame, the data channel and the page and sub-code fields are those of page-rules.md section 8. Push protocol version 9 (RULE-49) carries everything here; the record types are 23 to 27.
+Every integer in a record is big-endian. The record frame, the data channel and the page and sub-code fields are those of page-rules.md section 8. Push protocol version 10 (RULE-49) carries everything here; the record types are 23 to 27. **A page, in this document as in page-rules.md, is one page number and one sub-code together** (DEC-6599, RULE-112): every record, message and call here carries both, and nothing belongs to a page number alone.
 
 | Type | Name | Carries | Requirement |
 |---|---|---|---|
@@ -95,7 +96,7 @@ Every integer in a record is big-endian. The record frame, the data channel and 
 | cycle | first, last, period, once, and the tick it started (ANIM-14) | not cycling |
 | forced look | 0 none, 1 hover, 2 pressed, 3 alternative | the pointer decides the look |
 
-- It is changed by **operations**, which are the same bytes whether a rule's action holds them (RULE-45) or an `ANIMATE` record does, and are read by one function of `neoteletext-rules`. Each is a code byte, a target (a kind byte, 1 control or 2 object, and a 16-bit number, not 0) and a body:
+- It is changed by **operations**, which are carried by the `ANIMATE` record alone: the server sends one directly, and a group of a page's rule table holds one as a command (RULE-119), the same bytes either way, applied by the same code, and are read by one function of `neoteletext-rules`. Each is a code byte, a target (a kind byte, 1 control or 2 object, and a 16-bit number, not 0) and a body:
 
 | Code | Operation | Body | Applies to |
 |---|---|---|---|
@@ -111,8 +112,10 @@ Every integer in a record is big-endian. The record frame, the data channel and 
 
 - **Why a teletext sub-page holds 32 and the others 64.** A teletext sub-page has at most 32 sprites (`MAX_SPRITES`, ANIM-7), and the engine's core, which is built without allocation for microcontrollers, keeps the states in a fixed array of that many, which the sub-page's sprites and controls share. ReGIS and NAPLPS pictures have up to 64 objects that can move. An operation that would give one object more than the maximum a state does nothing and is counted, as an operation on a target that does not exist is; an object whose state sets nothing (every part back at its own) holds no state and frees its place.
 - A relative `move` adds to the position in force, saturating at the signed 16-bit bounds. A hidden control is drawn as spaces whose background is its row's full row colour, and takes no pointer event; a cell a sprite has changed is left as the sprite drew it when a control beneath it is hidden or given a look, because sprites lie over the page. A forced look on a teletext control draws the hover look for 1 and the pressed look for 2 and 3 (the control's two looks, the engine's decision E.127); on a ReGIS drawing, its `H`, `A` and `N` looks (ANIM-10); on a NAPLPS object, its hover, pressed and alternative macros (ANIM-11).
-- **The ANIMATE record's body** is: the page (2 bytes); the sub-code (2 bytes), or `0x3F7F` for whichever sub-page of the page is shown; a count (1 byte, 1 to 64); a reserved byte, 0; then that many operations. The whole record is applied together, at the tick after it arrives (or at its frame's end), and its effects are seen by rules from the next snapshot (RULE-7).
-- **One state, last writer wins.** A rule's action, an `ANIMATE` record and the stream's own change of the same thing all write the same state: a ReGIS commit that sets a drawing's `X` or `Y` forgets that drawing's position in the animation state, `V` its shown part, `L` or `G` its layer and order; a ReGIS deletion, a new stream generation, and a `SPRITES` or `NAPLPS_OBJECTS` record (which replace all of a sub-page's sprites or objects) forget the state of what they remove or replace. An operation on a target that does not exist does nothing and is counted.
+- **The ANIMATE record's body** is: the page (2 bytes); the sub-code (2 bytes, `0x0000` to `0x3F7E`; the first form's `0x3F7F`, "whichever sub-page is shown", is withdrawn by DEC-6599 and refused); a count (1 byte, 1 to 64); a reserved byte, 0; then that many operations. The whole record is applied together, at the tick after it arrives (or at its frame's end), and its effects are seen by rules from the next snapshot (RULE-7).
+- **In a group.** An `ANIMATE` record in a group may hold any operation, `reset` among them, and its fields may take amounts (RULE-106): an operation's target number from a row parameter or the firing's target, and the x and y of `move`, the frame, the look, the order and a cycle's period from a constant plus a variable, a row parameter or a value of the firing.
+- **Dropped with the page.** The animation state is part of a page's local state (RULE-111): it is dropped when the page is closed or its connection ends, kept while the page is paused, and never replayed by the server.
+- **One state, last writer wins.** An `ANIMATE` record, whether the server sent it or a group ran it, and the stream's own change of the same thing all write the same state: a ReGIS commit that sets a drawing's `X` or `Y` forgets that drawing's position in the animation state, `V` its shown part, `L` or `G` its layer and order; a ReGIS deletion, a new stream generation, and a `SPRITES` or `NAPLPS_OBJECTS` record (which replace all of a sub-page's sprites or objects) forget the state of what they remove or replace. An operation on a target that does not exist does nothing and is counted.
 - **Reason and source.** DEC-6524 items 5, 6 and 7 (move, show and hide by number without anything sent again); DEC-6522 item 7 (`show`, `hide`, `look`); one state so that the channel and the page's rules never hold two answers.
 - **Verification.** Tests in `neoteletext-rules` of each operation and of folding a list of them; decoder tests of last-writer-wins for each renderer; fuzz target `animate_record`.
 
@@ -254,12 +257,12 @@ Every integer in a record is big-endian. The record frame, the data channel and 
 - **Verification.** Decoder tests: 64 objects moving each tick paint within the budget each tick and reach their final places; a key pressed during the overload fires its rule in the next tick; each constant's refusal test.
 
 **ANIM-17 [engine: neoteletext-web; neoteletext-browser; neoteletext-app-server]. Sprite sheets as page assets: the SHEET record, type 26.**
-- **Statement.** A page's sprite frames are sent once and named by number afterwards:
+- **Statement.** A page's sprite frames are sent once for that page — that page number and sub-code — and named by number afterwards. A sheet belongs to one page and is never shared with another sub-code of the same page number (DEC-6599): a program that wants the same sheet on several sends it to each.
   - **Teletext.** The sheet is the page's objects: its own local objects, and the object pages it links (EN 300 706 clause 13 and clause 10.5: the Public and Global Public Object Pages named by the page's packets X/27/4 or its magazine's Magazine Organization Table). They are ordinary pages of the channel. The server MUST send a connection the object pages a selected page links, once for the connection, before the page.
-  - **ReGIS and NAPLPS.** Record type 26, `SHEET`, carries bytes of a page's sheet, in the REGIS record's form: the page (2 bytes); a kind (1 byte: 1 ReGIS, 2 NAPLPS); a reserved byte, 0; a generation (2 bytes); an offset (4 bytes); and data, at most 8,174 bytes. A sheet is one stream of at most `MAX_SHEET_BYTES` (65,536) for a page and kind; a new generation starts it again. The receiver MUST keep the page's sheet while it keeps the page, and feed it to every renderer it makes for a sub-page of that page, before that sub-page's own stream. A ReGIS sheet defines hidden drawings (masters) and ends with a commit; sub-page streams name them as sources, looks and frames. A NAPLPS sheet defines macros, DRCS characters and textures; sub-page streams and objects call them. A new generation of a sheet makes the receiver start the shown sub-page's renderer again from the new sheet. A sheet draws nothing itself: a ReGIS sheet's drawings that are left visible, and anything a NAPLPS sheet draws on the picture, are a fault the server refuses (`invalid_sheet`).
-- **When the server sends a sheet.** The server sends a connection a page's ReGIS and NAPLPS sheets at each selection of the page, as a new stream from their start, since it cannot know that a receiver kept the sheet of a page it left. A sheet is one stream for each connection and kind; the renderer reads the whole sheet so far at every `sprite_sheet` message, and a ReGIS commit that fails, or NAPLPS that changes a pixel, is `invalid_sheet`. A sub-page's ReGIS stream is checked after its page's ReGIS sheet. A new ReGIS sheet makes the server forget the connection's ReGIS stream of that page, so the program begins that stream again.
+  - **ReGIS and NAPLPS.** Record type 26, `SHEET`, carries bytes of a page's sheet, in the REGIS record's form: the page (2 bytes); the sub-code (2 bytes); a kind (1 byte: 1 ReGIS, 2 NAPLPS); a reserved byte, 0; a generation (2 bytes); an offset (4 bytes); and data, at most 8,172 bytes. A sheet is one stream of at most `MAX_SHEET_BYTES` (65,536) for a page and kind; a new generation starts it again. The receiver MUST keep the page's sheet while that page is selected, feed it to the renderer it makes for that page before the page's own stream, and drop it with the rest of the page's local state (RULE-111). A ReGIS sheet defines hidden drawings (masters) and ends with a commit; the page's stream names them as sources, looks and frames. A NAPLPS sheet defines macros, DRCS characters and textures; the page's stream and objects call them. A new generation of a sheet makes the receiver start the page's renderer again from the new sheet. A sheet draws nothing itself: a ReGIS sheet's drawings that are left visible, and anything a NAPLPS sheet draws on the picture, are a fault the server refuses (`invalid_sheet`).
+- **When the server sends a sheet.** The server sends a connection a page's ReGIS and NAPLPS sheets at each selection of the page, as a new stream from their start, since it cannot know that a receiver kept the sheet of a page it left. A sheet is one stream for each connection and kind; the renderer reads the whole sheet so far at every `sprite_sheet` message, and a ReGIS commit that fails, or NAPLPS that changes a pixel, is `invalid_sheet`. A page's ReGIS stream is checked after that page's ReGIS sheet. A new ReGIS sheet makes the server forget the connection's ReGIS stream of that page, so the program begins that stream again.
 - **Reason and source.** DEC-6524 item 14.
-- **Verification.** Decoder tests: two sub-pages use one sheet sent once; a new stream generation keeps the sheet; the server's refusals.
+- **Verification.** Decoder tests: a sheet sent for one sub-code is not fed to another sub-code of the same page number; a new stream generation keeps the sheet; a page left drops its sheet; the server's refusals.
 
 ## 5. NAPLPS WAIT and BLINK
 
@@ -271,7 +274,7 @@ Every integer in a record is big-endian. The record frame, the data channel and 
 - **Reason and source.** DEC-6524 item 12; TODO-6409 item 2 (a decoder clock for NAPLPS animation), which this settles.
 - **Verification.** Decoder tests with a scripted clock: a WAIT of 5 tenths shows the earlier picture for 30 ticks; the budget; the overflow; a BLINK of 5 on, 5 off changes the palette every 30 ticks and sends no pixels. An image sequence of a historical animated page.
 
-## 6. The program protocol's messages (version 14)
+## 6. The program protocol's messages (version 15)
 
 **ANIM-21 [neoteletext-app-server]. The messages.**
 - **Statement.** Program protocol 14 (RULE-34) MUST gain these program messages, each with `connections`, a `page` and, where stated, a `sub`, in the conventions of page-rules.md section 7:
@@ -298,23 +301,23 @@ Every integer in a record is big-endian. The record frame, the data channel and 
    "x":0,"y":440,"width":640,"height":40,"origin_x":0,"origin_y":0,
    "frames":[],"cover":0,"hover":null,"pressed":null,"alternative":null}]}
 
-{"type":"sprite_sheet","connections":"all","page":"150","kind":"regis","data":"RChCNDEp…","restart":true}
+{"type":"sprite_sheet","connections":"all","page":"150","sub":"0001","kind":"regis","data":"RChCNDEp…","restart":true}
 
 {"type":"timeline","connections":"all","page":"150","sub":"0001","id":1,"loop_ticks":null,"steps":[
   {"tick":0,"ops":[{"action":"show","target":{"object":10}}]},
   {"tick":30,"ops":[{"action":"move","target":{"object":10},"x":8,"y":0,"relative":true}]}]}
-{"type":"timeline_stop","connections":"all","page":"150","id":1}
+{"type":"timeline_stop","connections":"all","page":"150","sub":"0001","id":1}
 ```
 
-- `ops` holds 1 to 64 operations in the shapes of the rule table's actions `show`, `hide`, `look`, `move`, `order`, `frame`, `cycle` and `stop_cycle` (RULE-35), and `reset`. `sprites` holds 0 to 32 sprites and `naplps_objects` 0 to 64 objects, with the fields and ranges of ANIM-7 and ANIM-11 (`source` is `local`, `public` or `global`; a sprite's `kind` is `active`, `adaptive` or `passive`; an object's is `macro` or `region`). `sprite_sheet`'s `data` is Base64 of the next bytes of the sheet, and `restart` starts a new generation. A `timeline` holds 1 to `MAX_TIMELINE_STEPS` (1,024) steps in ascending `tick` (0 to 216,000); the **server** plays it, sending each step's `ANIMATE` record when its tick is due on the server's clock, counted from the message's arrival at `1,000 ÷ 60` milliseconds a tick, and again from the start every `loop_ticks` when that is given; `id` (1 to 65,535) names it for `timeline_stop`, and a new timeline with a playing one's `id` replaces it. A program has at most 16 timelines playing for a page.
+- `ops` holds 1 to 64 operations `show`, `hide`, `look`, `move`, `order`, `frame`, `cycle`, `stop_cycle` and `reset`, each an object tagged by `action` with a `target` (`{"control":n}` or `{"object":n}`) and the operation's fields of ANIM-6 (`look`: `normal`, `hover`, `pressed` or `alternative`; `x`, `y`, `relative`; `layer`, `order`; `frame`; `first`, `last`, `period`, `once`); the same `animate` message, without its `connections`, `page` and `sub`, is a command of a rule table's group (RULE-35). `sprites` holds 0 to 32 sprites and `naplps_objects` 0 to 64 objects, with the fields and ranges of ANIM-7 and ANIM-11 (`source` is `local`, `public` or `global`; a sprite's `kind` is `active`, `adaptive` or `passive`; an object's is `macro` or `region`). `sprite_sheet`'s `data` is Base64 of the next bytes of the sheet, and `restart` starts a new generation. A `timeline` holds 1 to `MAX_TIMELINE_STEPS` (1,024) steps in ascending `tick` (0 to 216,000); the **server** plays it, sending each step's `ANIMATE` record when its tick is due on the server's clock, counted from the message's arrival at `1,000 ÷ 60` milliseconds a tick, and again from the start every `loop_ticks` when that is given; `id` (1 to 65,535) names it for `timeline_stop`, and a new timeline with a playing one's `id` replaces it. A program has at most 16 timelines playing for a page.
 - **Audiences.** As for `rules` (RULE-40), an audience is the connections open when the message arrives: `sprites`, `naplps_objects`, `sprite_sheet`, `animate` and `timeline` sent to `"all"` reach no connection that opens afterwards.
 - **Frames are held by the server.** From a `frame` begin to its end the server holds, for each connection, everything it would send that changes what the frame's page shows, and at the end sends the begin's FRAME record, what it held and the end's FRAME record in one message; sound records and other pages' packets pass as they arrive. The server ends a frame that is not ended within `MAX_FRAME_TICKS` (two seconds) and one that is open when its program ends; a selection of another page drops it. A begin goes to the connections named that show the sub-page.
 - **Timelines are played for each connection** of the audience, counted from the message's arrival: `id` names a timeline within one connection and page, so a program may play the same `id` for two viewers at different times. At most 16 play for one connection and page, and at most 64 for one connection over all its pages. A step's tick `n` is due at the first millisecond at or after `n × 50,000 ÷ 3` microseconds. Steps are in strictly ascending order of `tick`, and with `loop_ticks` every step's tick is below it. A host that slept through several turns of a looping timeline sends one turn's steps and goes on at the next turn, in step with its start. A timeline keeps playing, into the state kept for a later viewer, while its connection shows another page.
 - **NAPLPS objects and their stream's generation.** A `naplps_objects` message is written for the generation of the NAPLPS stream the connection has for the sub-page, or, when it has none, for the generation its next `naplps` message with `restart` will begin; so a program sends `naplps` with `restart` before the objects of that stream when the connection already has a stream of the sub-page.
-- **What the server keeps for a late viewer.** For each connection and page the server MUST keep the newest `sprites`, `naplps_objects` and sheet, and the animation state that the `animate` messages and timeline steps sent so far amount to (folded with `neoteletext-rules`' function, at most the receiver's own maximum of ANIM-6: 32 objects and controls of a teletext sub-page, 64 of a ReGIS or NAPLPS one), for at most 64 pages and 16 sub-pages a page, and send them at each selection of the page: the sheets from their start (ANIM-17), the sub-page's definitions, then its folded state, as one `ANIMATE` record for the sub-page and one for the operations sent with the sub-code `0x3F7F`, each cut at 64 operations. A relative `move` is kept as the sum of the relative moves and restored as one relative move, because the server does not know an object's own position. A cycle so restored starts at the viewer's tick. New `sprites` or `naplps_objects`, and a ReGIS stream begun again, forget the kept state of the sub-page's objects, as ANIM-6 says a receiver does.
+- **The server keeps nothing for a late viewer.** Withdrawn: the first form's keeping, for each connection and page, of the newest `sprites`, `naplps_objects`, sheet and folded animation state, and its sending of them at each selection. By DEC-6587 items 3 and 9 and RULE-40 and RULE-111 of page-rules.md, the server holds no animation state, sprites, objects or sheet for a viewer who selects the page later, returns to it or reconnects: a program is told of every selection (`selected`, with `page` and `sub`) and sends the page's sheet, definitions and opening operations then, and a page's opening state is what its program sends. A timeline is played for the connections that have the page selected when it is sent; it ends for a connection that leaves the page or whose connection ends, and for every connection when the program's connection ends.
 - **Refusals.** Beside the existing rules: `frame_order` (an end with no begin, a begin inside a frame, a program that ends with a frame open — the server then sends the end itself); `frame_too_large` (the frame's records pass `MAX_FRAME_BYTES`; the server sends what it holds as an unframed page); `invalid_animation` (an operation outside its range, or on "any"); `invalid_sprites`; `invalid_naplps_objects`; `invalid_sheet`; `sheet_too_large`; `too_many_timelines`; `not_ascending` (a timeline's steps not in strictly ascending order of `tick`). Each record is checked with the engine's own reader before it is sent, and a ReGIS sheet and stream with the ReGIS renderer's validator, as ReGIS is today.
 - **Reason and source.** DEC-6524 "new messages in the program protocol"; DEC-6462 (the server plays the timeline, so the kits hold no scheduler).
-- **Verification.** Server tests: the record built from each example; each refusal; a late viewer's records; a timeline's records at their times against a scripted clock.
+- **Verification.** Server tests: the record built from each example; each refusal; a viewer who selects the page later is sent nothing that was kept; a timeline ends for a connection that leaves the page; a timeline's records at their times against a scripted clock.
 
 ## 7. The kits
 
@@ -327,9 +330,9 @@ context.frame(to: Audience, page: number, sub: number, body: () => void): void; 
 context.animate(to: Audience, page: number, sub: number, ops: readonly AnimationOp[]): void;
 context.sprites(to: Audience, page: number, sub: number, sprites: readonly Sprite[]): void;
 context.naplpsObjects(to: Audience, page: number, sub: number, objects: readonly NaplpsObject[]): void;
-context.spriteSheet(to: Audience, page: number, kind: "regis" | "naplps", data: string | Uint8Array, restart?: boolean): void;
+context.spriteSheet(to: Audience, page: number, sub: number, kind: "regis" | "naplps", data: string | Uint8Array, restart?: boolean): void;
 context.playTimeline(to: Audience, page: number, sub: number, timeline: Timeline, id?: number): number;  // returns the id
-context.stopTimeline(to: Audience, page: number, id: number): void;
+context.stopTimeline(to: Audience, page: number, sub: number, id: number): void;
 
 class Timeline {
   constructor(options?: { loopTicks?: number });
@@ -356,9 +359,9 @@ app.frame(to, page, sub)                      # a context manager: with app.fram
 app.animate(to, page, sub, ops)
 app.sprites(to, page, sub, sprites)
 app.naplps_objects(to, page, sub, objects)
-app.sprite_sheet(to, page, kind, data, restart=False)
+app.sprite_sheet(to, page, sub, kind, data, restart=False)
 app.play_timeline(to, page, sub, timeline, id=None) -> int
-app.stop_timeline(to, page, id)
+app.stop_timeline(to, page, sub, id)
 
 class Timeline:
     def __init__(self, *, loop_ticks: int | None = None) -> None: ...
@@ -463,7 +466,7 @@ Recorded in rdm as items 17 to 27 of DEC-6525, the one decision awaiting the own
 
 The fifteen mechanisms were built on 18 November 2026 in each repository at once, from this document at commit 85904b0. This section lists every place where what was built departs from that text or settles what it left open (DEVELOPMENT.md section 2.3, step 4). Each reading was taken without the owner and is recorded in rdm, in the record named, for the owner to confirm; where a reading is stated here as built, the requirement it concerns was corrected in place in the same change. Section 14.2 lists the places where the text was left as it is because what was built falls short of it or goes against it: those are faults to correct in code.
 
-**Decided since, and not in this text.** Three decisions of the owner's of 18 November 2026, made after the build, change this specification, and the requirements above do not yet say them: DEC-6580 (a key's sound actions run at once, a smaller device buffer while a local sound is open, the tick locked to the display's refresh), DEC-6587 (the second form of the rule table: a rule runs only a group of protocol commands, sixteen fixed variables, everything dropped on disconnect, no enabling and disabling of rules) and DEC-6599 (a sub-page is treated exactly as a page: its own table, sheet, animation state and timelines, addressed by page and sub-code together, with nothing shared between sub-pages of one page number). This document describes the first build, which those decisions name as the baseline they change; DEC-6599 makes every place where it keys on a page without its sub-code a fault of the first build, listed in the last table below.
+**Since written into this text.** The owner's decisions DEC-6587 and DEC-6599, made after the build, are now in the requirements above (section 15 lists the changes), so where this section cites ANIM-6, ANIM-17 or ANIM-21 as built, the citation is to the first form's text at commit 595f58c. DEC-6580's three changes are in page-rules.md (RULE-96 to RULE-98).
 
 ### 14.1 Departures and readings, now stated in the requirements
 
@@ -539,3 +542,17 @@ Each is recorded in the rdm record named, and none is a reading to confirm: the 
 | 12 | ANIM-19: both kits send the same bytes for a sheet's text | The Python kit writes UTF-8 | TODO-6561 item 2 |
 | 13 | Section 11: a page showing each mechanism in `regisdemo`, `naplpsdemo` and `demosite` | None | TODO-6605 |
 | 14 | The owner's decision DEC-6599: a sub-page's sheet, animation state and timelines are its own | ANIM-17 as written and built gives a page one sheet that is fed before each of its sub-pages' streams; ANIM-6's ANIMATE record and ANIM-21's messages accept the sub-code `0x3F7F` for whichever sub-page is shown; the server keeps sheets by page and late-viewer state under a page; the browser's decoder keeps a sheet across sub-pages | DEC-6599 |
+
+## 15. What changed in the second form
+
+The changes this document took on 18 November 2026 from the second form of the page rule table (page-rules.md section 18), against its text at commit 595f58c. The renderers' requirements (ANIM-4, ANIM-7 to ANIM-16, ANIM-18, ANIM-20) are unchanged.
+
+| # | Before | Now | By |
+|---|---|---|---|
+| 1 | Animation operations are held by a rule's actions and by the `ANIMATE` record | By the `ANIMATE` record alone, which a rule table's group holds as a command; `reset` and amounts are allowed in a group (ANIM-6) | DEC-6587 item 1 |
+| 2 | An `ANIMATE` record may name the sub-code `0x3F7F`, "whichever sub-page is shown" | Withdrawn and refused: a record names one page number and one sub-code (ANIM-6) | DEC-6599 |
+| 3 | A sheet belongs to a page number and is fed before each of its sub-pages' streams; the `SHEET` record and `sprite_sheet` name a page number | A sheet belongs to one page (number and sub-code); the `SHEET` record, `sprite_sheet`, `spriteSheet` and `sprite_sheet` gain the sub-code (ANIM-17, ANIM-19, ANIM-21) | DEC-6599 |
+| 4 | `timeline_stop` and `stopTimeline` name a page number | They gain the sub-code (ANIM-19, ANIM-21) | DEC-6599 |
+| 5 | The server keeps sprites, objects, sheets and the folded animation state for 64 pages a connection and sends them to a late viewer | The server keeps nothing; the program sends the page afresh at every selection; a timeline ends when its viewer leaves the page (ANIM-21) | DEC-6587 items 3 and 9 |
+| 6 | Animation state outlives a connection's break where the receiver keeps the page | It is local state, dropped at a close and at a disconnect and kept while paused (ANIM-6; RULE-111) | DEC-6587 item 3 |
+| 7 | Program protocol 14, push protocol 9 | 15 and 10 | DEC-6587 |

@@ -1,15 +1,16 @@
-# The page rule table: binding events to local actions in the browser
+# The page rule table: binding events to groups of protocol commands in the browser
 
 | | |
 |---|---|
-| **Status** | Specification of 18 November 2026, written while the owner was away, for building at once. The owner's decisions are DEC-6522 (the rule table) and REQ-6523 (no input unless asked); what this document decides beyond them is listed in section 15 and recorded in rdm as DEC-6525, which waits for the owner's confirmation. Section 16 lists the rdm requirements that carry this document. |
-| **Amended** | 18 November 2026, by the owner's decision DEC-6580 ("yes record 1 to 3 and build them"): an input event's rules are evaluated when it arrives and their sound actions delivered then (RULE-5, RULE-7, RULE-8, RULE-96); the sound helper asks for a small device buffer while a local sound is open (RULE-97); and the tick is locked to the display's refresh (RULE-98). RULE-64 to RULE-66 hold the new budgets. What that amendment decided beyond the owner's three items is in section 15, items 17 to 22. |
-| **Asked for by** | The owner, 18 November 2026: "I ALSO WANT YOU TO FULL SPECIFY AND DOCUMENT OUR META LANGUAGE, IMPLEMENT IT IN CODE", and a demonstration: "A MUSIC PLAYER THAT SHOWS SYNTHESIZERS INSTANTLY PLAYING ON A KEYPRESS AND INSTANTLY DISPLAYING LEVELS VISUALLY ALSO IN RESPONSE TO THE KEYPRESS". |
+| **Status** | The **second form**, specified on 18 November 2026 while the owner was away, for building at once. It replaces the first form of the same day (this document at neoteletext-common commit `85904b0`), which was built and audited and never deployed, so nothing here keeps compatibility with it. The owner's decisions are DEC-6522 (the rule table), REQ-6523 (no input unless asked), DEC-6580 (a key's sound commands run at once), DEC-6587 (the second form) and DEC-6599 (a sub-page is a page). What this document decides beyond them is listed in section 15 and recorded in rdm as DEC-6525 (the first form's choices that survive) and DEC-6610 (the second form's), both waiting for the owner's confirmation. Section 16 lists the rdm requirements that carry this document, section 17 is the record of what the first build changed, and section 18 lists every change of the second form against the first. |
+| **Asked for by** | The owner, 18 November 2026: "I ALSO WANT YOU TO FULL SPECIFY AND DOCUMENT OUR META LANGUAGE, IMPLEMENT IT IN CODE"; then, of the twelve ideas for triggering: "i like them all. implement all. ensure rdm updated. also make it so the ONLY thing that can be triggered is a group of protcol commands. i agree with constraining the number of commands in a group but not work cap. propose cap. why enable and disable rules? after a disconnect i think EVERYTHING should be dropped and the page reloads what do you think? local variables may only store a 32 bit signed integer not anything else. local variables must have hard coded names/designators, a fixed number of them with operations like inc dec and others that you think right."; and: "in neoteletext a sub-page has NO relattionship to its parent page - we treat sub pages EXACTLY as pages." |
 | **Process** | DEVELOPMENT.md section 2.3 (a proposal with its own security analysis, section 12 of this document), section 3.5 (every record in full) and section 14 (security). |
-| **Companion** | `animation.md` (requirements ANIM-n) defines the objects, records and renderer behaviour that this document's animation actions and collision conditions act on. |
-| **Repositories it changes** | neoteletext-renderer-teletext (the engine, with the new crate `neoteletext-rules`), neoteletext-browser, neoteletext-app-server, neoteletext-server-ts-protocol (the TypeScript kit), neoteletext-server-channels (the Python kit), neoteletext-server-ts-ui-components (the component library), every channel, and the new channel neoteletext-server-channel-musicplayer. |
+| **Companion** | `animation.md` (requirements ANIM-n) defines the objects, records and renderer behaviour that the `ANIMATE`, `SPRITES` and `NAPLPS_OBJECTS` commands and the collision conditions act on. |
+| **Repositories it changes** | neoteletext-renderer-teletext (the engine, with the crate `neoteletext-rules`), neoteletext-browser, neoteletext-app-server, neoteletext-server-ts-protocol (the TypeScript kit), neoteletext-server-channels (the Python kit), neoteletext-server-ts-ui-components (the component library), every channel, and neoteletext-server-channel-musicplayer. The ReGIS and NAPLPS renderers are not changed by the second form. |
 
-Requirements are numbered `RULE-n`. Each names in brackets the repository that implements it. "MUST", "SHOULD" and "MAY" are used as DEVELOPMENT.md section 4 defines them. Every integer on a wire is big-endian unless a field says otherwise. "The receiver" is any program that shows a page to a viewer; the NeoTeletext browser is the receiver this document specifies in full.
+Requirements are numbered `RULE-n`. Numbers are permanent: a requirement whose meaning survives keeps its number and is revised in place; one that the second form removes is kept as a line beginning "Withdrawn:" with the reason; new requirements take numbers from RULE-118. Each names in brackets the repository that implements it. "MUST", "SHOULD" and "MAY" are used as DEVELOPMENT.md section 4 defines them. Every integer on a wire is big-endian unless a field says otherwise. "The receiver" is any program that shows a page to a viewer; the NeoTeletext browser is the receiver this document specifies in full.
+
+**A page, in this document, is one page number and one sub-code together** (DEC-6599, RULE-112). Wherever this document says "page" without qualification it means that one identity; a sub-page is a page, and nothing here is addressed by a page number alone.
 
 ---
 
@@ -17,97 +18,118 @@ Requirements are numbered `RULE-n`. Each names in brackets the repository that i
 
 ### 1.1 Purpose
 
-A page may carry a **rule table**: a bounded, declarative list of rules, each binding one event (a key, a pointer action on a target, a timer, the page opening, a condition becoming true) to a short list of local actions (a MIDI message to a synthesizer the page is playing, showing or hiding an object, changing a variable, telling the page's channel). The receiver evaluates the table sixty times a second. It gives a page sound and graphics that answer the viewer within one tick with no round trip to the server, and it is the only way a page can ask for the viewer's input to be sent to its channel (REQ-6523).
+A page may carry a **rule table**: a bounded, declarative list of rules, each binding an event (a key, a pointer action on a target, a timer, the page opening, a condition becoming true, a cue point in a playing sound) to **one group of protocol commands**, which the receiver holds and applies itself. A command is an ordinary record of the push protocol, the same bytes the server sends a receiver to start a sound, play a note on a local sound, show, hide, move or re-look an object, place sprites, change a variable, start a timer or report to the channel. The receiver evaluates the table sixty times a second. It gives a page sound and graphics that answer the viewer with no round trip to the server, and it is the only way a page can ask for the viewer's input to be sent to its channel (REQ-6523).
 
-The table is not a program. It has no loops, no arithmetic beyond saturating addition of a constant to a declared variable, no function calls, and no rule can cause another to run in the same tick. REQ-417 (the engine's REQ-SEC-004) allows it as the one exception to "no executable content", inside the bounds of section 9 and no further.
+The table is not a program. It has no loops, no jumps, no multiplication or division, no computed addresses, and no rule can cause another to fire in the same tick. Its only arithmetic is the saturating addition and subtraction of 32-bit integers in the variable commands and in a command's value (RULE-99, RULE-106). REQ-417 (the engine's REQ-SEC-004) allows it as the one exception to "no executable content", inside the bounds of section 9 and no further.
 
 ### 1.2 Terms
 
 | Term | Meaning |
 |---|---|
-| **Tick** | One sixtieth of a second on the receiver's presentation clock (ANIM-1). Every rule is evaluated on tick boundaries only. |
-| **Page tick** | The number of ticks since the page was opened in this view, counted from 0. |
-| **Rule table** | The one table a page has, for all its sub-pages (RULE-2). |
-| **Rule** | A trigger, an optional condition and at most 16 actions (RULE-3). |
-| **Trigger** | The event that can make a rule fire (section 3). |
+| **Page** | One page number (`0x100` to `0x8FF`) and one sub-code (`0x0000` to `0x3F7E`) together: one identity (RULE-112). |
+| **Tick** | One sixtieth of a second on the receiver's presentation clock (ANIM-1). |
+| **Page tick** | The number of ticks evaluated since the page was opened in this view, counted from 0. |
+| **Rule table** | The one table a page has (RULE-2): rectangles, binding rows, rules, groups and sequences. |
+| **Rule** | One or more triggers, an optional condition, optionally a set of binding rows, and the number of one group to run (RULE-3). |
+| **Trigger** | An event that can make a rule fire (section 3). |
 | **Condition** | An expression of integer comparisons that must hold for the rule to fire (section 4). |
-| **Action** | One local effect (section 5). |
-| **Fire** | A rule fires when its trigger occurs and its condition holds; its actions then run in written order. |
-| **Target** | Something on the page that a pointer trigger, a `show`, a `move` or a collision test names: the page, a teletext control, an animation object, or a rectangle (RULE-12). |
+| **Command** | One record of the push protocol that a receiver applies (section 5): `CONTROL`, `LOCAL_MIDI`, `ANIMATE`, `SPRITES`, `NAPLPS_OBJECTS`, `VARIABLE`, `TIMER`, `REPORT`, `RUN` or `SEQUENCE`. The server may send any of them directly; a group holds them for later. |
+| **Group** | A numbered, stored list of commands of a page's table (RULE-118). The only thing a rule can trigger. |
+| **Run** | Applying a group's commands in written order. A run's size, with every group it runs, is limited (RULE-120). |
+| **Fire** | A rule fires when one of its triggers occurs and its condition holds; its group is then run. |
+| **Binding row** | Four constant integers, `p0` to `p3`, of a table's row list. A rule that names rows is a template: it is matched once for each of its rows, with that row's numbers standing in its triggers, its condition's constants and its group's commands (RULE-105). |
+| **Amount** | A constant, or a constant plus one source (a variable, a row parameter or a value of the firing), added with saturation and held to the valid range of the field it fills (RULE-106). |
+| **Target** | Something on the page that a pointer trigger, an animation operation or a collision test names: the page's picture, a teletext control, an animation object, or a rectangle (RULE-12). |
 | **Animation object** | A numbered thing a renderer keeps and can move, show, hide, order and cycle: a teletext sprite (ANIM-7), a ReGIS numbered drawing (ANIM-9) or a NAPLPS object (ANIM-11). |
-| **Page variable** | One of at most 32 integers a table declares, each held to its declared range (RULE-14). |
-| **Timer** | One of at most 8 tick counters a table declares, plus the page timer that starts at opening (RULE-15). |
-| **Value** | Something a condition reads: a variable, a key's state, a timer, a target's state, a sound's level, a synthesizer's state (section 6). |
-| **Open page** | The one page of the active tab that keys would go to (the browser's REQ-1378). Only the open page's table is evaluated, and "opened", "shown" and "closed" in this document mean becoming and ceasing to be the open page (RULE-58). |
-| **Snapshot** | The values as they stood when a tick began; every condition and every `send` of a value reads the snapshot (RULE-7). |
-| **Local sound** | A synthesizer sound with no blocks from the server, rendered by the receiver's sound helper and played by rules' `midi` actions (RULE-60). |
-| **Audio channel** | One of the four voices of the audio profile, 0 to 3 (the engine's REQ-AUD-010), named `channel` in the program protocol's `play`, `stop` and `gain`. It is not a MIDI channel. |
+| **Variable** | One of the fixed set of signed 32-bit integers every page has, designated `v0` to `v15`, zero at opening, never declared (RULE-14). |
+| **Timer** | One of the fixed set of tick counters every page has, `t0` to `t7`, stopped at opening, and the page timer that runs from opening (RULE-15). |
+| **Sequence** | One of a table's stored lists of steps, each step a tick offset and a group, played by the receiver on its own clock, a stated number of times or until stopped (RULE-103). |
+| **Armed run** | A run that waits for a page tick: one the server armed ("run group N at tick T"), or one waiting for the next beat of a timer (RULE-102). |
+| **Cue** | A numbered point in a playing sound's event list, which fires `cue` triggers when it is heard (RULE-109). |
+| **Mode** | A value of one variable that rules test in their conditions; the way a page switches sets of rules on and off (RULE-110). |
+| **Value** | Something a condition, a `REPORT` or a `set` reads: a variable, a key's state, a timer, a target's state, a sound's level, a synthesizer's state, a sequence's state, a value of the firing (section 6). |
+| **Open page** | The one page of the active tab that keys would go to (the browser's REQ-1378). Only the open page's table is evaluated (RULE-58). |
+| **Snapshot** | The values as they stood when a tick began; every condition reads the snapshot (RULE-7). |
+| **Local sound** | A synthesizer sound with no blocks from the server, rendered by the receiver's sound helper and played by `LOCAL_MIDI` commands (RULE-60). |
+| **Sound command** | A `CONTROL` or a `LOCAL_MIDI` command. In a group run by an input it is delivered at once (RULE-96). |
+| **Audio channel** | One of the four voices of the audio profile, 0 to 3 (the engine's REQ-AUD-010). It is not a MIDI channel. |
 | **Part** | A MIDI channel, 1 to 16, of one synthesizer sound (midi-architecture.md MIDI-3). |
 | **Program** | A channel's application, which speaks the program protocol to the server. |
 
 ### 1.3 Requirements of the model
 
 **RULE-1 [neoteletext-common]. A rule table is event binding, never executable content.**
-- **Statement.** A rule table MUST be only what sections 2 to 6 define: declarations (variables, timers, rectangles), rules (one trigger, at most one condition, at most 16 actions) and per-sub-page lists of rules switched off. No requirement may add to it a loop, a jump, a rule that runs another rule within a tick, arithmetic other than `add` of a constant to a variable with saturation at the variable's declared bounds, a call of a routine, text processing, or any action that reaches the network other than `send`, `echo` and the answer to a state query (section 7.4), unless REQ-417 is first changed by the owner's recorded decision.
-- **Reason and source.** The owner's ruling of 18 November 2026: "this is not executable logic it is event binding to local actions with simple evaluatios" (DEC-6522 item 1); the lessons of MHEG-5 recorded in DEC-6522 items 13 and 14.
+- **Statement.** A rule table MUST be only what sections 2 to 6 define: rectangles, binding rows, rules (triggers, at most one condition, one group number), groups of commands and sequences of steps. No requirement may add to it a loop, a jump, a conditional inside a group, a rule that fires another rule within a tick, multiplication, division, a bit operation, a random number, a computed address (a variable used to choose a target, a sound, a handle, an audio channel, a group, a timer, a sequence or another variable), a call of a routine, text processing, a command that defines or changes a table, a group, a sequence or a row (RULE-119), or any command that reaches the network other than `REPORT` and the answer to a state query (section 7.4), unless REQ-417 is first changed by the owner's recorded decision. The arithmetic allowed is exactly: comparison of a value with a constant; saturating addition and subtraction of signed 32-bit integers in the `VARIABLE` command (RULE-99) and in an amount (RULE-106); and holding a result to a constant range.
+- **Reason and source.** The owner's ruling of 18 November 2026: "this is not executable logic it is event binding to local actions with simple evaluatios" (DEC-6522 item 1); DEC-6587 items 1, 5 and 9; the lessons of MHEG-5 recorded in DEC-6522 items 13 and 14.
 - **Verification.** Inspection of the crate `neoteletext-rules` against this list at each change; the fuzz targets of RULE-83.
 
-**RULE-2 [neoteletext-common]. One table for a page, for all its sub-pages.**
-- **Statement.** A page (a magazine and page number, `0x100` to `0x8FF`) MUST have at most one rule table in a view at a time, which applies while any sub-page of that page is the one shown. A table MAY list, for at most 16 sub-codes, the rules that are switched off while that sub-page is shown (RULE-17). A table is replaced whole by a later table for the same page (a higher generation, RULE-41); replacing it resets the page's variables, timers and rule switches to the new table's declarations, as opening the page does, and fires the new table's `open` rules. A page with no table evaluates nothing and sends no input (RULE-50).
-- **Reason and source.** DEC-6522 item 5.
-- **Verification.** Tests in `neoteletext-rules`: a table applies across a change of sub-page with variables kept; a sub-page's list switches rules off only while it is shown; a replacement table resets state.
+**RULE-2 [neoteletext-common]. One table for a page; a sub-page is a page.**
+- **Statement.** A page (RULE-112: a page number and a sub-code) MUST have at most one rule table in a view at a time. It belongs to that page alone: it is not shared with, inherited by or visible to any other sub-code of the same page number. A table is replaced whole by a later table for the same page (RULE-41); replacing it drops the page's variables, timers, sequences, armed runs and edge memory, as opening the page does, and fires the new table's `open` rules at its page tick 0. A page with no table evaluates nothing and sends no input (RULE-50).
+- **Reason and source.** DEC-6599 (the owner: "we treat sub pages EXACTLY as pages"), which withdraws DEC-6522 item 5's "one table per page, applying to all its sub-pages".
+- **Verification.** Tests in `neoteletext-rules` and the browser's decoder: a table for page `101/0001` is not evaluated while `101/0002` is open; going from one to the other closes one and opens the other with every variable zero; a replacement table resets state.
 
 **RULE-3 [engine: neoteletext-rules]. The shape of a rule.**
-- **Statement.** A rule MUST consist of: a trigger (exactly one, section 3); a condition (none or one, section 4; a `becomes` trigger carries the condition itself and takes no second one); a list of 0 to 16 actions (section 5), where a rule with no actions MUST have `echo` set; the flag `echo`; the flag `enabled`, its state when the page opens. A table holds 0 to 64 rules, numbered 0 to 63 in the order written, which is **rule order**.
-- **Reason and source.** DEC-6522 items 5 and 10.
-- **Verification.** Codec tests: each shape round-trips; a rule with no actions and no `echo`, a 17th action and a 65th rule are each refused whole (RULE-70).
+- **Statement.** A rule MUST consist of: 1 to `MAX_TRIGGERS_PER_RULE` triggers (section 3; RULE-107); a condition (none or one, section 4; a rule with a `becomes` trigger has exactly that one trigger and MUST have a condition, which is the condition whose edge fires it); optionally a run of binding rows (RULE-105); and the number of one group of the same table. It has no action list, no `echo` flag and no enabled flag. A table holds 0 to `MAX_RULES` rules, numbered 0 to 63 in the order written, which is **rule order**.
+- **Reason and source.** DEC-6587 item 1 ("A rule is a trigger (or several), an optional condition, and the number of one group to run. It has no action list of its own") and item 8 (the enabled flag withdrawn).
+- **Verification.** Codec tests: each shape round-trips; one trigger and one rule over their limits, a group number the table does not have and a `becomes` rule without a condition are each refused whole (RULE-70).
 
 ## 2. The clock and the evaluation order
 
 **RULE-4 [engine: neoteletext-rules; neoteletext-browser]. Sixty ticks a second, counted from the page's opening.**
-- **Statement.** The receiver MUST evaluate an open page's table once for each tick of its presentation clock (ANIM-1), 60 ticks a second: tick `n` of the clock is due `n × 50,000 ÷ 3` microseconds (rounded down) after the clock's start, so that the ticks never drift against real time. A page's first evaluation is page tick 0, at the first clock tick after the page was opened in the view and its table decoded; each later clock tick is the next page tick. The page tick is a 32-bit unsigned number that stops at 4,294,967,295. When the receiver is late and more than one tick is due, it MUST evaluate each due tick in order, at most `MAX_CATCH_UP_TICKS` (6) in one wake; when more than that are due, it MUST move the clock's start later by the ticks it will not run, so that page time slows and no page tick is ever skipped. Evaluation stops while the page is not the one shown in its view, and the page is opened afresh when it is shown again. A receiver with a display MAY move the clock's start by small steps to keep the ticks in step with the display's refresh, within the bound of RULE-98; page time then follows the display, and still no page tick is skipped or run twice.
+- **Statement.** The receiver MUST evaluate an open page's table once for each tick of its presentation clock (ANIM-1), 60 ticks a second: tick `n` of the clock is due `n × 50,000 ÷ 3` microseconds (rounded down) after the clock's start, so that the ticks never drift against real time. A page's first evaluation is page tick 0, at the first clock tick after the page was opened in the view and its table decoded; each later clock tick is the next page tick. The page tick is a 32-bit unsigned number that stops at 4,294,967,295. When the receiver is late and more than one tick is due, it MUST evaluate each due tick in order, at most `MAX_CATCH_UP_TICKS` in one wake; when more than that are due, it MUST move the clock's start later by the ticks it will not run, so that page time slows and no page tick is ever skipped. While the page is open but its tab is not the active one, the page is **paused** (RULE-111): no tick is evaluated and the page tick does not advance; it goes on from the same page tick when the tab is active again.
 - **Reason and source.** DEC-6522 item 3 (the owner: "this event system operates on 60 ticks a second"); DEC-6524 item 1. Slowing rather than skipping keeps a recording of inputs by page tick exactly replayable.
-- **Verification.** Tests in `neoteletext-rules` with a scripted clock: 3,600 ticks are due in exactly 60 seconds; seven ticks overdue evaluate six and move the start; the browser's decoder test holds that a hidden page evaluates nothing.
+- **Verification.** Tests in `neoteletext-rules` with a scripted clock: 3,600 ticks are due in exactly 60 seconds; seven ticks overdue evaluate six and move the start; the browser's decoder test holds that a paused page evaluates nothing and resumes at the next page tick.
 
-**RULE-5 [engine: neoteletext-rules]. The fixed order within a tick, and the one step that may be taken early.**
-- **Statement.** In each tick the evaluator MUST do exactly this, in this order, and in no other:
+**RULE-5 [engine: neoteletext-rules]. The fixed order within a tick.**
+- **Statement.** In each page tick `t` the evaluator MUST do exactly this, in this order, and in no other. "Run" means RULE-118's run of the rule's group, with nested groups run in place.
   1. **Take the snapshot** (RULE-7): the metered values newest from the sound helper (RULE-33), then every other value as the last tick left it.
-  2. **Input events**, those that arrived since the last tick, in arrival order, at most `MAX_EVENTS_PER_TICK` (16); later ones wait for the next tick in a queue of at most `MAX_QUEUED_EVENTS` (64). For each event: update the input state (RULE-8); then, for each rule in rule order that is enabled in the snapshot, whose trigger the event matches (section 3) and whose condition holds, run its actions in written order.
-  3. **Timers**, in identifier order: the page timer first, then timers 0 to 7. For each timer that is running in the snapshot, for each enabled rule in rule order whose `after` or `every` trigger on that timer is due this tick (RULE-15) and whose condition holds, run its actions.
-  4. **`open`**, on page tick 0 only: each enabled `open` rule in rule order whose condition holds.
-  5. **`becomes`**, in rule order: for each enabled `becomes` rule, evaluate its condition; the rule fires when the condition holds now and did not hold at the rule's previous evaluation (RULE-11); run its actions.
-  6. **Animation** (ANIM-14): advance each cycling object whose frame is due.
-  7. **Apply**: the effects of every action run in this tick become the state the next tick's snapshot shows (RULE-7); outputs (sound operations, picture changes, sends) leave in the order their actions ran.
-- A `close` rule is evaluated in one final tick when the page stops being shown, in which steps 2, 3 and 5 are not run.
-- **Step 2 on arrival.** A receiver MAY, and the browser MUST (RULE-96), take step 2 for an input event at the moment the event arrives, without waiting for the tick. The event is then an event of the next tick to be evaluated, tick `t`, and is handled exactly as step 2 above handles it: step 1 of tick `t` is taken first if no earlier arrival of the interval has taken it; events are handled in arrival order, an event still waiting in the queue before a later arrival; its rules are matched in rule order against the snapshot of tick `t`; and a rule that fires runs its actions in written order. One thing alone differs: the **sound operations** of those actions — `midi`, `play`, `stop` and `gain` (RULE-20, codes 1 to 4) — leave at once, in the order their actions ran, and every other effect and output of those actions (what they write to variables, timers and rules, their animation operations, their `send` and `echo` reports) is held and applied or sent in step 7 of tick `t`, in the order the actions ran, with the sound operations left out as already delivered. At tick `t` the evaluator MUST NOT evaluate the event again: its rules' conditions, their firings and their counts are those decided on arrival, and tick `t` goes on from step 2's remaining events (those still in the queue, up to the tick's 16 in all) to steps 3 to 7. Every other trigger (`after`, `every`, `open`, `close`, `becomes`) is evaluated only at its tick, and its sound operations leave in step 7.
-- **The two ways are one order.** For the same table, the same events in the same arrival order within the same tick intervals, and the same world at each snapshot, a receiver that takes step 2 on arrival and one that takes it at the tick MUST produce the same firings, the same reports with the same page ticks, the same animation operations, the same sound operations in the same order, the same counters (RULE-72) and the same rule state at the end of every tick. Only the real time at which a sound operation leaves differs. A recording of each event with its page tick and its place among that tick's events therefore replays exactly through either.
-- **Reason and source.** DEC-6522 item 13: the order is part of the first version, so no second order ever has to be allowed. Steps 4 and 6 and the placement of `close` are this document's (section 15, item 3). Step 2 on arrival is the owner's decision DEC-6580 item 1 (18 November 2026): a key's note waited up to 16.7 milliseconds, 8.3 on average, for the tick, the largest part of the delay from a key to sound (RULE-64). Step 2 is the first step of a tick that reads anything but the snapshot, so taking it early changes nothing a later step can see.
-- **Verification.** A test of `neoteletext-rules` with one table that has a rule of every trigger kind writing its own number to a log by `send`: the order of sends in one tick is exactly steps 2 to 5; property test: the same table and the same event script give the same outputs on every run. For step 2 on arrival: a test that a key rule's four sound operations reach the world before the tick and its variable, animation operation, `send` and `echo` at the tick, once; and a property test over random tables and random events at random places in the tick interval, given at the tick, on arrival, and each either way, that compares the sound operations, every other output and the counters at every tick.
+  2. **`open`**, on page tick 0 only: each rule with an `open` trigger, in rule order (each of its rows in row order), whose condition holds. No input event belongs to page tick 0: an input that arrives before page tick 0 has been evaluated belongs to page tick 1.
+  3. **Input events** that belong to this tick, in arrival order, at most `MAX_EVENTS_PER_TICK`; later ones wait in a queue of at most `MAX_QUEUED_EVENTS` and belong to a later tick. Each event's rules were matched, and their conditions decided, when the event arrived (RULE-96); at this step, for each event in order: update the input state (RULE-8); then for each rule in rule order, and within a rule each of its rows in row order, that the event fired, run the rule's group. The sound commands of those runs were delivered on arrival and are not delivered again; every other command is applied now.
+  4. **Holds**: for each key and each pointer button that has been down for exactly `N` ticks at this tick, in the order they went down, each rule in rule order (rows in row order) with a `held` or `press_held` trigger of `N` ticks that it matches and whose condition holds (RULE-108).
+  5. **Commands the server sent directly** for this page since the last tick (`VARIABLE`, `TIMER`, `REPORT`, `RUN` and `SEQUENCE` records, RULE-114), in arrival order, at most `MAX_QUEUED_COMMANDS` waiting; one arriving at a full queue is dropped and counted.
+  6. **Armed runs** (RULE-102) whose due tick is `t` or earlier, in the order they were armed.
+  7. **Timers**, in identifier order: the page timer first, then `t0` to `t7`. For each timer that is running in the snapshot, each rule in rule order (rows in row order) whose `every` or `after` trigger on that timer is due this tick (RULE-15) and whose condition holds.
+  8. **Sequences** (RULE-103), in number order 0 to 7: for each sequence running in the snapshot, each of its steps whose offset equals its position this tick, in step order; then its position advances, a pass ends or the sequence ends.
+  9. **Cues** (RULE-109): the cues the sound helper reported since the last tick, in the order reported, at most `MAX_CUES_PER_TICK`, the rest dropped and counted; for each, each rule in rule order (rows in row order) with a `cue` trigger it matches and whose condition holds.
+  10. **`becomes`**, in rule order (rows in row order): evaluate the rule's condition; it fires when the condition holds now and did not hold at its previous evaluation (RULE-11).
+  11. **Animation** (ANIM-14): advance each cycling object whose frame is due.
+  12. **Apply**: the state every command of this tick wrote becomes the state the next tick's snapshot shows (RULE-7); outputs (sound commands not already delivered, picture changes, reports) leave in the order their commands ran; a state query waiting is answered (RULE-47).
+- A `close` rule is evaluated in one final tick when the page is closed while its connection stands (RULE-111), in which only step 1, the `close` rules in rule order, and step 12 are run. No `close` tick is run on a disconnect.
+- **Reason and source.** DEC-6522 item 13: the order is part of the specification, so no second order ever has to be allowed. DEC-6580 item 1 (input rules decided on arrival); DEC-6587 item 5 for steps 4, 5, 6, 8 and 9. `open` is first, and takes tick 0 to itself, so that a page's opening group has set its variables before any other group reads them (section 15, item 31).
+- **Verification.** A test of `neoteletext-rules` with one table that has a rule of every trigger kind, a sequence, an armed run and a queued server command, each writing its own number to a log by `REPORT`: the order of reports in one tick is exactly steps 2 to 10; property test: the same table and the same event script give the same outputs on every run.
 
 **RULE-6 [engine: neoteletext-rules]. No cascade within a tick.**
-- **Statement.** Nothing an action does MUST be visible to any condition, trigger or other action's reading in the same tick. A variable set, a target shown, hidden, moved or given a frame, a timer started or stopped, a rule enabled or disabled, and a sound started or stopped by an action in tick `t` are first seen in the snapshot of tick `t + 1`. A rule therefore cannot fire another rule in the same tick, and a rule that disables itself still completes its own actions. The work of a tick is bounded by the table's size and by `MAX_ACTIONS_PER_TICK` (256): once that many actions have run in a tick, further rule firings in that tick are dropped whole, counted, and reported once a second at most as a `tick_overrun` fault (RULE-72). A firing decided on an event's arrival (RULE-5, RULE-96) counts against the tick the event belongs to, and one that would pass the cap is dropped whole there, its sound operations with it. The one thing of an action that the same tick can show is physical: the sound of a sound operation delivered on arrival may already be in the metered values steps 3 to 5 read (RULE-7), as the sound of any note is one tick later; no rule state, target state or sound state (RULE-27) of an action is ever seen in its own tick.
-- **Reason and source.** DEC-6522 item 14.
-- **Verification.** Tests: rule A sets a variable and rule B's `becomes` on it fires in the next tick, never the same; a rule that disables itself runs all its actions; a table built to fire 64 rules on each of 16 events stops at 256 actions and reports the overrun.
+- **Statement.** Nothing a command does MUST be visible to any condition or trigger in the same tick. A variable changed, a target shown, hidden, moved or given a frame, a timer started or stopped, a sequence started or stopped, a run armed and a sound started or stopped by a command in tick `t` are first seen by a condition in the snapshot of tick `t + 1`; a timer or sequence started in tick `t` runs since tick `t + 1`; a run armed in tick `t` is due at tick `t + 1` at the earliest. A rule therefore cannot fire another rule in the same tick, and a `becomes` rule on a variable a group changed fires in the next tick. The one thing later commands of a tick do see is the working value of a variable (RULE-7), which no condition reads. There is no limit on the commands a tick applies beyond what the table's own limits allow (RULE-57, RULE-120): the first form's `MAX_ACTIONS_PER_TICK` is withdrawn (DEC-6587 item 2).
+- **Reason and source.** DEC-6522 item 14; DEC-6587 item 2 (the owner: "not work cap").
+- **Verification.** Tests: group A sets a variable and rule B's `becomes` on it fires in the next tick, never the same; a sequence started by a key runs its offset 0 step in the next tick; a group that stops its own sequence still completes.
 
-**RULE-7 [engine: neoteletext-rules]. Reads come from the snapshot; writes accumulate in order.**
-- **Statement.** The evaluator MUST keep two copies of the page's rule state: the snapshot `S`, read by every condition and every `send` of a value during the tick, and the working state `W`, which starts each tick equal to `S` and to which each action's effect is applied in the order the actions run. `add` reads the variable's value in `W`, so two `add` actions in one tick both count. At step 7 `S` becomes `W`. The rule state is: the variables; each timer's running flag and start tick; each rule's enabled flag and each `becomes` rule's previous result; each named target's local animation state (ANIM-6: shown, position, layer and order, frame, cycling, forced look); and, read only, the metered and tracked sound values of section 6.
-- **What the snapshot of tick `t` holds, and when it is taken.** The snapshot is taken once for a tick: at the tick, or, when step 2 is taken on arrival (RULE-5), at the arrival of the first event of the interval before the tick. It holds:
-  1. the variables, the timers and the rules' enabled flags exactly as step 7 of tick `t − 1` left them (at page tick 0, as the table declares them). These cannot change between ticks, so they are the same whenever the snapshot is taken;
-  2. the world as it is at the moment the snapshot is taken: each named target's state and bounding rectangle, the sound on each audio channel (RULE-27), the tracked synthesizer values (RULE-28 to RULE-30), which sub-page is shown (RULE-17), and the newest metered report (RULE-33). This is the world as tick `t − 1` left it, changed only by what the server or the viewer's browser did since (a record that moved an object, a play command, a turn to another sub-page, a newer metered report).
-- Every condition of tick `t` — those of step 2, whenever it is taken, and those of steps 3 to 5 — and every `send` of a value reads that one snapshot, with one exception: when the snapshot was taken on an arrival, steps 3 to 5 of tick `t` read the **metered** values (`level`, `envelope_stage`, `envelope_level`, `voices`) of the newest report at the tick, not of the snapshot, so that a meter is never a tick late because a key arrived. A change to the world that lands after the snapshot of tick `t` — a metered report excepted, as just said — is first seen in the snapshot of tick `t + 1`. A rule evaluated on arrival therefore reads the last completed tick's variables, timers, enabled flags and target states and the metered values of the newest report at the interval's first arrival; never anything a rule of its own interval did.
-- **For a recording.** The inputs of a page are its events, its metered reports and the changes others make to its world. A recording that stores each with its page tick and its place among that tick's inputs, and is replayed in that order, gives the same result on every run and through either way of RULE-5. Where every metered report and world change of an interval comes before the interval's first event, the two ways of RULE-5 give the same result as each other.
-- **Reason and source.** DEC-6522 item 14; this document's choice of how two writes in one tick combine (section 15, item 4). DEC-6580 item 1: "a rule triggered by an input reads the last completed tick's state". Taking the world once for a tick, at the first arrival, keeps every condition of the tick on one state, so that no rule of a tick can see what another did (RULE-6) however the events are timed; the metered exception is section 15, item 18.
-- **Verification.** Tests: `set v 5` then `add v 1` in one tick leave 6; a condition on `v` in the same tick reads the old value. On arrival: a key that sets a variable and a second key of the same interval whose condition reads it, which does not fire until the next interval; a timer started in tick `t` read by an arrival of the interval before tick `t + 2`; a metered report and a sub-page turn after the interval's first arrival, which the interval's later arrivals do not see, the tick's `becomes` rule sees for the metered value alone, and the next interval sees whole.
+**RULE-7 [engine: neoteletext-rules]. Conditions read the snapshot; commands write, and read variables from, the working state.**
+- **Statement.** The evaluator MUST keep two copies of the page's rule state: the snapshot `S`, read by every condition, and the working state `W`, which starts each tick equal to `S` and to which each command's effect is applied in the order the commands run. A command that reads a **variable** — a `VARIABLE` command's operand, an amount's variable source, a `REPORT` of a variable — reads it in `W` (on arrival, in the arrival copy, RULE-96), so that `inc` followed by a command that uses the variable uses the new value; every other value a command reads (a level, a target's state, a timer) is read in `S`. At step 12 `S` becomes `W`. The rule state is: the variables; each timer's running flag and start tick; each sequence's running flag, position, pass count and held parameters; the armed runs; each `becomes` rule's previous result for each of its rows; the memory of recent presses (RULE-108); each named target's local animation state (ANIM-6); and, read only, the metered and tracked sound values of section 6.
+- **What the snapshot of tick `t` holds, and when it is taken.** The snapshot is taken once for a tick: at the tick, or, when an input is decided on arrival (RULE-96), at the arrival of the first event of the interval before the tick. It holds:
+  1. the variables, the timers, the sequences and the armed runs exactly as step 12 of tick `t − 1` left them (at page tick 0, all zero, stopped and empty). These cannot change between ticks, so they are the same whenever the snapshot is taken;
+  2. the world as it is at the moment the snapshot is taken: each named target's state and bounding rectangle, the sound on each audio channel (RULE-27), the tracked synthesizer values (RULE-28 to RULE-30) and the newest metered report (RULE-33). This is the world as tick `t − 1` left it, changed only by what the server or the viewer's browser did since (a record that moved an object, a play command, a newer metered report).
+- Every condition of tick `t` — those decided on arrival and those of steps 2 and 4 to 10 — reads that one snapshot, with one exception: when the snapshot was taken on an arrival, the steps of tick `t` after the input events read the **metered** values (`level`, `envelope_stage`, `envelope_level`, `voices`) of the newest report at the tick, not of the snapshot, so that a meter is never a tick late because a key arrived. A change to the world that lands after the snapshot of tick `t` — a metered report excepted, as just said — is first seen in the snapshot of tick `t + 1`. A rule decided on arrival therefore reads the last completed tick's variables, timers and target states and the metered values of the newest report at the interval's first arrival; never anything a group of its own interval did.
+- **For a recording.** The inputs of a page are its events, its cues, the commands the server sends it, its metered reports and the changes others make to its world. A recording that stores each with its page tick and its place among that tick's inputs, and is replayed in that order, gives the same result on every run, whether inputs are decided on arrival or at the tick.
+- **Reason and source.** DEC-6522 item 14; DEC-6580 item 1: "a rule triggered by an input reads the last completed tick's state"; DEC-6587 item 7 (counters that are changed and then used). Taking the world once for a tick, at the first arrival, keeps every condition of the tick on one state (section 15, items 17 and 18); commands reading the working variables is section 15, item 32.
+- **Verification.** Tests: `set v0 5` then `add v0 1` in one group leave 6; a `LOCAL_MIDI` after `inc v0` whose key is `60 + v0` plays the new key; a condition on `v0` in the same tick reads the old value. On arrival: a key that sets a variable and a second key of the same interval whose condition reads it, which does not fire until the next interval; a metered report after the interval's first arrival, which the interval's later arrivals do not see and the tick's `becomes` rule does.
 
 **RULE-8 [engine: neoteletext-rules]. Input state follows the events, not the snapshot.**
-- **Statement.** The **input state** — which keys are down, which pointer buttons are down, where the pointer is and which targets it is inside — MUST be updated event by event in step 2, before the rules are matched against that event, so that a condition on a key's state in step 2 sees the keys as they are just after the triggering event, and steps 3 to 5 see them as they are after all the tick's events. Input state is not something an action can change, so RULE-6 is not broken. The evaluator tracks at most `MAX_KEYS_DOWN` (16) keys down at once; a 17th press is treated as not down for conditions (its `key` trigger still fires). When the page loses the keyboard, the pointer leaves, or the page closes, the receiver MUST give the evaluator a release (marked lost, as the input protocol's L flag, DOC-1935) for every key and button still down and a leave for every target the pointer was inside, so that `key_up`, `release` and `leave` rules fire and no note is left sounding. When step 2 is taken on arrival (RULE-5) the input state is updated on each arrival, in arrival order, exactly as above: an event's rules see the keys and the pointer as every event that arrived before it left them, itself included, whether those events arrived in this interval or an earlier one, and steps 3 to 5 see them as they are at the tick. Which objects a pointer event is inside is settled when the event is handled.
+- **Statement.** The **input state** — which keys are down and since which tick, which pointer buttons are down, where the pointer is and which targets it is inside — MUST be updated event by event, on arrival for the matching of RULE-96 and again in step 3, so that a condition on a key's state sees the keys as they are just after the triggering event, and steps 4 to 10 see them as they are after all the tick's events. Input state is not something a command can change, so RULE-6 is not broken. The evaluator tracks at most `MAX_KEYS_DOWN` keys down at once; a press beyond that is treated as not down for conditions and for `held` (its `key` trigger still fires). When the page loses the keyboard, the pointer leaves, the page is paused or the page closes, the receiver MUST give the evaluator a release (marked lost, as the input protocol's L flag, DOC-1935) for every key and button still down and a leave for every target the pointer was inside, so that `key_up`, `release` and `leave` rules fire and no note is left sounding.
 - **Reason and source.** A chord (a rule on key A when Shift is down) must work when both arrive in one tick; a held note must end when focus is lost (the engine's REQ-207).
-- **Verification.** Tests: Shift and A in one tick fire the rule on A-with-Shift; a blur with two keys down fires both `key_up` rules in rule order by key arrival. On arrival: a held key and then a key whose rule asks for it sound at once; the same two the other way round do not.
+- **Verification.** Tests: Shift and A in one tick fire the rule on A-with-Shift; a blur with two keys down fires both `key_up` rules in order of key arrival.
+
+**RULE-96 [engine: neoteletext-rules; neoteletext-browser]. An input's rules are decided on arrival, and their sound commands are delivered at once.**
+- **Statement.** When an input event arrives for the open page and fewer than `MAX_EVENTS_PER_TICK` events already belong to the coming tick, the evaluator MUST at once, without waiting for the tick: stamp the event with the coming page tick; update the input state; and for each rule in rule order (rows in row order) whose trigger the event matches, evaluate its condition against the tick's one snapshot (RULE-7), taking that snapshot now if no earlier arrival of the interval has. The rules and rows that fire are recorded with the event and are not evaluated a second time at the tick. For each firing, in order, the evaluator walks the rule's group, nested groups in place, and **delivers at once every sound command** (`CONTROL`, `LOCAL_MIDI`) it meets, with its amounts resolved; it applies every `VARIABLE` command it meets to the **arrival copy** of the sixteen variables — a copy that equals the working variables at the end of each tick — so that an amount that names a variable reads what the same walk at the tick will read; and it does nothing else. Every other command of those groups, and the real writes to the variables, happen at step 3 of the event's tick, in the same order, which is why step 3 is the first step that can change a variable in any tick but tick 0. An event that arrives when that many events already belong to the coming tick waits in the queue and is decided as soon as the tick before its own has completed. A group's commands are marked as sound commands when the table is decoded, never when it runs. Sound commands in a run that is not made by an input's rule — a timer's, a sequence's, an armed run's, a cue's, a `becomes` rule's, a `held` rule's, a command the server sent — are delivered at their step of the tick, before any picture work of that tick.
+- The logical order of a recording is unchanged by this: an event's firings, and every state change, carry the page tick the event belongs to, so a replay by page tick is exact; only the real-time delivery of sound is earlier.
+- **The evaluator's two ways.** `neoteletext-rules`' evaluator MUST offer both on one evaluator, freely mixed: `Evaluator::push(event)`, which leaves the event to be decided at its tick, and `Evaluator::push_now(event, world)`, which decides it at once and gives the world the sound commands of the groups it fires before it returns. `Evaluator::tick(world)` then runs the tick with those events already decided. For the same table, the same events in the same arrival order within the same tick intervals, and the same world at each snapshot, the two ways MUST produce the same firings, the same reports with the same page ticks, the same commands in the same order, the same counters (RULE-72) and the same rule state at the end of every tick; only the real time at which a sound command leaves differs. An event decided on arrival keeps its place among the `MAX_QUEUED_EVENTS` waiting until its tick has run. When the page closes with events decided on arrival whose tick has not run, that tick is run before the final tick, so that what those events' groups wrote and reported is not lost when their sound has left.
+- **In the browser** the decoder MUST call `push_now` for each input event of the open page as soon as it has read the event from the trusted core's pipe, before any other work that is waiting (a record to decode, a repaint, a tick that is not yet due), and MUST write the `LocalMidi`, play, stop and gain messages its world is given during that call to the trusted core, and flush them, before it returns to that other work. It reads the pipe by waiting on it, never by looking at intervals (the browser's decision 46). Its own record of what plays on each audio channel (RULE-27) MUST change for a sound command at the end of the tick the command belongs to, not when the command leaves, so that no condition sees a sound command in its own tick (RULE-6). A tick that falls due while an event is being handled runs after it. A receiver without a sound output of its own (`neottx rules-run`, the server's checks) may use either way; `neottx rules-run --on-arrival` uses the second, and writes the same lines.
+- **Reason and source.** DEC-6580 item 1 (the owner: "yes record 1 to 3 and build them"), which saves 8 milliseconds on average and 16.7 at most between a key and its sound; DEC-6587 item 9 ("the receiver marks them when the group is loaded"). The arrival copy is this document's (section 15, item 32): without it a note whose key is `p1 + v0` would read a variable that the same group has not yet changed.
+- **Verification.** Tests in `neoteletext-rules`: a key's `LOCAL_MIDI` leaves on arrival and its `ANIMATE` at the tick; a group `inc v0`, `LOCAL_MIDI 60 + v0` delivers key 61 on arrival and leaves `v0` at 1 after the tick; two keys in one interval read each other's writes in arrival order; the first event over `MAX_EVENTS_PER_TICK` in an interval is decided after the tick; a replay of the recorded events by page tick gives the same outputs. The browser's timed test (RULE-66).
 
 ## 3. Triggers
 
 **RULE-9 [engine: neoteletext-rules]. The trigger kinds.**
-- **Statement.** A trigger MUST be exactly one of the kinds below. The code is its byte in the record (RULE-43).
+- **Statement.** A trigger MUST be exactly one of the kinds below. The code is its byte in the table (RULE-43).
 
 | Code | Name | Fires when | Fields |
 |---|---|---|---|
@@ -117,9 +139,9 @@ The table is not a program. It has no loops, no arithmetic beyond saturating add
 | 4 | `release` | a button or contact that went down inside the target comes up, wherever the pointer then is | target, button |
 | 5 | `enter` | the pointer comes inside the target | target |
 | 6 | `leave` | the pointer goes outside the target, or leaves the page (RULE-8) | target |
-| 7 | `open` | page tick 0 (RULE-5 step 4) | none |
-| 8 | `close` | the page stops being shown (RULE-5) | none |
-| 9 | `becomes` | its condition holds now and did not at the rule's previous evaluation (RULE-11) | the condition |
+| 7 | `open` | page tick 0 (RULE-5 step 2) | none |
+| 8 | `close` | the page is closed while its connection stands (RULE-5, RULE-111) | none |
+| 9 | `becomes` | the rule's condition holds now and did not at its previous evaluation (RULE-11) | none: the condition is the rule's |
 | 10 | `every` | each `ticks` ticks after the timer started, while it runs | timer, `ticks` |
 | 11 | `after` | once, `ticks` ticks after the timer started | timer, `ticks` |
 | 12 | `text` | text arrives that is not a key: a paste, an input method's composition or its committed text | none |
@@ -127,143 +149,276 @@ The table is not a program. It has no loops, no arithmetic beyond saturating add
 | 14 | `wheel` | the wheel turns with the pointer inside the target | target |
 | 15 | `focus` | the page gains the keyboard | none |
 | 16 | `blur` | the page loses the keyboard | none |
+| 17 | `held` | a key matching the key set has been down for exactly `ticks` ticks without a release (RULE-108) | key set, modifier mask and value, `ticks` |
+| 18 | `double` | a key matching the key set is pressed at most `ticks` ticks after the previous press of the same key (RULE-108) | key set, modifier mask and value, `ticks` |
+| 19 | `press_held` | a button or contact that went down inside the target has been down for exactly `ticks` ticks (RULE-108) | target, button, `ticks` |
+| 20 | `double_press` | a button goes down inside the target at most `ticks` ticks after the previous press of the same button inside the same target (RULE-108) | target, button, `ticks` |
+| 21 | `cue` | a cue of the sound playing on an audio channel is heard (RULE-109) | audio channel, cue number or any |
 
-- Kinds 1 to 11 are DEC-6522 item 5's. Kinds 12 to 16 are added by this document so that every kind of input REQ-6523 names (typed text, a paste, a movement, the wheel, a focus change) has a trigger a rule can bind and `send` (section 15, item 1).
+- Kinds 1 to 11 are DEC-6522 item 5's; 12 to 16 were added by the first form so that every kind of input REQ-6523 names has a trigger; 17 to 21 are DEC-6587 item 5's ideas 4 and 7.
 - A button is 0 (left, or a touch contact, or a pen touching), 1 (middle), 2 (right) or 255 (any). The modifier mask and value are the input protocol's modifier bits (DOC-1935: Shift 1, Alt 2, Control 4, Super 8, Hyper 16, Meta 32, Caps Lock 64, Num Lock 128): the trigger matches when `(mods AND mask) = value`; mask 0 ignores modifiers. A key or click made with the browser's own modifier never reaches the evaluator (RULE-51).
-- `ticks` is 1 to `MAX_TIMER_TICKS` (216,000, one hour).
-- `enter` and `leave` fire on any pointer event that carries a position (a press, a release, a move, the wheel) when the set of targets under the pointer has changed since the last such event. `move` fires only on a move to another pixel, never on a press or a release, so that a press is reported once; its `held` is met when the move's own button mask or a tracked button says a button is down. The pointer is followed inside at most `MAX_POINTER_OBJECTS` (16) objects at once, the number of ancestors a ReGIS drawing can have (RULE-57).
-- **Reason and source.** DEC-6522 item 5; REQ-6523.
+- `ticks` of `every` and `after` is 1 to `MAX_TIMER_TICKS`; of `held` and `press_held`, 1 to `MAX_HOLD_TICKS`; of `double` and `double_press`, 1 to `MAX_DOUBLE_TICKS`.
+- **Reason and source.** DEC-6522 item 5; REQ-6523; DEC-6587 item 5.
 - **Verification.** One test for each kind in `neoteletext-rules`: the event that fires it, and the nearest events that must not.
 
+**RULE-107 [engine: neoteletext-rules]. Several triggers on one rule: any of them fires it.**
+- **Statement.** A rule MAY hold up to `MAX_TRIGGERS_PER_RULE` triggers, none of them `becomes`. The rule fires when any one of them occurs and the rule's condition holds. One input event fires a rule (or one row of it) at most once, however many of its triggers the event matches. Triggers that belong to different steps of RULE-5 (an input and a timer, say) each fire the rule at their own step, so a rule may fire more than once in a tick, once a step at most for each row.
+- **Reason and source.** DEC-6587 item 5, idea 9: a note played by its computer key or by a press on its drawing is one rule, not two.
+- **Verification.** Tests: a rule on a key or a press fires once for each; an event matching two of a rule's triggers fires it once; one trigger over the limit and a `becomes` beside another trigger are refused.
+
 **RULE-10 [engine: neoteletext-rules]. Naming keys.**
-- **Statement.** A key set MUST be either **any key** or 1 to `MAX_KEYS_PER_TRIGGER` (16) keys, each one of:
+- **Statement.** A key set MUST be either **any key** or 1 to `MAX_KEYS_PER_TRIGGER` keys, each one of:
   - **a character key** (kind 1): the Unicode scalar value the active keyboard layout gives the key without Shift, exactly the `key` of the input protocol's KEY event when it is a character (DOC-1935). Letters are the lower-case form.
   - **a named key** (kind 2): a functional key by its code in the input protocol's table (DOC-1936; the engine's `neoteletext_input::keys::code`), written in JSON by its name, the schema's `KeyName` (for example `Enter`, `ArrowLeft`, `F1`, `ColorF0Red`, `ShiftLeft`).
   - **a physical key** (kind 3): the key that carries the given character on a United States layout, whatever the active layout: the KEY event's `base` when it has one, else its `key` when that is a character (DOC-1937). A musical keyboard laid out on the letter rows uses this kind, so that it has the same shape on every layout.
-- A key event matches a set when it matches any member. The same naming is used by a key-state value (RULE-24).
+- In a rule that names rows, a key's code MAY be given as a row parameter in place of a constant (RULE-105). A key event matches a set when it matches any member. The same naming is used by a key-state value (RULE-24).
 - **Reason and source.** DEC-6522 item 5 ("a named key, a character, or a set"); the input protocol already identifies keys these three ways, so nothing new is defined.
-- **Verification.** Tests: on a French layout the physical key `q` matches the key that types `a`; `any` matches a modifier alone; a set of 17 is refused.
+- **Verification.** Tests: on a French layout the physical key `q` matches the key that types `a`; `any` matches a modifier alone; a set one over its limit is refused.
 
 **RULE-11 [engine: neoteletext-rules]. `becomes` is an edge.**
-- **Statement.** Each `becomes` rule MUST keep one bit, its condition's result at its previous evaluation, false when the page opens and whenever the rule is disabled. In step 5 an enabled `becomes` rule fires when its condition holds and that bit is false; the bit is then set to the condition's result. A condition that already holds at page tick 0 therefore fires at tick 0, and a rule enabled while its condition holds fires at the next tick. A disabled rule is not evaluated.
+- **Statement.** Each `becomes` rule MUST keep one bit for itself, or one for each of its rows, its condition's result at its previous evaluation, false when the page opens. In step 10 the rule (or the row) fires when its condition holds and that bit is false; the bit is then set to the condition's result. A condition that already holds at page tick 0 therefore fires at tick 0. The bits are kept for at most `MAX_RULES × MAX_ROWS` rule-and-row pairs, which is every pair a table can have.
 - **Reason and source.** DEC-6522 item 5 ("edge-triggered, false to true"). Firing at opening when true lets a page's meters and indicators agree with the state from the first tick.
-- **Verification.** Tests: a level crossing a threshold fires once and not again while above; falling and rising fires again; the opening and enabling cases.
+- **Verification.** Tests: a level crossing a threshold fires once and not again while above; falling and rising fires again; the opening case; eight rows of one rule with eight thresholds fire independently.
 
 **RULE-12 [engine: neoteletext-rules]. Targets.**
-- **Statement.** A target MUST be one of four kinds, written in the record as a kind byte and a 16-bit number:
+- **Statement.** A target MUST be one of four kinds, written as a kind byte and a 16-bit number:
 
 | Kind | Name | Number | What it is |
 |---|---|---|---|
 | 0 | page | 0 | the whole page's picture |
-| 1 | control | 1 to 32, or 0 for any control | a teletext control of the page beneath (the engine's REQ-INT-117; `neoteletext_core::controls`), numbered from 1 in the order the page declares them |
-| 2 | object | 1 to 65,535, or 0 for any object | an animation object of the sub-page shown: a teletext sprite, a ReGIS numbered drawing or a NAPLPS object, by its number (animation.md) |
+| 1 | control | 1 to 32, or 0 for any control | a teletext control of the page (the engine's REQ-INT-117; `neoteletext_core::controls`), numbered from 1 in the order the page declares them |
+| 2 | object | 1 to 65,535, or 0 for any object | an animation object of the page: a teletext sprite, a ReGIS numbered drawing or a NAPLPS object, by its number (animation.md) |
 | 3 | rectangle | 0 to 15 | a rectangle the table declares (RULE-13) |
 
-- Number 0 ("any") is allowed only in the triggers `press`, `release`, `enter`, `leave`, `move` and `wheel`; it fires once for each control or object concerned, and the event reported by `send` names which. Actions and collision conditions name one control, object or rectangle.
+- Number 0 ("any") is allowed only in the triggers `press`, `release`, `enter`, `leave`, `move`, `wheel`, `press_held` and `double_press`; it fires once for each control or object concerned, and the firing's `target` value (RULE-116) and the event reported by `REPORT` name which. Animation operations and collision conditions name one control, object or rectangle. In a rule that names rows, a target's number MAY be given as a row parameter (RULE-105).
 - **Inside** is decided thus. The page: always. A control: the pointer's cell is one of the control's cells. A ReGIS numbered drawing: the picture's pick record names that drawing at the pointer's pixel, or a drawing that has it as an ancestor (regis-v2.md, "Picking"); only detectable drawings are named. A teletext sprite or a NAPLPS object: it is shown and marked detectable, and the pointer's pixel is within its bounding rectangle (ANIM-13). A rectangle: the pointer's pixel is within it. One pointer event may be inside several targets, and every rule it matches fires, in rule order.
-- A target that does not exist on the sub-page shown is never inside, reads as not shown, and actions on it do nothing and are counted.
+- `enter` and `leave` fire on any pointer event that carries a position (a press, a release, a move, the wheel) when the set of targets under the pointer has changed since the last such event. `move` fires only on a move to another pixel, never on a press or a release, so that a press is reported once; its `held` is met when the move's own button mask or a tracked button says a button is down. The pointer is followed inside at most `MAX_POINTER_OBJECTS` objects at once, the number of ancestors a ReGIS drawing can have.
+- A target that does not exist on the page is never inside, reads as not shown, and operations on it do nothing and are counted.
 - **Reason and source.** DEC-6522 item 5 ("Targets are integer object numbers within the page"); the kind byte keeps the three renderers' numbers and the controls' apart.
-- **Verification.** Tests of each kind's inside rule, with a pointer on an edge pixel; `any` firing once per object with the object named in the send.
+- **Verification.** Tests of each kind's inside rule, with a pointer on an edge pixel; `any` firing once per object with the object named in the report.
 
 **RULE-13 [engine: neoteletext-rules]. Rectangles and the pixel grid.**
-- **Statement.** A table MAY declare 0 to `MAX_RECTS` (16) rectangles, each `x`, `y`, `width`, `height` (each 0 to 65,535, width and height at least 1) in the pixels of the sub-page's picture, origin at the top left, x to the right, y down: a teletext page is 480 by 500 dots (a cell is 12 by 20, DOC-1938); a ReGIS picture 800 by 480; a NAPLPS picture 640 by 480. The pointer's pixel given to the evaluator is in the same grid. A rectangle that lies partly outside the picture is cut to it.
+- **Statement.** A table MAY declare 0 to `MAX_RECTS` rectangles, each `x`, `y`, `width`, `height` (each 0 to 65,535, width and height at least 1) in the pixels of the page's picture, origin at the top left, x to the right, y down: a teletext page is 480 by 500 dots (a cell is 12 by 20, DOC-1938); a ReGIS picture 800 by 480; a NAPLPS picture 640 by 480. The pointer's pixel given to the evaluator is in the same grid. A rectangle that lies partly outside the picture is cut to it.
 - **Reason and source.** DEC-6522 item 5 ("a screen rectangle"); the grids are those the browser already uses for each kind of page (the browser's REQ-6377 for ReGIS).
 - **Verification.** Tests on each grid's last pixel.
 
-**RULE-14 [engine: neoteletext-rules]. Page variables.**
-- **Statement.** A table MAY declare 0 to `MAX_VARIABLES` (32) variables, numbered from 0 in the order declared. Each has `min`, `max` and `initial`, signed 32-bit integers with `min ≤ initial ≤ max`. A variable holds its initial value when the page opens. `set` writes a constant, held to the range (a value below `min` becomes `min`, above `max` becomes `max`); `add` adds a signed 32-bit constant with saturation at `min` and `max`, computed without overflow. Variables are local to the page in its view, are not kept when the page is closed, and are never shared between pages, tabs or channels.
-- **Reason and source.** DEC-6522 items 6 and 7 ("a small set of numeric page variables", "held to its declared range").
-- **Verification.** Tests: saturation at both ends, including `add` of the largest and smallest 32-bit constants; reset at each opening.
+**RULE-14 [engine: neoteletext-rules]. The sixteen variables.**
+- **Statement.** Every page MUST have exactly `VARIABLES` variables, designated `v0` to `v15` in every message and numbered 0 to 15 in every record. A table declares none and names none: the designators are fixed for every page of every channel. Each is a signed 32-bit integer and nothing else, zero when the page opens. Every operation on one saturates at −2,147,483,648 and 2,147,483,647 and is computed without overflow. They are changed only by the `VARIABLE` command (RULE-99). Variables are local to the page in its view, are dropped when the page is closed or its connection ends (RULE-111), and are never shared between pages, sub-pages, tabs or channels.
+- **Reason and source.** DEC-6587 item 4 (the owner: "local variables may only store a 32 bit signed integer not anything else. local variables must have hard coded names/designators, a fixed number of them") and item 7. The first form's declared variables with ranges are withdrawn.
+- **Verification.** Tests: saturation at both ends for every operation; all sixteen zero at each opening; a record naming variable 16 refused.
 
-**RULE-15 [engine: neoteletext-rules]. Timers.**
-- **Statement.** A table MAY declare 0 to `MAX_TIMERS` (8) timers, numbered 0 to 7, each with a flag saying whether it starts running when the page opens. A timer is either stopped or running since a start tick. `start_timer` in tick `t` makes it running since tick `t + 1` (RULE-6), replacing any earlier start; `stop_timer` stops it. A timer that starts at opening runs since page tick 0. The **page timer** (identifier 255 in the record, first in identifier order) always runs since page tick 0, cannot be started or stopped, and is not one of the 8. With `e` the page tick minus the start tick: an `after N` trigger is due when `e = N`; an `every N` trigger is due when `e > 0` and `e` is a multiple of `N`. A timer's value in a condition is 1 while running and 0 while stopped (RULE-25).
-- **Reason and source.** DEC-6522 items 5 and 7 ("timers keyed by identifier: starting a running timer replaces it").
-- **Verification.** Tests: after `start_timer` in tick `t`, `after 1` fires at tick `t + 2` (the timer runs since tick `t + 1`, and `e = 1` one tick after that); restarting replaces; `every 30` on the page timer fires at ticks 30, 60, 90.
+**RULE-15 [engine: neoteletext-rules]. The eight timers and the page timer.**
+- **Statement.** Every page MUST have exactly `TIMERS` timers, designated `t0` to `t7` and numbered 0 to 7, declared by no table, all stopped when the page opens. A timer is either stopped or running since a start tick. A `TIMER` start (RULE-100) applied in tick `t` makes it running since tick `t + 1` (RULE-6), replacing any earlier start; a stop stops it. The **page timer** (identifier 255, designated `page`, first in identifier order) always runs since page tick 0, cannot be started or stopped, and is not one of the eight. With `e` the page tick minus the start tick: an `after N` trigger is due when `e = N`; an `every N` trigger is due when `e > 0` and `e` is a multiple of `N`. Those tick `e` are the timer's **beats** of `N` ticks (RULE-102). A timer's values in a condition are RULE-25's.
+- **Reason and source.** DEC-6522 items 5 and 7 ("timers keyed by identifier: starting a running timer replaces it"); DEC-6587 item 6; fixed and undeclared as the variables are (section 15, item 33).
+- **Verification.** Tests: `after 1` fires one tick after the start was applied; restarting replaces; `every 30` on the page timer fires at ticks 30, 60, 90.
 
-**RULE-16 [engine: neoteletext-rules]. Switching rules on and off.**
-- **Statement.** `enable` and `disable` each name a set of rules of the same table (a 64-bit mask in the record, bit `n` for rule `n`). Their effect is seen from the next tick (RULE-6). A rule's effective state in a tick is: enabled in the snapshot, and not in the list of rules switched off for the sub-page shown (RULE-17).
-- **Reason and source.** DEC-6522 items 5 and 7.
-- **Verification.** Tests: a rule disabling itself; enabling a `becomes` rule whose condition holds.
+Withdrawn: RULE-16 (switching rules on and off) and RULE-17 (rules switched off for a sub-page). DEC-6587 item 8 removes `enable`, `disable`, the per-rule enabled flag and the sub-page off-lists: a mode is a variable that a rule's condition tests (RULE-110). DEC-6599 withdraws the sub-page off-lists a second way: a sub-page has a table of its own.
 
-**RULE-17 [engine: neoteletext-rules]. Rules switched off for a sub-page.**
-- **Statement.** A table MAY carry 0 to `MAX_SUBPAGE_MASKS` (16) entries, each a sub-code (`0x0000` to `0x3F7E`) and a 64-bit mask of rules that are off while that sub-page is the one shown. A sub-code may appear once. Changing the sub-page shown changes nothing else: variables, timers and enabled flags are kept, and `open` does not fire again.
-- **Reason and source.** DEC-6522 item 5 ("a sub-page may name rules of the table to switch off while it is shown").
-- **Verification.** Test: a rule fires on sub-page 1 and not on sub-page 2, with its `becomes` bit cleared while off.
+**RULE-105 [engine: neoteletext-rules]. Binding rows: a rule as a template.**
+- **Statement.** A table MAY hold 0 to `MAX_ROWS` **rows**, numbered from 0 in the order written, each exactly `ROW_PARAMETERS` signed 32-bit constants, `p0` to `p3`. A rule MAY name a run of rows by its first row and a count (at least 1, within the table's rows); two rules MAY name the same rows. Such a rule is a template that the **receiver** holds and matches once for each of its rows, in row order, with that row's parameters standing in four places and no others:
+  1. **a key of a trigger's key set**, whose code is then the row's parameter and MUST, for every row the rule names, be a valid code for the key's kind;
+  2. **the number of a trigger's target**, which MUST, for every row, be a valid number for the target's kind (a control 1 to 32, an object 1 to 65,535, a rectangle the table has);
+  3. **the constant of a comparison** in the rule's condition (RULE-18), to which the parameter is added with saturation;
+  4. **an amount** in a command of the group the rule runs, and of every group that group runs (RULE-106), and the `fired` values `p0` to `p3` (RULE-116).
+- An event fires each row whose substituted triggers it matches and for which the condition holds, each firing being a run of the rule's group with that row's parameters in force. A rule without rows runs its group with all four parameters 0. A sequence started, and a run armed, by a command of such a run keep the parameters in force (RULE-102, RULE-103). Rows are constants of the table: nothing changes them, and they are checked when the table is decoded, never when it runs.
+- **Why the receiver holds the rows.** The alternative, the server expanding each row into a plain rule and a plain group, was weighed and not chosen: the music player's thirteen keys, each played by a key or a pointer press and released, would take 26 rules and 26 groups out of `MAX_RULES` and `MAX_GROUPS`, where a template takes 2 rules, 2 groups and 13 rows of 16 bytes; and the mechanism that puts a row's number into a command is the one an amount needs for a variable anyway (RULE-106), so the evaluator gains one source of a number and no new machinery. The table on the wire is smaller and the 64-rule limit is not spent on repetition.
+- **Reason and source.** DEC-6587 item 5, idea 2, and item 6.
+- **Verification.** Tests: thirteen rows fire the right row for each key and none for another; a row whose parameter is not a valid key code or target number refuses the table whole; two rules sharing rows; a `becomes` rule with eight rows.
+
+**RULE-108 [engine: neoteletext-rules]. Held and double-press triggers.**
+- **Statement.** **Held.** The evaluator keeps, for each key down (at most `MAX_KEYS_DOWN`) and each pointer button down, the page tick of the event that put it down. A `held` trigger of `N` ticks fires at step 4 of the tick `N` after that tick, once, when the key is still down and matches the trigger's key set and modifiers as they were at the press; a `press_held` fires likewise for a button that went down inside the target. A key released before then fires nothing. Automatic repeats do not restart the count.
+- **Double.** The evaluator keeps the last `MAX_RECENT_PRESSES` presses not yet used: for each, the key (or the button and the target it was inside) and its page tick. A `double` trigger of `N` ticks matches a press when a kept press of the same key is at most `N` ticks earlier; a `double_press` likewise for the same button inside the same target. When a press fires any rule by a `double` or `double_press` trigger, the kept press it paired with is forgotten and this press is not kept, so three quick presses are one double and a single, never two doubles; otherwise the press is kept, the oldest forgotten for it. An automatic repeat is not a press. The plain `key` and `press` rules fire on every press as before; a page that wants a single press to wait for a possible second writes that with a timer.
+- Both are decided with the input state, which no command can change, and `double` is an input trigger decided on arrival (RULE-96); `held` belongs to step 4 and is not.
+- **Reason and source.** DEC-6587 item 5, idea 7.
+- **Verification.** Tests: a key held 30 ticks fires `held 30` at the thirtieth tick and not when released at the twenty-ninth; two presses 10 ticks apart fire `double 12` once and three fire it once; presses of different keys never pair.
+
+**RULE-109 [engine: neoteletext-rules, neoteletext-audio, neoteletext-audio-instruments; neoteletext-browser; neoteletext-app-server]. Cue points in a playing sound.**
+- **Statement.** A **cue** is a numbered point, 0 to `MAX_CUE`, in the event list of a stored or live synthesizer sound whose blocks the server sends.
+  - **In the block.** A cue is carried as the Standard MIDI Files Cue Point meta event with one byte of data, the cue's number: the four bytes `FF 07 01 nn` after its delta time (Standard MIDI Files 1.0, "Meta-Events": `FF 07 len text`, Cue Point; `FF 06 len text` is Marker). The block grammar of midi-architecture.md MIDI-23 already reads a meta event as a `skipped` event passed over by its length, so a receiver that knows no cues is unaffected. This amends MIDI-8 and MIDI-115, which said a block carries no meta event: it now carries this one and no other. A block holds at most `MAX_CUES_PER_BLOCK` (4) cues, a limit of the audio block and not of the rule table, defined in `neoteletext-audio-instruments`; a fifth is passed over and counted.
+  - **From a program.** In the program protocol a family's event list MAY hold `{"event":"cue","number":n,"time_us":…}`. When a stored sound is given as a Standard MIDI File (MIDI-112), the `sound` message MAY give `cues`, a list of at most 128 entries `{"text":"…","number":n}`: the server turns each Marker (`FF 06`) and Cue Point (`FF 07`) meta event of the file whose text equals an entry's `text` exactly into that cue number at the event's time, and drops the others as before. No receiver reads a cue's text.
+  - **Heard, not rendered.** The decoder renders a sound's blocks ahead of what is heard (by up to `STREAM_TARGET_MS`). When its instrument's event reader passes a cue, the decoder MUST send the sound helper, through the trusted core, a **cue mark**: the audio channel, the position of the cue in the stream as a count of samples from the stream's start, and the number (`Cue`, RULE-63). The sound helper keeps at most `MAX_PENDING_CUE_MARKS` (32) marks for each stream, dropping and counting more. As soon as it has rendered the device buffer that holds a mark's sample, and without waiting for the metering report, it reports `CueHeard` (the view's channel number, the audio channel, the number) to the trusted core, which checks the fields' bounds and that the view has that sound playing, and gives it to that view's decoder; the decoder gives the evaluator the cue, and step 9 of the next tick fires the `cue` rules. A cue is therefore acted on within one device buffer and one tick of being heard. A sound that is stopped, or a page that is paused or closed, forgets its marks.
+  - **The trigger** names an audio channel, 0 to 3, and a cue number, or 255 for any cue; the firing's `cue` value (RULE-116) is the number.
+  - A local sound has no timeline and so no cues. The sound helper is told no rule and no trigger; it echoes numbers its own view's decoder gave it.
+- **Reason and source.** DEC-6587 item 5, idea 4. The mark travels with the stream and comes back when heard, because the decoder's own position is up to 400 milliseconds early.
+- **Verification.** Engine tests: a block with a cue parses, the instrument reports it at its sample, and a fifth in a block is counted; a server test of each program form and of a file's markers; a helper test with a scripted device that a mark at sample `s` is reported after the buffer holding `s` and before the next; a browser test that the `cue` rule fires in the tick after the report.
+
+**RULE-110 [neoteletext-common; the kits]. Modes are variables.**
+- **Statement.** A page that has sets of rules that apply at different times MUST express it with a variable: each rule of a set tests the variable in its condition, and a group changes the variable. Nothing else switches a rule on or off, and no value gives the shown sub-page (DEC-6599: another sub-page is another page with a table of its own). The kits MUST offer a small helper that only builds objects (RULE-55): a mode set names one variable and gives each named mode a number from 0; it yields, for a mode, the condition `{"read":{"of":"variable","variable":"v3"},"op":"==","value":n}` (joined with a rule's own condition by `and`) and the command `{"type":"variable","op":"set","variable":"v3","value":n}`. Because a change of a variable is seen by conditions from the next tick (RULE-6), a mode changes between ticks and never in the middle of one.
+- **Reason and source.** DEC-6587 items 5 (idea 6) and 8 (the owner: "why enable and disable rules?"); DEC-6599 item 4.
+- **Verification.** Kit tests of the helper's objects; an evaluator test that a key which sets the mode and a key rule of the new mode in the same tick does not fire the latter.
 
 ## 4. Conditions
 
 **RULE-18 [engine: neoteletext-rules]. The condition expression.**
-- **Statement.** A condition MUST be a tree of at most `MAX_CONDITION_NODES` (16) nodes, of which at most `MAX_CONDITION_TERMS` (8) are terms, with operators nested at most `MAX_CONDITION_DEPTH` (3) deep (a term directly under three operators is allowed; a fourth operator level is refused). The nodes:
+- **Statement.** A condition MUST be a tree of at most `MAX_CONDITION_NODES` nodes, of which at most `MAX_CONDITION_TERMS` are terms, with operators nested at most `MAX_CONDITION_DEPTH` deep (a term directly under that many operators is allowed; one operator level more is refused). The nodes:
 
 | Code | Node | Meaning |
 |---|---|---|
-| 1 | `and` | 2 to 8 children; true when all are |
-| 2 | `or` | 2 to 8 children; true when any is |
+| 1 | `and` | 2 to `MAX_AND_OR_CHILDREN` children; true when all are |
+| 2 | `or` | 2 to `MAX_AND_OR_CHILDREN` children; true when any is |
 | 3 | `not` | 1 child; true when it is false |
-| 4 | compare (term) | a value (section 6), one of `==` (1), `!=` (2), `<` (3), `<=` (4), `>` (5), `>=` (6), and a signed 32-bit constant |
+| 4 | compare (term) | a value (section 6), one of `==` (1), `!=` (2), `<` (3), `<=` (4), `>` (5), `>=` (6), and a signed 32-bit constant, to which a row parameter MAY be added (RULE-105) |
 | 5 | in range (term) | a value and constants `low ≤ high`; true when `low ≤ value ≤ high` |
-| 6 | in set (term) | a value and 1 to 8 constants; true when the value equals one |
+| 6 | in set (term) | a value and 1 to `MAX_SET_MEMBERS` constants; true when the value equals one |
 | 7 | `overlaps` (term) | two targets; true when their bounding rectangles share at least one pixel (RULE-19) |
 | 8 | `inside` (term) | two targets; true when the first's bounding rectangle lies wholly within the second's (RULE-19) |
 
-- Every value is a signed 32-bit integer and every comparison is of a value with a constant; two values are never compared with each other and nothing is computed from them. Evaluation of `and` and `or` MAY stop at the first child that settles it, since no node has an effect.
-- **Reason and source.** DEC-6522 item 6; DEC-6524 item 9 for nodes 7 and 8.
-- **Verification.** Tests of each node and operator at its boundaries; a ninth term, a 17th node and a fourth level are each refused whole.
+- Every value is a signed 32-bit integer and every comparison is of a value with a constant of the table; two values are never compared with each other and nothing is computed from them. Evaluation of `and` and `or` MAY stop at the first child that settles it, since no node has an effect.
+- **Reason and source.** DEC-6522 item 6; DEC-6524 item 9 for nodes 7 and 8; DEC-6587 item 5 (idea 2) for the row parameter.
+- **Verification.** Tests of each node and operator at its boundaries; one term, one node and one level over their limits are each refused whole.
 
 **RULE-19 [engine: neoteletext-rules]. Collision and region tests are on bounding rectangles.**
-- **Statement.** For `overlaps` and `inside`, each target's rectangle MUST be: a control's cells in dots; an animation object's bounding rectangle as its renderer reports it for the object's state in the snapshot (ANIM-13); a declared rectangle; the page's whole picture. A target that does not exist or is not shown has no rectangle, and a test that names it is false. `overlaps` and `inside` MUST name targets of kinds 1, 2 or 3 as the first operand and of kinds 0 to 3 as the second, and never "any".
+- **Statement.** For `overlaps` and `inside`, each target's rectangle MUST be: a control's cells in dots; an animation object's bounding rectangle as its renderer reports it for the object's state in the snapshot (ANIM-13); a declared rectangle; the page's whole picture. A target that does not exist or is not shown has no rectangle, and a test that names it is false. `overlaps` and `inside` MUST name targets of kinds 1, 2 or 3 as the first operand and of kinds 0 to 3 as the second, and never "any" or a row parameter.
 - **Reason and source.** DEC-6524 item 9: "object A overlaps object B" and "object A is inside rectangle R", on bounding rectangles.
 - **Verification.** Tests: rectangles that touch at an edge do not overlap; share one pixel, do; a hidden object overlaps nothing.
 
-## 5. Actions
+## 5. Groups and commands
 
-**RULE-20 [engine: neoteletext-rules]. The action kinds.**
-- **Statement.** An action MUST be exactly one of the kinds below. A rule's actions run in written order; each is checked against its bounds when the table is decoded, never when it runs.
+Withdrawn: RULE-20 (the nineteen action kinds). DEC-6587 item 1 removes the rule's action list: the only thing a rule triggers is a group of protocol commands. Each first-form action is now a command: `midi` is `LOCAL_MIDI` (RULE-21); `play`, `stop` and `gain` are the audio profile's `CONTROL` record; `show`, `hide`, `look`, `move`, `order`, `frame`, `cycle` and `stop_cycle` are operations of an `ANIMATE` record (ANIM-6); `set` and `add` are `VARIABLE` (RULE-99); `start_timer` and `stop_timer` are `TIMER` (RULE-100); `send` is `REPORT` (RULE-22); `enable` and `disable` are withdrawn (RULE-110).
 
-| Code | Name | Effect | Fields |
+**RULE-118 [engine: neoteletext-rules]. A group, and a run of it.**
+- **Statement.** A table MAY hold 0 to `MAX_GROUPS` groups, numbered from 0 in the order written. A group is a list of 1 to `MAX_GROUP_COMMANDS` commands. Each command is one record's type and body, exactly the bytes the server would send that record with directly, at most `MAX_COMMAND_BYTES` of body, with up to `MAX_COMMAND_BINDINGS` bindings after it (RULE-106), framed as RULE-45 gives. A group is referenced by its number: by a rule, by a sequence's step and by a `RUN` record. The receiver MUST check every command of every group when the table is decoded — its type against RULE-119's list, its body with the same reader that reads that record when the server sends it, its page against the table's own, its bindings against RULE-106's table — and refuse the whole table for any fault (RULE-70); nothing is checked when a group runs. To **run** a group is to apply its commands in written order, each exactly as the same record sent by the server is applied, with its amounts resolved first; a `RUN` command that runs a group now is replaced, in that order, by the run of that group (RULE-102). A run happens only at a step of RULE-5 (or, for its sound commands, on arrival, RULE-96). A command whose target, sound, group, timer or sequence does nothing useful when it runs (an object that does not exist, an audio channel with no sound) does nothing, is counted in the page's `skipped` figure (RULE-72) and never stops the run.
+- **Reason and source.** DEC-6587 item 1: "A group is a stored, numbered list of ordinary protocol commands … which the receiver checks and holds when the page arrives and applies when a rule runs the group", so that there is one vocabulary: anything the server can send, a rule can trigger, and it is applied by the code that already applies records.
+- **Verification.** Tests in `neoteletext-rules`: a group round-trips byte for byte; each command in a group has the effect of the same record applied directly; one command, one group and one byte of a command over their limits are each refused whole.
+
+**RULE-119 [engine: neoteletext-rules, neoteletext-web]. What a group may hold, and what it may not.**
+- **Statement.** A command in a group MUST be a record of one of these types, and its body's page field (and sub-code field, where the record has one) MUST be the table's own page:
+
+| Type | Record | In a group it | Sent directly it is applied |
 |---|---|---|---|
-| 1 | `midi` | gives one MIDI channel voice message to the local sound playing on an audio channel (RULE-21) | audio channel 0 to 3; status; two data bytes |
-| 2 | `play` | starts a sound the page already has on an audio channel, as the audio profile's play command does (REQ-AUD-010) | audio channel; handle 0 to 255; generation; gain 0 to 100; fade 0 to 10,000 ms; loop |
-| 3 | `stop` | ramps an audio channel to silence and stops it | audio channel; fade |
-| 4 | `gain` | ramps an audio channel to a gain | audio channel; gain; fade |
-| 5 | `show` | makes a control or object shown (ANIM-6) | target |
-| 6 | `hide` | makes it hidden | target |
-| 7 | `look` | forces a look on a control or object: 0 normal (the pointer decides again), 1 hover, 2 pressed, 3 alternative (ANIM-6) | target; look |
-| 8 | `set` | sets a variable to a constant (RULE-14) | variable; value |
-| 9 | `add` | adds a constant to a variable with saturation | variable; amount |
-| 10 | `start_timer` | starts or restarts a timer (RULE-15) | timer 0 to 7 |
-| 11 | `stop_timer` | stops a timer | timer |
-| 12 | `enable` | switches rules on (RULE-16) | rule mask |
-| 13 | `disable` | switches rules off | rule mask |
-| 14 | `send` | reports to the page's channel: the trigger's own event, or one value (RULE-22) | what; value |
-| 15 | `move` | puts an object at a position, or moves it by an amount, in its renderer's units (ANIM-6) | target; relative; x; y (signed 16-bit) |
-| 16 | `order` | sets an object's layer (0 to 3, or 255 to keep it) and its order within the layer (−128 to 127) (ANIM-12) | target; layer; order |
-| 17 | `frame` | shows one frame of an object, 0 to 15 (ANIM-14), and stops any cycle | target; frame |
-| 18 | `cycle` | starts cycling an object's frames from `first` to `last`, one frame each `period` ticks (1 to 3,600), looping or once (ANIM-14) | target; first; last; period; once |
-| 19 | `stop_cycle` | stops the cycle at the frame shown | target |
+| 3 | `CONTROL` (the audio profile's, REQ-AUD-006) | plays a sound the page already has, stops or changes the gain of an audio channel. Its sequence field MUST be 0 and is not read; its page field MUST be the table's page number (a group cannot start a sound for the whole service, which would outlive the page); its flags MUST NOT include "after the current sound" | on arrival, as today |
+| 23 | `ANIMATE` (ANIM-6) | changes the animation state of the page's controls and objects: `show`, `hide`, `look`, `move`, `order`, `frame`, `cycle`, `stop_cycle`, `reset` | at the tick after it arrives |
+| 24 | `SPRITES` (ANIM-7) | replaces the page's teletext sprites | at the tick after it arrives |
+| 25 | `NAPLPS_OBJECTS` (ANIM-11) | replaces the page's NAPLPS objects | at the tick after it arrives |
+| 28 | `LOCAL_MIDI` (RULE-21) | gives one MIDI message to a local sound | on arrival |
+| 29 | `VARIABLE` (RULE-99) | changes a variable | at step 5 of the next tick |
+| 30 | `TIMER` (RULE-100) | starts or stops a timer | at step 5 |
+| 31 | `REPORT` (RULE-22) | reports to the page's channel | at step 5 |
+| 32 | `RUN` (RULE-102) | runs another group now, or arms a run | at step 5 |
+| 33 | `SEQUENCE` (RULE-103) | starts or stops a sequence | at step 5 |
 
-- Kinds 1 to 14 are DEC-6522 item 7's. Kinds 15 to 19 are the actions on animation objects that DEC-6524 item 9 and the task of 18 November 2026 call for.
-- An action whose target, sound, variable or timer does not exist when it runs does nothing and is counted in the page's `skipped` figure (RULE-72); it is never an error that stops the rule. The cases are: `midi` when no local sound plays on the audio channel in the snapshot; `stop` and `gain` when no sound plays there in the snapshot; `play` when the handle has no sound; an animation action (`show`, `hide`, `look`, `move`, `order`, `frame`, `cycle`, `stop_cycle`) whose target does not exist in the snapshot; and a `cycle` beyond `MAX_CYCLING_OBJECTS` (ANIM-14).
-- **Reason and source.** DEC-6522 item 7; DEC-6524 items 5 to 10.
-- **Verification.** A test of each action's effect and of each field at and beyond its bounds.
+- Every other record type MUST be refused in a group, and the table with it. Each, and why:
 
-**RULE-21 [engine: neoteletext-rules; neoteletext-browser]. The `midi` action.**
-- **Statement.** A `midi` action MUST carry one complete MIDI 1.0 channel voice message with no running status: note off (`0x8n`), note on (`0x9n`), control change (`0xBn`), program change (`0xCn`, whose second data byte is 0 in the record and is not given to the instrument) or pitch bend (`0xEn`), where `n` is the part's MIDI channel less one, and each data byte is 0 to 127 (MIDI 1.0 Detailed Specification, "Channel Voice Messages"). Polyphonic key pressure, channel pressure, system exclusive, system common and system real-time messages MUST be refused when the table is decoded. The message is given to the local sound (RULE-60) playing on the named audio channel of the page's view; when no local sound plays there, the action does nothing and is counted. It is never given to a sound whose blocks the server sends, whose timeline the server owns.
-- **Reason and source.** DEC-6522 item 7 ("a standard MIDI message to a playing synthesizer sound: note on and off, control change, program change, pitch bend"). Limiting it to local sounds keeps one writer for each instrument.
-- **Verification.** Codec tests for each status; a system exclusive status refused; a browser test that a `midi` action reaches only a local sound.
+| Forbidden in a group | Why |
+|---|---|
+| `RULES` (21): a table, and with it any definition of a group, a sequence, a row or a rectangle | A page cannot rewrite its own rules when triggered (DEC-6587 item 9). What a table can do is fixed when it is checked, by the server and again by the receiver, and never changes afterwards |
+| `REGIS` (14), `NAPLPS` (17), `SHEET` (26) and teletext packets: page content | These are bytes at an offset of a stream the server owns; a stored copy applied at a local time would leave the receiver and the server disagreeing about the stream. A picture is sent ahead (hidden drawings, a sheet, sprites, objects) and a group shows, hides, moves or re-looks it. The 256-byte command limit would not hold a picture in any case |
+| `OBJECT` (1), `DATA` (2): a sound's definition and its blocks | Assets are sent ahead; a group plays them. Blocks are a stream the server owns |
+| `FRAME` (27) | A run is already applied whole on one tick; a frame inside it would have nothing to bracket |
+| `LINKS` (9), `SUBPAGES` (10), `DRAWING_LINKS` (15), `REGIS_CURSOR` (16) | Where a link leads and which sub-pages a page lists are navigation the browser shows the viewer and follows itself; they must not change at local speed under the pointer |
+| `REDIRECT` (11), `DENIED` (12), `INDEX` (6), `LOG` (7) | They concern the channel or the selection, not a page's presentation; a stored `REDIRECT` would let a table move the viewer to another page or channel by a timer |
+| `CURSOR` (4), `INPUT_CONTROL` (5), `STATE_CHALLENGE` (18), `STATE_END` (19), `STATE_KEEP_OFFER` (20), `RULES_QUERY` (22) | They belong to the session, to viewer state or to the server's own question; none is a page's to replay |
 
-**RULE-22 [engine: neoteletext-rules]. `send` and `echo`.**
-- **Statement.** `send` with `what` 0 MUST report that the rule fired together with the trigger's own event: for an input trigger the input event exactly as the viewer made it (and, for a pointer trigger, the target it was inside); for `open`, `close`, `becomes`, `every` and `after`, no event, only that the rule fired. `send` with `what` 1 MUST report the rule and one named value as the snapshot holds it. A rule's `echo` flag is exactly a `send` with `what` 0 added after its last action. A rule MAY hold several `send` actions; each makes one report. What leaves the receiver for a report, and its limits, are RULE-46 and RULE-52.
-- **Reason and source.** DEC-6522 items 7 and 8.
-- **Verification.** Tests: the reports of a rule with two sends and `echo`, in order.
+- A `SPRITES` or `NAPLPS_OBJECTS` command is held to the 256-byte command limit like any other, so a group can place a few small sprites or objects and not a whole page of them; the whole set is sent ahead by the server and a group moves and shows it with `ANIMATE`.
+- **Reason and source.** DEC-6587 items 1, 6 ("a single command in a group is at most 256 bytes, so a group cannot carry a whole picture") and 9; the list of what is forbidden is this document's, each with its reason (section 15, item 34).
+- **Verification.** One test for each allowed type (accepted, and applied as the direct record is) and one for each forbidden type (the table refused whole); a `CONTROL` naming another page or no page, and an `ANIMATE` naming another sub-code, each refused.
 
-## 6. The values a condition can read
+**RULE-120 [engine: neoteletext-rules]. A group is limited by its commands, not by its work.**
+- **Statement.** These limits hold, each a named constant whose figure is stated in RULE-57 and nowhere else, each checked when the table is decoded, and a table over any is refused whole: `MAX_GROUP_COMMANDS` commands a group; `MAX_GROUPS` groups a page; a command's body at most `MAX_COMMAND_BYTES`; all of a page's groups together, as framed, at most `MAX_GROUPS_BYTES`; a group MAY run other groups (a `RUN` command with the mode "now") to a depth of at most `MAX_GROUP_DEPTH`, a group that runs none having depth 1, and no group may run itself directly or through others; and one run of a group, with every group it runs in place, applies at most `MAX_RUN_COMMANDS` commands, each `RUN` counting as one command beside the commands of the group it runs. Because nesting has no cycle and no condition, the number of commands a run applies is a constant of the table, and the receiver never counts commands while running. The receiver MUST NOT put any limit on the work a run does beyond these: no count of actions a tick, no time budget on a triggered group. The receiver's general budgets, which apply to every command however it arrives — the repaint budget (REQ-6368), the animation budget (ANIM-16), the report budgets of the trusted core (RULE-52), the local sound's message queue and overrun stop (RULE-62) — apply to a group's commands exactly as to the server's.
+- **Reason and source.** DEC-6587 item 2 (the owner: "i agree with constraining the number of commands in a group but not work cap") and item 6 (the figures, proposed by the session for the owner's confirmation). What a hostile table can cost within these limits is section 12.4.
+- **Verification.** Tests: a chain of `MAX_GROUP_DEPTH` groups accepted and of one more refused; a cycle of two and a group that runs itself refused; a group whose expansion is `MAX_RUN_COMMANDS` commands accepted and one more refused; groups of `MAX_GROUPS_BYTES` bytes accepted and one byte more refused.
 
-Every value is a signed 32-bit integer. A value is named in the record by 8 bytes: a space byte, a byte `a` and three 16-bit fields `b`, `c`, `d` (RULE-44). A value that cannot be read (no such variable index is impossible after decoding; no sound on the channel; another family's sound; a property the family does not have) reads as 0, and a property `playing` or `shown` exists in each space to tell "0" from "absent".
+**RULE-21 [engine: neoteletext-web, neoteletext-rules; neoteletext-browser]. `LOCAL_MIDI`, record type 28: one MIDI message to a local sound.**
+- **Statement.** Record type 28, `LOCAL_MIDI`, has a body of 8 bytes: the page (2 bytes); the sub-code (2 bytes); the audio channel (1 byte, 0 to 3); a status byte; and two data bytes. It MUST carry one complete MIDI 1.0 channel voice message with no running status: note off (`0x8n`), note on (`0x9n`), control change (`0xBn`), program change (`0xCn`, whose second data byte is 0 and is not given to the instrument) or pitch bend (`0xEn`, whose 14-bit value is data 1, the low seven bits, and data 2, the high seven), where `n` is the part's MIDI channel less one, and each data byte is 0 to 127 (MIDI 1.0 Detailed Specification, "Channel Voice Messages"). Polyphonic key pressure, channel pressure, system exclusive, system common and system real-time messages MUST be refused by the record's reader. The message is given to the local sound (RULE-60) playing on the named audio channel for that page in the view; when no local sound plays there, the command does nothing and is counted. It is never given to a sound whose blocks the server sends, whose timeline the server owns. It is a sound command (RULE-96). The server MAY send it directly (the program message `local_midi`, RULE-114), and a receiver applies it on arrival when that page is the open page of the view, and otherwise drops and counts it.
+- **Reason and source.** DEC-6522 item 7 ("a standard MIDI message to a playing synthesizer sound"); DEC-6587 item 1, which makes it a record the server can also send. Limiting it to local sounds keeps one writer for each instrument's timeline.
+- **Verification.** Codec tests for each status; a system exclusive status refused; a browser test that a `LOCAL_MIDI` reaches only a local sound, from a group and from the server.
 
-**RULE-23 [engine: neoteletext-rules]. Space 1: page variables.**
-- **Statement.** `a` is the variable's number, 0 to 31; `b`, `c`, `d` are 0. The value is the variable's value in the snapshot.
-- **Verification.** Covered by RULE-14's tests.
+**RULE-99 [engine: neoteletext-web, neoteletext-rules]. `VARIABLE`, record type 29.**
+- **Statement.** Record type 29, `VARIABLE`, changes one variable. Its body: the page (2 bytes); the sub-code (2 bytes); an operation (1 byte); the variable (1 byte, 0 to 15; 255 for all sixteen, with `clear` only); an operand kind (1 byte); and the operand:
+
+| Operand kind | Bytes after it | The operand's value |
+|---|---|---|
+| 0 | none | none (for `inc`, `dec`, `toggle`, `clear`) |
+| 1 | a signed 32-bit constant | the constant |
+| 2 | a constant; a variable (1 byte, 0 to 15) | the constant plus that variable's working value, saturating |
+| 3 | a constant; a `fired` property (1 byte, 0 to 7, RULE-116) | the constant plus that value of the firing, saturating |
+| 4 | a value (8 bytes, RULE-44) | that value as the snapshot holds it (`set` only) |
+| 5 | two constants `low ≤ high` | the range (`wrap` only) |
+
+| Code | Operation | Operand kinds | Effect on the variable `v` |
+|---|---|---|---|
+| 1 | `set` | 1 to 4 | `v` becomes the operand |
+| 2 | `inc` | 0 | `v` becomes `v + 1`, saturating |
+| 3 | `dec` | 0 | `v` becomes `v − 1`, saturating |
+| 4 | `add` | 1 to 3 | `v` becomes `v` plus the operand, saturating |
+| 5 | `sub` | 1 to 3 | `v` becomes `v` minus the operand, saturating |
+| 6 | `toggle` | 0 | 0 becomes 1; anything else becomes 0 |
+| 7 | `min` | 1 to 3 | `v` becomes the lesser of `v` and the operand: `v` is held to at most the operand |
+| 8 | `max` | 1 to 3 | `v` becomes the greater of `v` and the operand: `v` is held to at least the operand |
+| 9 | `wrap` | 5 | when `v > high`, `v` becomes `low`; when `v < low`, `v` becomes `high`; otherwise unchanged. It follows a change, for a counter that cycles; it is a comparison and an assignment, never a division |
+| 10 | `clear` | 0 | `v` becomes 0; with variable 255, all sixteen do |
+
+- There is no multiplication, division, remainder, bit operation or random number, and no operation whose variable is chosen by a number computed at run time. Every sum is computed without overflow and saturates at the 32-bit bounds. A record whose body is not exactly its operation's and operand kind's length, or that pairs an operation with an operand kind the table above does not give it, is refused. Sent directly (`variable`, RULE-114) it is applied at step 5 of the next tick of the open page, where a `fired` operand reads 0.
+- **Reason and source.** DEC-6587 item 7 (proposed by the session at the owner's request: "operations like inc dec and others that you think right").
+- **Verification.** A test of each operation with each operand kind at the 32-bit bounds; `wrap` at, above and below its range; each disallowed pairing refused.
+
+**RULE-100 [engine: neoteletext-web, neoteletext-rules]. `TIMER`, record type 30.**
+- **Statement.** Record type 30, `TIMER`, has a body of 6 bytes: the page; the sub-code; an operation (1 start, 2 stop); a timer (0 to 7). Start makes the timer running since the tick after the one in which the command is applied, replacing an earlier start; stop stops it (RULE-15). The page timer cannot be named.
+- **Reason and source.** DEC-6522 item 7; DEC-6587 item 1 (timer start and stop are protocol commands).
+- **Verification.** Covered by RULE-15's tests, from a group and from a direct record.
+
+**RULE-22 [engine: neoteletext-web, neoteletext-rules]. `REPORT`, record type 31: the one command that tells the channel.**
+- **Statement.** Record type 31, `REPORT`, has a body of 13 bytes: the page; the sub-code; `what` (1 byte); and a value (8 bytes, RULE-44, all zero unless `what` is 1). With `what` 0 it reports **the firing**: in a run made by an input's rule, that the rule fired together with the input event exactly as the viewer made it (and, for a pointer trigger, the target it was inside); in any other run — a timer's, a sequence's, an armed run's, a cue's, `open`, `close`, `becomes`, `held` — only that the rule or the run fired, with no event. With `what` 1 it reports one named value: a variable as the working state holds it, any other value as the snapshot holds it. Each `REPORT` applied makes one report (RULE-46), and what leaves the receiver for it, and its limits, are RULE-52's: a report can carry an input event only when a rule the viewer's own event fired ran it in that event's tick, so a group cannot widen what is sent (REQ-6523). The first form's `echo` flag is withdrawn as a part of a rule: the program protocol keeps `"echo": true` as a way of writing "and a `REPORT` of the firing after the group" (RULE-35). Sent directly by the server (`report`, RULE-114), `what` MUST be 1: the server refuses the other, and a receiver that is sent it reports a bare firing with no rule.
+- **Reason and source.** DEC-6522 items 7 and 8; DEC-6587 item 1 ("reporting to the server" is a protocol command); `echo` decided in section 15, item 35.
+- **Verification.** Tests: the reports of a group with two `REPORT`s, in order; a `REPORT` in a sequence's step carries no event; a `REPORT` of `v0` after `inc v0` in one group reports the new value.
+
+**RULE-102 [engine: neoteletext-web, neoteletext-rules]. `RUN`, record type 32: run a group now, at a tick, after a delay, or on a timer's next beat.**
+- **Statement.** Record type 32, `RUN`, has a body of 11 bytes: the page; the sub-code; a group (1 byte, a group of the page's table); a mode (1 byte); a timer (1 byte, 0 to 7 or 255 for the page timer, in mode 3; else 0); and `ticks` (unsigned 32-bit).
+
+| Mode | Name | `ticks` | Meaning |
+|---|---|---|---|
+| 0 | now | 0 | Run the group in place: in a group, at this point of the run (a nested run, RULE-120); sent directly, at step 5 |
+| 1 | at | a page tick | **Arm** a run of the group for that page tick. A tick that is not later than the tick in which the command is applied has passed: the run is due at the next tick, and is counted as late. A tick more than `MAX_ARM_TICKS` ahead is not armed and is counted as skipped |
+| 2 | after | 1 to `MAX_ARM_TICKS` | Arm a run for that many ticks after the tick in which the command is applied |
+| 3 | beat | a period, 1 to `MAX_TIMER_TICKS` | **Quantised start**: arm a run for the named timer's next beat of that period — the next tick, later than this one, at which an `every` trigger of that period on that timer would be due (RULE-15). When the timer is stopped, the run is due at the next tick |
+
+- An **armed run** is a due tick, a group and four parameters: the row parameters in force when it was armed (RULE-105), or zeros. At most `MAX_ARMED_RUNS` wait at once for a page; arming one more does nothing and is counted. An armed run is run at step 6 of its due tick, once, and then forgotten; nothing cancels one but the page closing, the connection ending or its table being replaced. The due tick is fixed when the run is armed: stopping or restarting the timer afterwards does not move it.
+- **The two clocks.** The page tick is the receiver's: it starts at 0 when the page opens in that view, counts the ticks the receiver has evaluated, slows when the receiver is late and does not advance while the page is paused. The server has no copy of it. It learns it from the `tick` every report carries (RULE-37) and from a state answer (RULE-38), and estimates the present tick as the last one learnt plus sixty for each second since. A program that wants "soon" uses mode 2, which needs no knowledge of the receiver's tick; a program that wants several viewers' pages to act at one moment of its own clock arms each with mode 1 from that view's own estimate, and accepts that a run armed for a tick already past happens one tick after it arrives. Nothing is resynchronised.
+- **Reason and source.** DEC-6587 item 5: ideas 5 (server-armed runs), 8 (quantised start) and 10 (groups running groups); item 6.
+- **Verification.** Tests: each mode's due tick; a past tick runs at the next and is counted; a beat of 8 on a timer started at tick 3 armed at tick 13 is due at tick 20; one over `MAX_ARMED_RUNS` is counted; an armed run keeps its row's parameters.
+
+**RULE-103 [engine: neoteletext-web, neoteletext-rules]. Sequences, and `SEQUENCE`, record type 33.**
+- **Statement.** A table MAY hold 0 to `MAX_SEQUENCES` sequences, numbered from 0. A sequence is: a length in ticks (1 to `MAX_SEQUENCE_TICKS`, 216,000); a repeat count (1 to `MAX_SEQUENCE_REPEAT`, 255, or 0 for "until stopped"); and 1 to `MAX_SEQUENCE_STEPS` steps, each a tick offset (0 to the length less one) and a group, in ascending offset, two steps of one offset being run in written order. Record type 33, `SEQUENCE`, has a body of 6 bytes: the page; the sub-code; an operation (1 start, 2 stop); a sequence (0 to 7; 255 for every sequence, with stop only). **Start**, applied in tick `t`, makes the sequence running since tick `t + 1` at position 0 and pass 0, replacing any run of it in progress, and holds the row parameters in force (or zeros), which its steps' groups run with. At step 8 of each tick a running sequence runs every step whose offset equals its position; then the position goes up by one, and when it reaches the length it returns to 0 and the pass count goes up by one, and when the pass count reaches a repeat count that is not 0 the sequence stops. **Stop** stops it where it is; the step groups already run are not undone. A sequence's steps are constants of the table.
+- **Reason and source.** DEC-6587 item 5, ideas 3 (local sequences, groups with tick offsets) and 11 (repeat counts); item 6.
+- **Verification.** Tests: a sequence of three steps and length 12 repeated twice runs its groups at ticks `t+1`, `t+5`, `t+9`, `t+13`, `t+17`, `t+21` and stops; restarting replaces; "until stopped" runs past `MAX_SEQUENCE_REPEAT` passes; a step offset not below the length, descending offsets and one step over the limit are refused.
+
+**RULE-106 [engine: neoteletext-rules]. A variable as a command's value: amounts and bindings.**
+- **Statement.** A command in a group MAY carry up to `MAX_COMMAND_BINDINGS` **bindings**. A binding names one field of the command and one **source**, and means: when the command runs, the field's value is the constant written in the command's body plus the source's value, added as signed 32-bit integers with saturation, and then held to the field's valid range (below the least becomes the least, above the greatest becomes the greatest). The command is then applied with that value exactly as if the server had sent it so. The sources:
+
+| Source byte | Source | Value |
+|---|---|---|
+| `0x10` to `0x1F` | a variable `v0` to `v15` | its working value (RULE-7); on arrival, its value in the arrival copy (RULE-96) |
+| `0x20` to `0x23` | a row parameter `p0` to `p3` | the parameter in force (RULE-105); 0 when none |
+| `0x30` to `0x33` | a value of the firing: the key, the target, the row, the cue (RULE-116) | as RULE-116 gives; 0 when there is none |
+
+- The fields that accept a binding are exactly these, and a binding of any other field refuses the table:
+
+| Record | Field code | Field | Valid range | Sources allowed |
+|---|---|---|---|---|
+| `LOCAL_MIDI` | 1 | data 1 (the key, the controller or the program) | 0 to 127 | any |
+| `LOCAL_MIDI` | 2 | data 2 (the velocity or the controller's value; not with program change) | 0 to 127 | any |
+| `LOCAL_MIDI` | 3 | the 14-bit pitch bend value (status `0xEn` only) | 0 to 16,383 | any |
+| `CONTROL` | 1 | gain | 0 to 100 | any |
+| `CONTROL` | 2 | fade, in milliseconds | 0 to 10,000 | any |
+| `ANIMATE`, operation `move` | 2, 3 | x, y | −32,768 to 32,767 | any |
+| `ANIMATE`, operation `frame` | 4 | frame | 0 to 15 | any |
+| `ANIMATE`, operation `look` | 5 | look | 0 to 3 | any |
+| `ANIMATE`, operation `order` | 6 | order within the layer | −128 to 127 | any |
+| `ANIMATE`, operation `cycle` | 7 | period, in ticks | 1 to 3,600 | any |
+| `ANIMATE`, every operation | 1 | the target's number | 1 to 32 for a control, 1 to 65,535 for an object | a row parameter, or the firing's target (`0x31`), **never a variable** |
+
+- A binding's **item** byte is the place of the operation within an `ANIMATE` record, from 0, and 0 for every other record. A field has at most one binding. The target's number is the one field that is an identity and not a quantity: it is not held to a range — a number outside its range makes that one operation do nothing and be counted — and it never takes a variable, because a variable choosing which object is acted on would be a computed address (RULE-1); a row parameter is a constant of the table, and the firing's target is the object the viewer's own pointer event named. No audio channel, handle, generation, page, sub-code, status byte, group, timer, sequence, variable designator, layer, flag or count takes a binding. `VARIABLE` has its own operands (RULE-99) and takes none; `TIMER`, `REPORT`, `RUN`, `SEQUENCE`, `SPRITES` and `NAPLPS_OBJECTS` take none. A record the server sends directly has no bindings: its fields are constants.
+- An amount is a constant plus **one** source. A value that needs two (a note that is a row's key plus an octave variable) is made by a `VARIABLE` command first: `set v2` to `p1`, `add v2` `v0`, then the note's key is `0 + v2`.
+- **Reason and source.** DEC-6587 item 5, idea 12: "a variable as a command's value, a constant plus a variable held to the field's valid range", and its amendment of REQ-417 to allow bounded saturating addition and nothing else.
+- **Verification.** A test of each row of the table: the field takes the sum, saturates and is held to its range; a binding of a field not listed, a variable bound to a target number, and two bindings of one field are each refused whole; a target number out of range at run time is a counted no-op.
+
+## 6. The values a condition, a report or a `set` can read
+
+Every value is a signed 32-bit integer. A value is named in a record by 8 bytes: a space byte, a byte `a` and three 16-bit fields `b`, `c`, `d` (RULE-44). A value that cannot be read (no sound on the channel; another family's sound; a property the family does not have) reads as 0, and a property `playing` or `shown` exists in each space to tell "0" from "absent".
+
+**RULE-23 [engine: neoteletext-rules]. Space 1: the variables.**
+- **Statement.** `a` is the variable's number, 0 to 15; `b`, `c`, `d` are 0. In a condition the value is the variable's value in the snapshot; in a command, its working value (RULE-7).
+- **Verification.** Covered by RULE-14's and RULE-7's tests.
 
 **RULE-24 [engine: neoteletext-rules]. Space 2: key and pointer state.**
 - **Statement.** `a` is the kind: 1 a character key, 2 a named key, 3 a physical key (RULE-10), with the key's 32-bit code in `b` (high half) and `c` (low half): the value is 1 while that key is down, else 0. Kind 4 is a pointer button, `b` the button 0 to 2: 1 while down over the page. Kind 5 is the pointer: `b` 0 gives 1 while the pointer is over the page, `b` 1 its x pixel and `b` 2 its y pixel (0 while it is not over the page). Kind 6 is the count of keys down, 0 to 16. These read the input state (RULE-8).
@@ -276,8 +431,8 @@ Every value is a signed 32-bit integer. A value is named in the record by 8 byte
 
 **RULE-26 [engine: neoteletext-rules]. Space 4: target state.**
 - **Statement.** `a` is the target's kind (1 control, 2 object), `b` its number, `c` the property: 0 exists (1 or 0), 1 shown, 2 frame (0 to 15), 3 x and 4 y (the object's position in its renderer's units, ANIM-6; a control's first column and row), 5 the look in force (0 to 3), 6 layer, 7 order, 8 cycling (1 or 0), 9 pointer inside (1 or 0). All are read from the snapshot except 9, which is input state.
-- **Reason and source.** DEC-6522 item 8 names these as local state; the task of 18 November 2026 asks for "object states (shown, frame, position)".
-- **Verification.** Tests after each animation action, one tick later.
+- **Reason and source.** DEC-6522 item 8 names these as local state.
+- **Verification.** Tests after each animation operation, one tick later.
 
 **RULE-27 [engine: neoteletext-rules; neoteletext-browser]. Space 5: a sound on an audio channel.**
 - **Statement.** `a` is the audio channel, 0 to 3; `b` the property:
@@ -290,9 +445,9 @@ Every value is a signed 32-bit integer. A value is named in the record by 8 byte
 | 3 | `gain` | the channel's gain as last commanded, 0 to 100 |
 | 4 | `local` | 1 while the sound playing is a local sound (RULE-60), else 0 |
 
-- A sound is addressed as the program protocol addresses a playing sound: by the audio channel it plays on (the `channel` of `play`, `stop` and `gain`), and it is told apart by its handle (the `handle` of `sound` and `play`). The rule table has no other name for a sound.
+- A sound is addressed as the program protocol addresses a playing sound: by the audio channel it plays on, and it is told apart by its handle. The rule table has no other name for a sound.
 - **Reason and source.** DEC-6522 items 4 and 6.
-- **Verification.** Browser tests with a scripted sound helper: each property after `play`, `gain` and `stop`.
+- **Verification.** Browser tests with a scripted sound helper: each property after a play, a gain and a stop.
 
 **RULE-28 [engine: neoteletext-rules, neoteletext-audio-instruments; neoteletext-browser]. Space 6: a synthesizer's state.**
 - **Statement.** `a` is the audio channel, 0 to 3. `b` names the family the rule expects: its high byte the family's codec code of the audio profile (12 the synth6581 family, 13 synth7, 14 the synth106 family, 15 synthD, 16 the synth53 family, 17 synth8, 18 synth80; the engine's `Codec::code`) and its low byte the variant (0, or 1 for synth8580, synth60 and synth52, 2 for synth51, as the OBJECT record's variant and chip tags choose). `c` has the part's MIDI channel less one (0 to 15) in its high byte and the class in its low byte; `d` is the index within the class:
@@ -313,7 +468,26 @@ Every value is a signed 32-bit integer. A value is named in the record by 8 byte
 - When the sound playing on the audio channel is not of the named family and variant, or none plays, every class reads 0.
 - For the synth6581 family, which is programmed by register writes and has no notes (synth6581-synth8580.md), classes 0 to 3, 8 and 9 read 0; class 4's index is the register's ASID identifier, 0 to 27 (appendix A.1), and its value the register's last written byte; classes 5 and 6 take the voice, 1 to 3, as the part (high byte of `c` 0 to 2).
 - **Reason and source.** DEC-6522 items 4 and 6 (the owner: "evaluations of synth property values with a set of common operators"). The fields are the named, typed fields the program protocol already gives each family's patch (DEC-6462), so nothing is named twice.
-- **Verification.** For each family, a test in `neoteletext-audio-instruments` reads every parameter of appendix A after setting it by its control message; browser tests of `note`, `notes` and `program` after rule `midi` actions.
+- **Verification.** For each family, a test in `neoteletext-audio-instruments` reads every parameter of appendix A after setting it by its control message; browser tests of `note`, `notes` and `program` after `LOCAL_MIDI` commands.
+
+**RULE-116 [engine: neoteletext-rules]. Space 7: the firing.**
+- **Statement.** `a` is the property; `b`, `c`, `d` are 0:
+
+| `a` | Name | Value |
+|---|---|---|
+| 0 | `key` | the code of the key whose event fired the rule: its Unicode scalar value, or its functional code (RULE-10); 0 when no key event did |
+| 1 | `target` | the number of the control, object or rectangle the pointer event that fired the rule was inside, for a rule whose trigger named one or "any"; 0 otherwise |
+| 2 | `row` | the place, from 0, of the firing row within the rule's rows; 0 without rows |
+| 3 | `cue` | the number of the cue that fired the rule; 0 otherwise |
+| 4 to 7 | `p0` to `p3` | the row parameters in force (RULE-105); 0 when none |
+
+- In a condition these are the values of the event and row being matched. In a command they are those of the run's firing; a nested run has its caller's. A run a sequence or an armed run makes has the parameters that were held for it and 0 for `key`, `target`, `row` and `cue`; a run of a command the server sent has 0 for all. A page that needs the key later stores it: `set v5` to the firing's `key`.
+- **Reason and source.** DEC-6587 item 7: `set` to "a readable value such as … the key that fired the rule".
+- **Verification.** Tests: each property in a condition and in a `set`; zeros in a sequence's step; a nested run reads its caller's.
+
+**RULE-117 [engine: neoteletext-rules]. Space 8: sequences.**
+- **Statement.** `a` is the sequence, 0 to 7; `b` the property: 0 running (1 or 0), 1 the passes completed since its start (0 to 2,147,483,647), 2 its position in ticks within the pass (0 while stopped).
+- **Verification.** Covered by RULE-103's tests.
 
 **RULE-29 [engine: neoteletext-audio-instruments]. Each family publishes one parameter table.**
 - **Statement.** Each family's interface module (`synth7/interface.rs` and the others, built by the feature `interface` alone) MUST publish a constant table `PARAMETERS` of its readable patch fields in the order of appendix A — each entry a name, a least and a greatest value — and a function that reads a field's present value for a part from the family's tracker (the state a sender tracks, MIDI-94). The parameter number is the entry's place in the table, from 0. The table's names, order and ranges MUST be those of the program protocol's `Synth7Parameter`, `Synth106Parameter`, `Synth60Parameter`, `SynthDParameter`, `Synth53Parameter`, `Synth8Parameter` and `Synth80Parameter` types of the server's schema, variant by variant in schema order, which a test of the server asserts; a field whose schema type is an enumeration reads as the ordinal of its value in schema order from 0, and a boolean as 0 or 1. A parameter number is never reused or reordered; new fields are added at the end.
@@ -321,12 +495,12 @@ Every value is a signed 32-bit integer. A value is named in the record by 8 byte
 - **Verification.** The server's test that schema and tables agree; a test that appendix A of this document is the tables' printout (the engine's `cargo xtask` prints it and the commit gate compares).
 
 **RULE-30 [neoteletext-browser]. Where each synthesizer value is read.**
-- **Statement.** The decoder MUST read classes 0 to 4, 8 and 9 from the family's tracker that it keeps for the sound: for a local sound, a tracker fed with the sound's setup events (RULE-60) and then with every `midi` action in order, so no question is put to the sound helper; for a sound whose blocks the server sends, the tracker of the instrument the decoder renders it with, at the position rendered, which is ahead of what is heard by up to the stream's buffer (`STREAM_TARGET_MS`, 400 milliseconds) and is approximate by that much. Classes 5 to 7 of a local sound are metered by the sound helper (RULE-33); of a server-timed sound they are read from the decoder's instrument at the position rendered.
+- **Statement.** The decoder MUST read classes 0 to 4, 8 and 9 from the family's tracker that it keeps for the sound: for a local sound, a tracker fed with the sound's setup events (RULE-60) and then with every `LOCAL_MIDI` command in order, so no question is put to the sound helper; for a sound whose blocks the server sends, the tracker of the instrument the decoder renders it with, at the position rendered, which is ahead of what is heard by up to the stream's buffer (`STREAM_TARGET_MS`, 400 milliseconds) and is approximate by that much. Classes 5 to 7 of a local sound are metered by the sound helper (RULE-33); of a server-timed sound they are read from the decoder's instrument at the position rendered.
 - **Reason and source.** DEC-6522 item 4: the owner accepted that reading may "cost CPU and be approximate". Tracking in the decoder costs nothing per tick and needs no message.
-- **Verification.** Browser tests: `note[60]` reads 1 in the tick after a rule's note on with no helper message exchanged.
+- **Verification.** Browser tests: `note[60]` reads 1 in the tick after a note on with no helper message exchanged.
 
 **RULE-31 [engine: neoteletext-audio-instruments]. Envelope position.**
-- **Statement.** The trait `Instrument` MUST gain a method `meter(&self, part: u8) -> Meter`, with a default that answers idle and zero, giving for the part's most recently started voice that is not idle (else idle): the stage 0 to 4 of RULE-28, the amplitude envelope's present value scaled linearly to 0 to 255 of the envelope's full scale, and the count of voices not idle. The amplitude envelope is: synth106, synth60, synth53, synth52, synth51, synth8 and synthD, the voice's loudness (VCA) envelope; synth80, channel I's amplifier envelope of the voice; synth7, the envelope generator of operator 1 of the newest note, operator 1 being a carrier in all 32 algorithms; the synth6581 family, the envelope generator of the voice named as the part, its 8-bit counter as it stands. Stages a family does not have are never reported (synth7's four rates map to attack for the first, decay for the second and third while a key is down, sustain when level 3 is reached, release after key off).
+- **Statement.** The trait `Instrument` MUST have a method `meter(&self, part: u8) -> Meter`, with a default that answers idle and zero, giving for the part's most recently started voice that is not idle (else idle): the stage 0 to 4 of RULE-28, the amplitude envelope's present value scaled linearly to 0 to 255 of the envelope's full scale, and the count of voices not idle. The amplitude envelope is: synth106, synth60, synth53, synth52, synth51, synth8 and synthD, the voice's loudness (VCA) envelope; synth80, channel I's amplifier envelope of the voice; synth7, the envelope generator of operator 1 of the newest note, operator 1 being a carrier in all 32 algorithms; the synth6581 family, the envelope generator of the voice named as the part, its 8-bit counter as it stands. Stages a family does not have are never reported (synth7's four rates map to attack for the first, decay for the second and third while a key is down, sustain when level 3 is reached, release after key off).
 - **Reason and source.** DEC-6522 items 4 and 6 ("a voice's envelope position").
 - **Verification.** For each family a test: after a note on, the stage passes 1, 2, 3 in order and 4 after note off, and the level is 0 when idle.
 
@@ -337,330 +511,417 @@ Every value is a signed 32-bit integer. A value is named in the record by 8 byte
 
 **RULE-33 [neoteletext-browser]. The message flow of metering.**
 - **Statement.** Metering MUST work through these messages and no others:
-  1. When the decoder has decoded a table for a page that is shown, it sends the trusted core a **watch list** with the page's key: at most `MAX_WATCHED` (32) slots, each an audio channel (0 to 3) and a kind (1 `level`; 2 `envelope_stage`, 3 `envelope_level`, 4 `voices`, each with a part 0 to 15) — exactly the distinct metered values the table's conditions and `send` actions name. A page with none sends none. When the page stops being shown, or its table is removed, the decoder sends an empty list.
-  2. The trusted core checks the list's bounds and that the page is shown in that view, and passes it to the sound helper tagged with the view's channel number, replacing that view's earlier list (`ToSound::Watch`).
+  1. When the decoder has decoded a table for a page that is open, it sends the trusted core a **watch list** with the page's key: at most `MAX_WATCHED` slots, each an audio channel (0 to 3) and a kind (1 `level`; 2 `envelope_stage`, 3 `envelope_level`, 4 `voices`, each with a part 0 to 15) — exactly the distinct metered values the table's conditions and its groups' `REPORT` and `VARIABLE` commands name. A page with none sends none. When the page is paused or closed, its connection ends, or its table is removed, the decoder sends an empty list.
+  2. The trusted core checks the list's bounds and that the page is open in that view, and passes it to the sound helper tagged with the view's channel number, replacing that view's earlier list (`ToSound::Watch`).
   3. The sound helper, after rendering each device buffer, when at least one sixtieth of a second of output frames has been rendered since its last report and a list is in force, sends one report for each view with a list: the slots' values in the list's order, each one byte (`FromSound::Metered`). While the output device is stopped it sends one report of zeros and then none.
   4. The trusted core checks the report's length against the list it passed and gives it to that view's decoder (`ToDecoder::Metered`).
   5. The decoder keeps the newest report; step 1 of each tick (RULE-5) copies it into the snapshot. A slot not yet reported reads 0.
-- The sound helper is never told a condition, a threshold or a rule; it meters and reports. Reports follow the audio device's clock, so a value in a snapshot is up to one report's interval (a sixtieth of a second and one device buffer) and one tick old. Steps 3 to 5 of a tick whose snapshot was taken on an arrival read the newest report at the tick (RULE-7).
+- The sound helper is never told a condition, a threshold or a rule; it meters and reports. Reports follow the audio device's clock, so a value in a snapshot is up to one device buffer and one tick old.
 - **Reason and source.** DEC-6522 item 4. The trusted core stays the only path between helpers (the browser's architecture, section 6.2).
 - **Verification.** Tests with the scripted helper: the list sent for a table of three watched values; a report of the wrong length dropped by the core; no report while no list is in force; the level seen by a `becomes` rule within two ticks of the helper's report.
 
-## 7. The program protocol: version 14
+## 7. The program protocol: version 15
 
-The program protocol is the line-by-line JSON a channel's program exchanges with the server (the server's `crates/teletext-runtime/src/protocol.rs`; its generated schema is the contract, DEC-6462). It is at version 13 today (`PROTOCOL: u32 = 13`, `protocol/schema-13.json`). This document and animation.md make version 14. The conventions are version 13's: every message is one object with a `type`; names are snake_case; a page is a string of three hexadecimal digits (`PageNumber`) and a sub-code a string of four (`SubCode`); an audience is `"all"` or a list of connection numbers (`Connections`); unknown fields are refused; what the schema cannot say is checked by `protocol/check.rs` and answered by a typed `refused`.
+The program protocol is the line-by-line JSON a channel's program exchanges with the server (the server's `crates/teletext-runtime/src/protocol.rs`; its generated schema is the contract, DEC-6462). The first form made version 14 (`PROTOCOL: u32 = 14`, `protocol/schema-14.json`, on the server's branch `protocol-14`, never deployed). This document and animation.md make version 15. The conventions are unchanged: every message is one object with a `type`; names are snake_case; a page number is a string of three hexadecimal digits (`PageNumber`) and a sub-code a string of four (`SubCode`); an audience is `"all"` or a list of connection numbers (`Connections`); unknown fields are refused; what the schema cannot say is checked by `protocol/check.rs` and answered by a typed `refused`. **Every message of this section that concerns a page carries both `page` and `sub`** (RULE-112); an audience of `"all"` means every connection that has that page selected at that moment.
 
-**RULE-34 [neoteletext-app-server]. Protocol 14.**
-- **Statement.** The server MUST raise `PROTOCOL` to 14 and generate `protocol/schema-14.json` from its Rust types, deleting `schema-13.json` in the same change; its `start` message says `"protocol": 14`. It MUST add the program messages `rules` and `query_state` and the server messages `rule_event`, `page_state` and `rules_fault` of this section, the fields `rule`, `tick` and `target` of `input` (RULE-37), the local sound kinds of RULE-61, and the messages animation.md defines (`animate`, `sprites`, `naplps_objects`, `sprite_sheet`, `frame`). A program that speaks another version is refused as today. Both kits take the schema by copy pinned to the server's commit, as they take version 13's.
-- **Reason and source.** DEC-6522 item 9; DEC-6462.
+**RULE-34 [neoteletext-app-server]. Protocol 15.**
+- **Statement.** The server MUST raise `PROTOCOL` to 15 and generate `protocol/schema-15.json` from its Rust types, deleting `schema-14.json` in the same change; its `start` message says `"protocol": 15`. It MUST carry the program messages `rules` and `query_state` in their second form, the new program messages `local_midi`, `variable`, `timer`, `report`, `run` and `sequence` (RULE-114), the server messages `input`, `rule_event`, `page_state` and `rules_fault` in their second form (RULE-37, RULE-38, RULE-48), the local sound kinds of RULE-61, the `cue` event and the `cues` list of RULE-109, and the messages animation.md defines. A program that speaks another version is refused as today. Both kits take the schema by copy pinned to the server's commit.
+- **Reason and source.** DEC-6522 item 9; DEC-6462; DEC-6587 (the messages change shape, so the number is raised, REQ-2215).
 - **Verification.** The server's schema test (the committed schema is the generated one); both kits' pin checks.
 
 **RULE-35 [neoteletext-app-server]. The `rules` message.**
 - **Statement.** A program gives a page its table with:
 
 ```json
-{"type":"rules","connections":"all","page":"101","table":{
-  "variables":[{"name":"octave","min":0,"max":8,"initial":4}],
-  "timers":[{"name":"beat","running":false}],
+{"type":"rules","connections":[7],"page":"101","sub":"0001","table":{
   "rects":[{"name":"pad","x":40,"y":300,"width":200,"height":100}],
-  "rules":[{"name":"c_down","on":{"event":"key","keys":[{"physical":"a"}]},
-            "when":null,"do":[{"action":"midi","channel":0,
-            "message":{"event":"note_on","channel":1,"key":60,"velocity":100}}],
-            "echo":false,"enabled":true}],
-  "subpages":[{"sub":"0002","off":["c_down"]}]}}
+  "rows":{"keys":[{"p0":{"physical":"a"},"p1":60,"p2":101},{"p0":{"physical":"s"},"p1":62,"p2":103}]},
+  "groups":[
+    {"name":"note_on","commands":[
+      {"type":"local_midi","channel":0,"message":{"event":"note_on","channel":1,"key":{"plus":0,"row":"p1"},"velocity":100}},
+      {"type":"animate","ops":[{"action":"look","target":{"object":{"row":"p2"}},"look":"pressed"}]}]},
+    {"name":"note_off","commands":[
+      {"type":"local_midi","channel":0,"message":{"event":"note_off","channel":1,"key":{"plus":0,"row":"p1"},"velocity":64}},
+      {"type":"animate","ops":[{"action":"look","target":{"object":{"row":"p2"}},"look":"normal"}]}]}],
+  "sequences":[{"name":"pulse","length":30,"repeat":0,"steps":[{"tick":0,"run":"note_on"},{"tick":15,"run":"note_off"}]}],
+  "rules":[
+    {"name":"down","on":[{"event":"key","keys":[{"physical":{"row":"p0"}}]},{"event":"press","target":{"object":{"row":"p2"}},"button":0}],
+     "when":null,"rows":"keys","run":"note_on"},
+    {"name":"up","on":[{"event":"key_up","keys":[{"physical":{"row":"p0"}}]},{"event":"release","target":{"object":{"row":"p2"}},"button":0}],
+     "rows":"keys","run":"note_off"},
+    {"name":"typed","on":{"event":"key","keys":"any","repeat":true},"do":[{"type":"report"}]}]}}
 ```
 
-- `table` is the table, or `null`, which removes the page's table for those connections (and, where the channel's default applies, RULE-53, puts the default back). In a table, `rules` is required (0 to 64 entries); `variables` (at most 32), `timers` (at most 8), `rects` (at most 16) and `subpages` (at most 16) default to empty. In a rule, `name`, `on` and `do` are required; `when` defaults to `null` (no condition), `echo` to `false`, `enabled` to `true`.
-- **`on`**, the trigger, is an object tagged by `event`:
+- `table` is the table, or `null`, which removes the page's table for those connections (and, where the channel's default applies, RULE-53, puts the default back). In a table, `rules` is required (it may be empty); `rects`, `rows` (an object of named row sets), `groups` and `sequences` default to empty; each is held to its limit of RULE-57 (`MAX_RULES`, `MAX_RECTS`, `MAX_ROWS` rows in all, `MAX_GROUPS`, `MAX_SEQUENCES`). There is no `variables`, `timers` or `subpages` member: the sixteen variables are written `"v0"` to `"v15"` and the timers `"t0"` to `"t7"` and `"page"` wherever one is named.
+- **A rule** has `name` and `on` (required); `when` (a condition or `null`, the default); `rows` (the name of a row set, or absent); and exactly one of `run` (the name of a group) and `do` (a list of 1 to `MAX_GROUP_COMMANDS` commands, which the server makes into an unnamed group of the table; two rules whose `do` lists are equal share one group). `echo` (boolean, default `false`) means "after the group, a `report` of the firing": the server appends that command to the rule's `do` group, or for a `run` makes an unnamed group that runs the named one and then reports. Unnamed groups count toward `MAX_GROUPS`.
+- **`on`** is one trigger or a list of 1 to `MAX_TRIGGERS_PER_RULE` (RULE-107). A trigger is an object tagged by `event`:
 
 | `event` | Other fields |
 |---|---|
 | `key` | `keys` (a key set); `repeat` (boolean, default `false`); `mods` (`{"mask":0..255,"value":0..255}`, default both 0) |
 | `key_up` | `keys`; `mods` |
+| `held`, `double` | `keys`; `mods`; `ticks` (1 to `MAX_HOLD_TICKS` for `held`; 1 to `MAX_DOUBLE_TICKS` for `double`) |
 | `press`, `release` | `target`; `button` (0, 1, 2 or `"any"`, default `"any"`) |
+| `press_held`, `double_press` | `target`; `button`; `ticks` |
 | `enter`, `leave`, `wheel` | `target` |
 | `move` | `target`; `held` (boolean, default `false`) |
 | `open`, `close`, `text`, `focus`, `blur` | none |
-| `becomes` | `condition` (required; the rule's `when` MUST be `null`) |
-| `every`, `after` | `ticks` (1 to 216,000); `timer` (a timer's name, or `null` for the page timer, the default) |
+| `becomes` | none: the rule's `when` is its condition and MUST NOT be `null`; it is the rule's only trigger |
+| `every`, `after` | `ticks` (1 to `MAX_TIMER_TICKS`); `timer` (`"t0"` to `"t7"`, or `"page"`, the default) |
+| `cue` | `channel` (0 to 3); `number` (0 to `MAX_CUE`, or `"any"`, the default) |
 
-- A **key set** is `"any"` or a list of 1 to 16 keys, each `{"char":"a"}` (one Unicode scalar value, a letter in lower case), `{"name":"Enter"}` (a `KeyName` of the schema) or `{"physical":"a"}` (RULE-10).
-- A **target** is `"page"`, `{"control":n}`, `{"object":n}`, `{"rect":"name"}`, or in the six pointer triggers `{"control":"any"}` or `{"object":"any"}` (RULE-12).
-- **`when`** and `condition` are a condition: `{"and":[c, ...]}`, `{"or":[c, ...]}`, `{"not":c}`, `{"read":v,"op":"==","value":n}` with `op` one of `==`, `!=`, `<`, `<=`, `>`, `>=`, `{"read":v,"in_range":[low,high]}`, `{"read":v,"in_set":[n, ...]}`, `{"overlaps":[t,t]}` or `{"inside":[t,t]}` (RULE-18).
+- A **key set** is `"any"` or a list of 1 to `MAX_KEYS_PER_TRIGGER` keys, each `{"char":"a"}` (one Unicode scalar value, a letter in lower case), `{"name":"Enter"}` (a `KeyName` of the schema) or `{"physical":"a"}` (RULE-10); in a rule with `rows`, the inner value MAY be `{"row":"p0"}` to `{"row":"p3"}`.
+- A **target** is `"page"`, `{"control":n}`, `{"object":n}`, `{"rect":"name"}`, or in the pointer triggers `{"control":"any"}` or `{"object":"any"}` (RULE-12); in a rule with `rows` a trigger's `n`, and in a group's `animate` operation any target's `n`, MAY be `{"row":"p0"}` to `{"row":"p3"}`, or in an operation `{"fired":"target"}`, each optionally with `"plus":k`.
+- **A row** is an object with any of `p0` to `p3` (absent ones are 0), each a signed 32-bit integer or a key written as in a key set (`{"char":…}`, `{"name":…}`, `{"physical":…}`), which stands for that key's code.
+- **`when`** is a condition: `{"and":[c, ...]}`, `{"or":[c, ...]}`, `{"not":c}`, `{"read":v,"op":"==","value":n}` with `op` one of `==`, `!=`, `<`, `<=`, `>`, `>=` and `value` an integer or `{"plus":k,"row":"p0"}`, `{"read":v,"in_range":[low,high]}`, `{"read":v,"in_set":[n, ...]}`, `{"overlaps":[t,t]}` or `{"inside":[t,t]}` (RULE-18).
 - A **value** `v` is an object tagged by `of`:
 
 | `of` | Other fields | Space |
 |---|---|---|
-| `variable` | `name` | 1 |
+| `variable` | `variable` (`"v0"` to `"v15"`) | 1 |
 | `key` | `key` (one key, as in a key set) | 2 |
 | `button` | `button` (0 to 2) | 2 |
 | `pointer` | `property`: `over`, `x`, `y` | 2 |
 | `keys_down` | none | 2 |
-| `timer` | `name` (a timer's name, or `null` for the page timer); `property`: `running`, `elapsed` | 3 |
+| `timer` | `timer` (`"t0"` to `"t7"` or `"page"`); `property`: `running`, `elapsed` | 3 |
 | `target` | `target`; `property`: `exists`, `shown`, `frame`, `x`, `y`, `look`, `layer`, `order`, `cycling`, `inside` | 4 |
 | `sound` | `channel` (0 to 3); `property`: `playing`, `level`, `handle`, `gain`, `local` | 5 |
-| `synth` | `channel` (0 to 3); `family` (`synth6581`, `synth8580`, `synth7`, `synth106`, `synth60`, `synthd`, `synth53`, `synth52`, `synth51`, `synth8`, `synth80`); `part` (1 to 16; for the synth6581 family the voice, 1 to 3); `property`: `program`, `notes`, `note`, `velocity`, `field`, `envelope_stage`, `envelope_level`, `voices`, `controller`, `bend`; and with `note` or `velocity` a `key` (0 to 127), with `field` a `field` (a name of appendix A for the family), with `controller` a `controller` (0 to 127) | 6 |
+| `synth` | `channel` (0 to 3); `family`; `part` (1 to 16; for the synth6581 family the voice, 1 to 3); `property`: `program`, `notes`, `note`, `velocity`, `field`, `envelope_stage`, `envelope_level`, `voices`, `controller`, `bend`; and with `note` or `velocity` a `key` (0 to 127), with `field` a `field` (a name of appendix A for the family), with `controller` a `controller` (0 to 127) | 6 |
+| `fired` | `property`: `key`, `target`, `row`, `cue`, `p0`, `p1`, `p2`, `p3` | 7 |
+| `sequence` | `sequence` (a sequence's name); `property`: `running`, `passes`, `position` | 8 |
 
-- **`do`** is a list of 0 to 16 actions, each tagged by `action`:
-
-| `action` | Other fields |
-|---|---|
-| `midi` | `channel` (the audio channel, 0 to 3); `message`: one of `{"event":"note_on","channel":1..16,"key":0..127,"velocity":0..127}`, `{"event":"note_off", ...}` with the same fields, `{"event":"control_change","channel","controller":0..127,"value":0..127}`, `{"event":"program_change","channel","program":0..127}`, `{"event":"pitch_bend","channel","value":0..16383}` — the schema's event shapes for a family without `time_us` |
-| `play` | `channel`; `handle` (0 to 255); `generation` (0 to 65,535); `gain` (0 to 100); `fade_ms` (0 to 10,000); `loop` (boolean) |
-| `stop` | `channel`; `fade_ms` |
-| `gain` | `channel`; `gain`; `fade_ms` |
-| `show`, `hide`, `stop_cycle` | `target` (a control or an object) |
-| `look` | `target`; `look`: `normal`, `hover`, `pressed`, `alternative` |
-| `set` | `variable` (a name); `value` |
-| `add` | `variable`; `amount` |
-| `start_timer`, `stop_timer` | `timer` (a name) |
-| `enable`, `disable` | `rules` (a list of 1 to 64 rule names) |
-| `send` | `value` (a value, or `null` for the trigger's own event, the default) |
-| `move` | `target` (an object); `x`, `y` (−32,768 to 32,767); `relative` (boolean, default `false`) |
-| `order` | `target`; `layer` (0 to 3, or `null` to keep it); `order` (−128 to 127) |
-| `frame` | `target`; `frame` (0 to 15) |
-| `cycle` | `target`; `first`, `last` (0 to 15, `first ≤ last`); `period` (1 to 3,600 ticks); `once` (boolean, default `false`) |
-
-- **Reason and source.** DEC-6522 item 9; DEC-6462 (the server is where the meaning lives; the kits send this shape and hold no logic).
+- **A group** is `{"name":…,"commands":[…]}` with 1 to `MAX_GROUP_COMMANDS` commands. **A command is a program message without its `connections`, `page` and `sub`**, which the table supplies: one of the `sound` kinds `play`, `stop` and `gain` (as version 14 has them, `play` without `page`, `after` false), `local_midi`, `animate`, `sprites`, `naplps_objects`, `variable`, `timer`, `report`, `run` and `sequence` (RULE-114; animation.md ANIM-21). Any other message type in a group is refused (`invalid_group`). In a group, and nowhere else, a field that RULE-106 lists MAY be given as an **amount** in place of an integer: `{"plus":k,"variable":"v3"}`, `{"plus":k,"row":"p1"}` or `{"plus":k,"fired":"key"}` (`key`, `target`, `row` or `cue`), `plus` defaulting to 0. The fields are: a `local_midi` message's `key`, `velocity`, `controller`, `value` and `program`; `play`'s and `gain`'s `gain` and `fade_ms`, and `stop`'s `fade_ms`; and an `animate` operation's `x`, `y`, `frame`, `look` (as its number 0 to 3), `order` and `period`.
+- **A sequence** is `{"name":…,"length":n,"repeat":r,"steps":[{"tick":k,"run":"group"}, …]}` (RULE-103): `length` 1 to `MAX_SEQUENCE_TICKS`, `repeat` 0 (until stopped) or 1 to `MAX_SEQUENCE_REPEAT`, 1 to `MAX_SEQUENCE_STEPS` steps in ascending `tick` below `length`.
+- **Reason and source.** DEC-6522 item 9; DEC-6462 (the server is where the meaning lives; the kits send this shape and hold no logic), which is why `do` and `echo` are made into groups by the server and not, as DEC-6587 item 9 first proposed, by each kit (section 15, item 36); DEC-6587 items 1, 5 and 7.
 - **Verification.** The server's protocol tests accept each worked example of section 7.5 and refuse each fault of RULE-39 with the stated rule and path.
 
+**RULE-114 [neoteletext-app-server; engine: neoteletext-web]. The commands as program messages.**
+- **Statement.** Each command a group may hold is also a message a program may send directly, for the connections named that have the page selected; the server encodes the same record either way, with one function. Beside `sound` (`play`, `stop`, `gain`) and animation.md's `animate`, `sprites` and `naplps_objects`, protocol 15 adds:
+
+```json
+{"type":"local_midi","connections":[7],"page":"101","sub":"0001","channel":0,
+ "message":{"event":"note_on","channel":1,"key":60,"velocity":100}}
+{"type":"variable","connections":[7],"page":"101","sub":"0001","op":"set","variable":"v0","value":4}
+{"type":"variable","connections":[7],"page":"101","sub":"0001","op":"add","variable":"v0","value":{"plus":0,"variable":"v1"}}
+{"type":"variable","connections":[7],"page":"101","sub":"0001","op":"set","variable":"v2","value":{"read":{"of":"sound","channel":0,"property":"level"}}}
+{"type":"variable","connections":[7],"page":"101","sub":"0001","op":"wrap","variable":"v0","low":0,"high":3}
+{"type":"variable","connections":[7],"page":"101","sub":"0001","op":"clear","variable":"all"}
+{"type":"timer","connections":[7],"page":"101","sub":"0001","op":"start","timer":"t0"}
+{"type":"report","connections":[7],"page":"101","sub":"0001","value":{"of":"variable","variable":"v0"}}
+{"type":"run","connections":[7],"page":"101","sub":"0001","group":"flash","at":null}
+{"type":"run","connections":[7],"page":"101","sub":"0001","group":"flash","at":{"tick":5400}}
+{"type":"run","connections":[7],"page":"101","sub":"0001","group":"flash","at":{"after":30}}
+{"type":"run","connections":[7],"page":"101","sub":"0001","group":"flash","at":{"beat":{"timer":"t0","ticks":30}}}
+{"type":"sequence","connections":[7],"page":"101","sub":"0001","op":"start","sequence":"pulse"}
+{"type":"sequence","connections":[7],"page":"101","sub":"0001","op":"stop","sequence":null}
+```
+
+- `local_midi`'s `message` is one of `{"event":"note_on","channel":1..16,"key":0..127,"velocity":0..127}`, `{"event":"note_off", …}` with the same fields, `{"event":"control_change","channel","controller":0..127,"value":0..127}`, `{"event":"program_change","channel","program":0..127}`, `{"event":"pitch_bend","channel","value":0..16383}` — the schema's event shapes for a family without `time_us`. `variable`'s `op` is `set`, `inc`, `dec`, `add`, `sub`, `toggle`, `min`, `max`, `wrap` or `clear`; `variable` is `"v0"` to `"v15"`, or `"all"` with `clear`; `value` (for `set`, `add`, `sub`, `min`, `max`) is an integer, `{"plus":k,"variable":"vN"}`, `{"plus":k,"fired":…}` (any `fired` property, in a group only), or for `set` alone `{"read":v}`; `wrap` takes `low` and `high`. `timer`'s `op` is `start` or `stop`. `report`'s `value` is a value, or `null` (the default, and allowed only in a group) for the firing. `run`'s `at` is `null` (now), `{"tick":n}`, `{"after":n}` or `{"beat":{"timer":…,"ticks":n}}` (RULE-102). `sequence`'s `sequence` is a name, or `null` with `stop` for all.
+- A `run` or `sequence` sent directly names a group or sequence of the table the server last sent that connection for that page, which the server keeps the names of (RULE-36, RULE-40); an unknown name is refused (`unknown_name`) for that connection. A message for a page a connection does not have selected is not sent to it.
+- **Reason and source.** DEC-6587 item 1: "the rule table's own housekeeping … is therefore made of protocol commands too, and the server may send any of them directly as well."
+- **Verification.** Server tests: each example's record equals the same command's bytes inside a group; an amount outside a group refused (`invalid_command`); a `report` of the firing sent directly refused.
+
 **RULE-36 [neoteletext-app-server]. Names exist only between a program and the server.**
-- **Statement.** Rule, variable, timer and rectangle names MUST match `[a-z][a-z0-9_]{0,31}` and be distinct within their kind in a table; `page` is not allowed as a timer's or a rectangle's name. The server turns each name into its number (its place in the table's list, from 0) when it encodes the record, and turns numbers back into names in every message it gives the program. No name is sent to a receiver.
+- **Statement.** Rule, group, sequence, row-set and rectangle names MUST match `[a-z][a-z0-9_]{0,31}` and be distinct within their kind in a table; `page` is not allowed as a rectangle's name. The server turns each name into its number (its place in the table's list, from 0; unnamed groups after the named) when it encodes the table, and turns numbers back into names in every message it gives the program. No name is sent to a receiver. Variables and timers have no names: `v0` to `v15` and `t0` to `t7` are the same in every message of every page (DEC-6587 item 4); a program that wants `octave` for `v0` writes that in its own code.
 - **Reason and source.** A program's author reads names; the record carries numbers so that the receiver parses no text (DEC-6522 item 9).
 - **Verification.** Server tests: a duplicate and an unknown name refused; an event's rule number reported by its name.
 
-**RULE-37 [neoteletext-app-server]. What `send` and `echo` give the program.**
-- **Statement.** When a receiver reports a rule's firing (RULE-46), the server MUST give the program, for the connection it came from:
-  - for an input trigger, the `input` message of version 13 unchanged in its `event` shape (`key`, `mouse`, `wheel`, `touch`, `pick`, `hover`, `drawing_hover`, `text`, `compose`, `paste`, `focus`, `blur`), with three added fields: `rule`, the name of the rule that sent it; `tick`, the page tick at which it fired; and `target`, the target the pointer was inside for a pointer trigger whose rule named a control, an object or a rectangle, else `null`. A pointer event on a page drawn by the ReGIS renderer is followed, as in version 13, by the `input` message of its `pick`, with the same `rule` and `tick`.
+**RULE-37 [neoteletext-app-server]. What `report` gives the program.**
+- **Statement.** When a receiver reports (RULE-46), the server MUST give the program, for the connection it came from:
+  - for a report of a firing with an input event, the `input` message unchanged in its `event` shape (`key`, `mouse`, `wheel`, `touch`, `pick`, `hover`, `drawing_hover`, `text`, `compose`, `paste`, `focus`, `blur`), with the fields `rule`, the name of the rule that fired; `row`, the place of the firing row within the rule's row set, or `null`; `tick`, the page tick the event belongs to; and `target`, the target the pointer was inside for a pointer trigger whose rule named a control, an object or a rectangle, else `null`. A pointer event on a page drawn by the ReGIS renderer is followed, as before, by the `input` message of its `pick`, with the same `rule`, `row` and `tick`.
 
     ```json
-    {"type":"input","connection":7,"page":"101","sub":"0001","lost":false,"rule":"keys","tick":412,"target":null,
+    {"type":"input","connection":7,"page":"101","sub":"0001","lost":false,"rule":"typed","row":null,"tick":412,"target":null,
      "event":{"kind":"key","action":"press","key":"a","base":null,"mods":0,"text":"a"}}
     ```
-  - for `open`, `close`, `becomes`, `every` and `after`, and for a `send` of a value, the new message `rule_event`:
+  - for a report of a firing with no event, and for a report of a value, the message `rule_event`, whose `rule` is `null` when the run was not made by a rule (a command the server sent, or a sequence or armed run it started):
 
     ```json
-    {"type":"rule_event","connection":7,"page":"101","sub":"0001","rule":"hot","tick":9031,"event":{"kind":"fired"}}
-    {"type":"rule_event","connection":7,"page":"101","sub":"0001","rule":"report","tick":9031,
-     "event":{"kind":"value","read":{"of":"variable","name":"octave"},"value":5}}
+    {"type":"rule_event","connection":7,"page":"101","sub":"0001","rule":"hot","row":null,"tick":9031,"event":{"kind":"fired"}}
+    {"type":"rule_event","connection":7,"page":"101","sub":"0001","rule":null,"row":null,"tick":9031,
+     "event":{"kind":"value","read":{"of":"variable","variable":"v0"},"value":5}}
     ```
-- A program therefore receives an `input` message only for an event some rule of the page's table sent. Events arrive in the order the receiver sent them.
-- **The table that names a report.** A report's rule, values and targets are turned into names with the RULES record the connection was sent at the generation the report carries; the server keeps the last four records it sent a connection for this. A report of a generation the connection was never sent, or of a rule or value that table does not have, is given to no program and is counted with stale input. A report with no input event (a firing, or a value) is given to the program whatever the connection has selected since, so that a `close` rule's report arrives; an input event stamped with a page that is no longer the connection's selection is dropped, as in version 13.
-- **A release the server itself gives.** When a connection closes, or its selection changes, while a key, a button or a contact is held, the server gives the program the release marked `lost` (the engine's REQ-207) only for a press that some rule sent, with that press's `rule` and `tick`, so that a program still hears nothing no rule asked for.
-- **Reason and source.** DEC-6522 item 8 (a) and (b); keeping `input`'s shape means every program written for version 13 reads version 14's input without change.
-- **Verification.** Server tests: each input kind carried in a RULE_EVENT gives the same `event` object version 13 gave for the bare event; the two `rule_event` shapes.
+- **The table that names a report.** A report's rule, values and targets are turned into names with the names of the table the connection was sent at the generation the report carries; the server keeps the names of the last four tables it sent a connection while that connection stands, for this. A report of a generation the connection was never sent, or of a rule or value that table does not have, is given to no program and is counted with stale input. A report with no input event (a firing, or a value) is given to the program whatever the connection has selected since, so that a `close` rule's report arrives; an input event stamped with a page that is no longer the connection's selection is dropped, as in version 13.
+- **A release the server itself gives.** When a connection closes, or its selection changes, while a key, a button or a contact is held, the server gives the program the release marked `lost` (the engine's REQ-207) only for a press that some rule reported, with that press's `rule`, `row` and `tick`, so that a program still hears nothing no rule asked for.
+- A program therefore receives an `input` message only for an event some rule of the page's table reported. Events arrive in the order the receiver sent them.
+- **Reason and source.** DEC-6522 item 8 (a) and (b); keeping `input`'s shape means every program's handling of input is unchanged.
+- **Verification.** Server tests: each input kind carried in a RULE_EVENT gives the same `event` object version 13 gave for the bare event; the `rule_event` shapes; a row's place reported.
 
 **RULE-38 [neoteletext-app-server]. The state query and its answer.**
-- **Statement.** A program asks one connection for one page's local state with `{"type":"query_state","connection":7,"page":"101","request":42}`, where `request` is 1 to 4,294,967,295 and is the program's own number for the question. The server sends the connection a RULES_QUERY record (RULE-47) when that connection has the page selected, and otherwise refuses with `wrong_page`. It MUST refuse a second query for the same connection and page within one second with `too_frequent`. The receiver answers once (RULE-47) and the server gives the program:
+- **Statement.** A program asks one connection for one page's local state with `{"type":"query_state","connection":7,"page":"101","sub":"0001","request":42}`, where `request` is 1 to 4,294,967,295 and is the program's own number for the question. The server sends the connection a RULES_QUERY record (RULE-47) when that connection has the page selected, and otherwise refuses with `wrong_page`. It MUST refuse a second query for the same connection and page within one second with `too_frequent`. The receiver answers once (RULE-47) and the server gives the program:
 
 ```json
 {"type":"page_state","connection":7,"page":"101","sub":"0001","request":42,"tick":9120,"table":true,
- "variables":{"octave":5},
- "timers":{"beat":{"running":true,"elapsed":18}},
- "enabled":["c_down","c_up","hot"],
+ "variables":[4,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+ "timers":{"t0":{"running":true,"elapsed":18}},
+ "sequences":{"pulse":{"running":true,"passes":3,"position":12}},
+ "armed":1,
  "targets":[{"target":{"object":301},"exists":true,"shown":true,"look":"normal","frame":0,"x":700,"y":380,"layer":2,"order":0,"cycling":false}],
  "values":[{"read":{"of":"sound","channel":0,"property":"level"},"value":41}]}
 ```
 
-- `table` is `false`, and every list empty, when the page has no table in that view. `targets` holds every control and object the table names, in the order first named; `values` every distinct value the table's conditions and sends read, as the snapshot of the answering tick holds them. When no answer comes within 10 seconds, or the connection ends or leaves the page first, the server MUST give the program a `refused` message with the rule `not_answered` and the query's `request`, so that a missing answer is never mistaken for an empty state.
-- **Reason and source.** DEC-6522 item 8 (c): for resynchronisation after a reconnect and for debugging, not a stream.
+- `variables` is always the sixteen values, `v0` first. `timers` lists the timers that are running; `sequences` every sequence of the table by name; `armed` is the count of armed runs waiting. `table` is `false`, and the lists empty and the variables zero, when the page has no table in that view. `targets` holds every control and object the table names by a constant, in the order first named; `values` every distinct value the table reads, as the snapshot of the answering tick holds them. When no answer comes within 10 seconds, or the connection ends or leaves the page first, the server MUST give the program a `refused` message with the rule `not_answered` and the query's `request`.
+- The query is for a program that wants to read a page's values, and for debugging. It is **not** a means of resynchronising: after a disconnect there is nothing to read (RULE-111).
+- **Reason and source.** DEC-6522 item 8 (c), as DEC-6587 item 9 keeps it.
 - **Verification.** Server tests: the answer's fields from a recorded PAGE_STATE; the rate refusal; the timeout refusal.
 
 **RULE-39 [neoteletext-app-server]. Refusals.**
-- **Statement.** A faulty `rules` or `query_state` message MUST be refused whole with the `refused` message of version 13 (`path`, `rule`, `detail`, `message`), and nothing of it sent to any receiver. Beside the existing rules (`unknown_field`, `missing_field`, `wrong_type`, `out_of_range`, `too_long`, `duplicate`, `not_in_index`, `unknown_connection`, `wrong_page`), the schema's `Rule` gains:
+- **Statement.** A faulty message of this section MUST be refused whole with the `refused` message (`path`, `rule`, `detail`, `message`), and nothing of it sent to any receiver. Beside the existing rules (`unknown_field`, `missing_field`, `wrong_type`, `out_of_range`, `too_long`, `duplicate`, `not_in_index`, `unknown_connection`, `wrong_page`), the schema's `Rule` has:
 
 | `rule` | When |
 |---|---|
-| `rules_over_limit` | the table exceeds a limit of section 9 that the schema cannot state: more than 8 terms, 16 nodes or 3 levels in a condition; more than 64 distinct values or 64 distinct targets in the table; an encoded table over `MAX_TABLE_BYTES`. `detail` names the limit and its value |
-| `invalid_rules` | a shape fault the schema cannot state: a rule with no actions and no `echo`; a `becomes` rule with a `when`; `first` above `last`; `low` above `high`; `min` above `max` or `initial` outside them; "any" where a single target is required; a `page` target in an action; a sub-code repeated in `subpages` |
-| `unknown_name` | a rule, variable, timer or rectangle name that the table does not declare |
+| `rules_over_limit` | the table exceeds a limit of section 9 that the schema cannot state: a condition's terms, nodes or levels; the table's distinct values or targets; the rows, or the groups counting the unnamed; the groups' bytes; a command's bytes; the rule-and-row pairs; an encoded table over `MAX_TABLE_BYTES`. `detail` names the limit's constant and its value (REQ-6608) |
+| `invalid_rules` | a shape fault the schema cannot state: a rule with both `run` and `do` or neither; a `becomes` rule without a `when` or with a second trigger; `first` above `last`; `low` above `high`; "any" where a single target is required; a `page` target in an operation; a `{"row":…}` in a rule without `rows`; a row whose parameter is not a valid key or target number where a trigger uses it; a sequence's steps out of order or beyond its length |
+| `invalid_group` | a group fault: a message type RULE-119 forbids; a `play` with `page`, `after` true or for the whole service; an amount in a field that takes none, or a variable as a target's number; groups that run each other in a ring; nesting deeper than `MAX_GROUP_DEPTH`; a run that would apply more than `MAX_RUN_COMMANDS` commands. `detail` names the group and the fault |
+| `invalid_command` | a command sent directly that is allowed only in a group: an amount, a `fired` value, a `report` of the firing |
+| `unknown_name` | a rule, group, sequence, row-set or rectangle name that the table does not have |
 | `duplicate_name` | a name declared twice within its kind |
 | `unknown_parameter` | a `field` that the named family's table (appendix A) does not have |
 | `too_frequent` | a `query_state` within one second of the last for that connection and page |
 | `not_answered` | a `query_state` that got no answer (RULE-38) |
 
-- The existing rules answer the faults this table does not name: `page` as a timer's or a rectangle's name is `reserved`; a key name the engine's table of keys does not have is `not_listed`; a `synth` value without the `key`, `field` or `controller` its property needs is `missing_field`, and with one its property does not use is `invalid_rules`; a letter of a `char` or `physical` key written in upper case is `invalid_rules`; a list longer than the schema states is `too_long`; a name that does not match RULE-36's pattern is `wrong_type`.
+- The existing rules answer the faults this table does not name: `page` as a rectangle's name is `reserved`; a key name the engine's table of keys does not have is `not_listed`; a `synth` value without the `key`, `field` or `controller` its property needs is `missing_field`, and with one its property does not use is `invalid_rules`; a letter of a `char` or `physical` key written in upper case is `invalid_rules`; a list longer than the schema states is `too_long`; a name that does not match RULE-36's pattern is `wrong_type`.
 - The server MUST also check every table with `neoteletext_rules::check` — the same code the receiver decodes with — after encoding it, and refuse with `invalid_rules` anything that code refuses, so that no receiver is ever sent a table it would refuse (RULE-59).
 - **Reason and source.** DEC-6522 item 10: "refused whole, and the refusal is reported, never silently ignored"; the server's existing practice for ReGIS (`invalid_regis`).
 - **Verification.** One server test for each row, asserting `rule` and `path`; the kits' `server-rules` tests hold the kits to the same refusals.
 
-**RULE-40 [neoteletext-app-server]. The server keeps and sends tables per connection.**
-- **Statement.** The server MUST keep, for each connection and page, the newest table the program gave an audience that includes the connection, at most `MAX_KEPT_TABLES` (64) pages a connection, the oldest dropped first. An audience is the connections open when the message arrives: a `rules` message to `"all"` is kept by every connection open at that moment, and a connection that opens afterwards has the channel's default table (RULE-53), or none, until the program gives it one, as a `page` sent to `"all"` reaches no connection opened later. It MUST send a connection the page's RULES record (RULE-41): at every selection of the page, before the page's own packets and records, so that the table is in place when the page opens (selecting another sub-page of the same page sends nothing, so the table's state is kept, RULE-17); and at once when the program sends a new table, or removes it, while the connection has the page selected. A table that is byte for byte the one the connection already holds for its selected page is kept and not sent again, because sending it would reset the page's variables and timers and fire its `open` rules (RULE-2). Each record sent to a connection for a page carries a generation one above the last sent to that connection for that page, starting at 1 and passing from 65,535 to 1. A table is never sent to a connection that has another page selected.
-- **Reason and source.** A viewer who joins late or reconnects needs the table as they need the page; one table per page per view (RULE-2).
-- **Verification.** Server tests: selection sends the table first; a late joiner gets it; a replacement raises the generation; the same table given again is not sent.
+**RULE-40 [neoteletext-app-server]. The server sends a table when it is given one, keeps none for later, and drops everything at a disconnect.**
+- **Statement.** The server MUST send a connection a page's table at once when the program gives it, to each connection of the audience that has that page (page number and sub-code) selected at that moment, and to no other. It MUST NOT keep a table, an animation state, sprites, objects or a sheet to send a viewer who selects the page later, comes back to it or reconnects: a program is told of every selection (`selected`, with its `page` and `sub`) and sends the page afresh then, its table with it, and that is all a late or returning viewer is sent (RULE-111). Going from one sub-code to another is a selection like any other. For each connection the server keeps only: the page it has selected; whether a table is in place there, and the names of that table (for RULE-36 and RULE-114); the default table's use (RULE-53); and a generation counter. Each RULES record sent on a connection carries a generation one above the last sent on that connection, starting at 1 and passing from 65,535 to 1. At a selection the server sends first, before the program is told, the channel's default table (RULE-53) or a RULES record that says the page has no table, so that the page starts from a known state; the program's own table then replaces it.
+- **Reason and source.** DEC-6587 item 3 (the owner: "after a disconnect i think EVERYTHING should be dropped and the page reloads") and item 9 ("a page's opening state is what the page sends"); DEC-6599 items 2 and 3. It replaces the first form's tables kept for 64 pages a connection.
+- **Verification.** Server tests: a table to `"all"` reaches only the connections with that page and sub-code selected; a connection that selects the page later is sent the default or the empty record and nothing of an earlier `rules` message; a reconnecting viewer is sent nothing that was kept; the generation rises.
 
 ### 7.5 Worked examples
 
-Each is a complete `rules` message that the server accepts. The seventh, the music player's whole table, is in section 14.
+Each is a complete message the server accepts (`docs/rules-examples.jsonl` holds them one a line). The music player's whole table is in section 14.
 
-**Example 1: a text field's keys are sent, and nothing else.** The page takes typed text, the Enter key and the Backspace key; a click, a move and the wheel are not sent.
+**Example 1: a text field's keys are sent, and nothing else.**
 
 ```json
-{"type":"rules","connections":"all","page":"120","table":{"rules":[
-  {"name":"typed","on":{"event":"key","keys":"any","repeat":true},"do":[{"action":"send"}]},
-  {"name":"composed","on":{"event":"text"},"do":[{"action":"send"}]}]}}
+{"type":"rules","connections":"all","page":"120","sub":"0000","table":{"rules":[
+  {"name":"typed","on":[{"event":"key","keys":"any","repeat":true},{"event":"text"}],"do":[{"type":"report"}]}]}}
 ```
 
-**Example 2: a button that lights at once and tells the channel.** Control 3 takes its pressed look locally while it is held; the release is echoed.
+**Example 2: a button that lights at once and tells the channel.** Control 3 takes its pressed look locally while it is held; the release is reported.
 
 ```json
-{"type":"rules","connections":"all","page":"130","table":{"rules":[
-  {"name":"vote_down","on":{"event":"press","target":{"control":3},"button":0},"do":[{"action":"look","target":{"control":3},"look":"pressed"}]},
-  {"name":"vote","on":{"event":"release","target":{"control":3},"button":0},"do":[{"action":"look","target":{"control":3},"look":"normal"}],"echo":true}]}}
+{"type":"rules","connections":"all","page":"130","sub":"0000","table":{"rules":[
+  {"name":"vote_down","on":{"event":"press","target":{"control":3},"button":0},
+   "do":[{"type":"animate","ops":[{"action":"look","target":{"control":3},"look":"pressed"}]}]},
+  {"name":"vote","on":{"event":"release","target":{"control":3},"button":0},"echo":true,
+   "do":[{"type":"animate","ops":[{"action":"look","target":{"control":3},"look":"normal"}]}]}]}}
 ```
 
-**Example 3: a counter held to a range, reported when it changes.** The arrow keys change `volume` between 0 and 10; the channel is told the new value two ticks after the key's tick, when the report rule's timer fires: the timer runs from the tick after the key's (RULE-15), and `after 1` is due one tick after that.
+**Example 3: a counter held to a range, reported in the group that changes it.** The arrow keys change `v0` between 0 and 10, starting at 5; the channel is told the new value by the same group, because a `report` of a variable reads its working value.
 
 ```json
-{"type":"rules","connections":"all","page":"140","table":{
- "variables":[{"name":"volume","min":0,"max":10,"initial":5}],
- "timers":[{"name":"report","running":false}],
+{"type":"rules","connections":"all","page":"140","sub":"0000","table":{
+ "groups":[
+  {"name":"up","commands":[{"type":"variable","op":"inc","variable":"v0"},{"type":"variable","op":"min","variable":"v0","value":10},
+                           {"type":"report","value":{"of":"variable","variable":"v0"}}]},
+  {"name":"down","commands":[{"type":"variable","op":"dec","variable":"v0"},{"type":"variable","op":"max","variable":"v0","value":0},
+                             {"type":"report","value":{"of":"variable","variable":"v0"}}]}],
  "rules":[
-  {"name":"up","on":{"event":"key","keys":[{"name":"ArrowUp"}],"repeat":true},"do":[{"action":"add","variable":"volume","amount":1},{"action":"start_timer","timer":"report"}]},
-  {"name":"down","on":{"event":"key","keys":[{"name":"ArrowDown"}],"repeat":true},"do":[{"action":"add","variable":"volume","amount":-1},{"action":"start_timer","timer":"report"}]},
-  {"name":"tell","on":{"event":"after","ticks":1,"timer":"report"},"do":[{"action":"send","value":{"of":"variable","name":"volume"}}]}]}}
+  {"name":"start","on":{"event":"open"},"do":[{"type":"variable","op":"set","variable":"v0","value":5}]},
+  {"name":"up","on":{"event":"key","keys":[{"name":"ArrowUp"}],"repeat":true},"run":"up"},
+  {"name":"down","on":{"event":"key","keys":[{"name":"ArrowDown"}],"repeat":true},"run":"down"}]}}
 ```
 
-**Example 4: a sprite that walks with the arrow keys, and a collision.** Object 10 moves 8 pixels a press while the key repeats; when it overlaps object 20 a sound plays and the channel is told.
+**Example 4: a sprite that walks with the arrow keys, and a collision.** Object 10 moves 8 pixels a press while the key repeats; when it overlaps object 20 a sound plays, object 20 is hidden and the channel is told.
 
 ```json
-{"type":"rules","connections":"all","page":"150","table":{"rules":[
-  {"name":"left","on":{"event":"key","keys":[{"name":"ArrowLeft"}],"repeat":true},"do":[{"action":"move","target":{"object":10},"x":-8,"y":0,"relative":true}]},
-  {"name":"right","on":{"event":"key","keys":[{"name":"ArrowRight"}],"repeat":true},"do":[{"action":"move","target":{"object":10},"x":8,"y":0,"relative":true}]},
-  {"name":"hit","on":{"event":"becomes","condition":{"overlaps":[{"object":10},{"object":20}]}},
-   "do":[{"action":"play","channel":1,"handle":5,"generation":1,"gain":100,"fade_ms":5,"loop":false},{"action":"hide","target":{"object":20}}],"echo":true}]}}
+{"type":"rules","connections":"all","page":"150","sub":"0000","table":{"rules":[
+  {"name":"left","on":{"event":"key","keys":[{"name":"ArrowLeft"}],"repeat":true},
+   "do":[{"type":"animate","ops":[{"action":"move","target":{"object":10},"x":-8,"y":0,"relative":true}]}]},
+  {"name":"right","on":{"event":"key","keys":[{"name":"ArrowRight"}],"repeat":true},
+   "do":[{"type":"animate","ops":[{"action":"move","target":{"object":10},"x":8,"y":0,"relative":true}]}]},
+  {"name":"hit","on":{"event":"becomes"},"when":{"overlaps":[{"object":10},{"object":20}]},"echo":true,
+   "do":[{"type":"sound","kind":"play","channel":1,"handle":5,"generation":1,"gain":100,"fade_ms":5,"duck":0,"loop":false,"after":false},
+         {"type":"animate","ops":[{"action":"hide","target":{"object":20}}]}]}]}}
 ```
 
 **Example 5: a blinking prompt and a timeout.** Object 7 cycles two frames every 30 ticks from opening; after ten seconds without a key the channel is told once.
 
 ```json
-{"type":"rules","connections":"all","page":"160","table":{
- "timers":[{"name":"idle","running":true}],
- "rules":[
-  {"name":"blink","on":{"event":"open"},"do":[{"action":"cycle","target":{"object":7},"first":0,"last":1,"period":30,"once":false}]},
-  {"name":"awake","on":{"event":"key","keys":"any"},"do":[{"action":"start_timer","timer":"idle"}]},
-  {"name":"asleep","on":{"event":"after","ticks":600,"timer":"idle"},"do":[{"action":"send"}]}]}}
+{"type":"rules","connections":"all","page":"160","sub":"0000","table":{"rules":[
+  {"name":"start","on":{"event":"open"},
+   "do":[{"type":"animate","ops":[{"action":"cycle","target":{"object":7},"first":0,"last":1,"period":30,"once":false}]},
+         {"type":"timer","op":"start","timer":"t0"}]},
+  {"name":"awake","on":{"event":"key","keys":"any"},"do":[{"type":"timer","op":"start","timer":"t0"}]},
+  {"name":"asleep","on":{"event":"after","ticks":600,"timer":"t0"},"do":[{"type":"report"}]}]}}
 ```
 
-**Example 6: a synthesizer's own state drives the picture.** While any note is down on part 1 of the synth106 sound on audio channel 0, object 50 is shown; when the filter's cutoff field passes 100 the alternative look is forced on object 51; a sub-page with the help text switches the note rules off.
+**Example 6: a synthesizer's own state drives the picture, and a mode.** While any note is down on part 1 of the synth106 sound on audio channel 0, object 50 is shown. The key H sets mode 1 (help), in which the gate rules do nothing; Escape sets mode 0.
 
 ```json
-{"type":"rules","connections":"all","page":"170","table":{"rules":[
-  {"name":"gate_on","on":{"event":"becomes","condition":{"read":{"of":"synth","channel":0,"family":"synth106","part":1,"property":"notes"},"op":">","value":0}},"do":[{"action":"show","target":{"object":50}}]},
-  {"name":"gate_off","on":{"event":"becomes","condition":{"read":{"of":"synth","channel":0,"family":"synth106","part":1,"property":"notes"},"op":"==","value":0}},"do":[{"action":"hide","target":{"object":50}}]},
-  {"name":"bright","on":{"event":"becomes","condition":{"read":{"of":"synth","channel":0,"family":"synth106","part":1,"property":"field","field":"vcf_frequency"},"op":">","value":100}},"do":[{"action":"look","target":{"object":51},"look":"alternative"}]},
-  {"name":"dull","on":{"event":"becomes","condition":{"read":{"of":"synth","channel":0,"family":"synth106","part":1,"property":"field","field":"vcf_frequency"},"op":"<=","value":100}},"do":[{"action":"look","target":{"object":51},"look":"normal"}]},
-  {"name":"open_filter","on":{"event":"wheel","target":{"object":51}},"do":[{"action":"send"}]}],
- "subpages":[{"sub":"0002","off":["gate_on","gate_off"]}]}}
+{"type":"rules","connections":"all","page":"170","sub":"0000","table":{"rules":[
+  {"name":"gate_on","on":{"event":"becomes"},
+   "when":{"and":[{"read":{"of":"variable","variable":"v0"},"op":"==","value":0},
+                  {"read":{"of":"synth","channel":0,"family":"synth106","part":1,"property":"notes"},"op":">","value":0}]},
+   "do":[{"type":"animate","ops":[{"action":"show","target":{"object":50}}]}]},
+  {"name":"gate_off","on":{"event":"becomes"},
+   "when":{"or":[{"read":{"of":"variable","variable":"v0"},"op":"!=","value":0},
+                 {"read":{"of":"synth","channel":0,"family":"synth106","part":1,"property":"notes"},"op":"==","value":0}]},
+   "do":[{"type":"animate","ops":[{"action":"hide","target":{"object":50}}]}]},
+  {"name":"help","on":{"event":"key","keys":[{"char":"h"}]},"do":[{"type":"variable","op":"set","variable":"v0","value":1}]},
+  {"name":"back","on":{"event":"key","keys":[{"name":"Escape"}]},"do":[{"type":"variable","op":"set","variable":"v0","value":0}]},
+  {"name":"open_filter","on":{"event":"wheel","target":{"object":51}},"do":[{"type":"report"}]}]}}
 ```
 
-## 8. The records and the input messages: push protocol version 9
+**Example 7: a sequence, a quantised start and a cue.** A metronome timer starts at opening. Space arms the group `go` for the timer's next beat of 30 ticks; `go` starts the sequence `fanfare`, three notes eight ticks apart, played twice. Each cue 1 of the song on audio channel 1 flashes object 9 by a sequence of its own.
 
-The server encodes each message for receivers as a record in the audio profile's record frame on data channel 12, packet 4/31 (the engine's REQ-AUD-003; DOC-1952): a header of version, type and a two-byte body length, the body, and a CRC-32, cut into as many fragments as it needs, the body at most 8,184 bytes (`MAX_FRAMED_BODY`). The types in use end at 20 (`STATE_KEEP_OFFER`); types 8 and 13 are retired or kept and are not taken. The browser's messages to the server are events of the input protocol (DOC-1931): the byte `0xFF`, a type, and for an extension type (`0x40` to `0x7F`) a varint length and a payload; the extension types in use end at `0x4A` (`STATE_OFFER`).
+```json
+{"type":"rules","connections":"all","page":"180","sub":"0000","table":{
+ "groups":[
+  {"name":"go","commands":[{"type":"sequence","op":"start","sequence":"fanfare"}]},
+  {"name":"n1","commands":[{"type":"local_midi","channel":0,"message":{"event":"note_on","channel":1,"key":60,"velocity":100}}]},
+  {"name":"n2","commands":[{"type":"local_midi","channel":0,"message":{"event":"note_off","channel":1,"key":60,"velocity":64}},
+                           {"type":"local_midi","channel":0,"message":{"event":"note_on","channel":1,"key":64,"velocity":100}}]},
+  {"name":"n3","commands":[{"type":"local_midi","channel":0,"message":{"event":"note_off","channel":1,"key":64,"velocity":64}},
+                           {"type":"local_midi","channel":0,"message":{"event":"note_on","channel":1,"key":67,"velocity":100}}]},
+  {"name":"n4","commands":[{"type":"local_midi","channel":0,"message":{"event":"note_off","channel":1,"key":67,"velocity":64}}]},
+  {"name":"lit","commands":[{"type":"animate","ops":[{"action":"show","target":{"object":9}}]}]},
+  {"name":"unlit","commands":[{"type":"animate","ops":[{"action":"hide","target":{"object":9}}]}]}],
+ "sequences":[
+  {"name":"fanfare","length":32,"repeat":2,"steps":[{"tick":0,"run":"n1"},{"tick":8,"run":"n2"},{"tick":16,"run":"n3"},{"tick":24,"run":"n4"}]},
+  {"name":"flash","length":6,"repeat":1,"steps":[{"tick":0,"run":"lit"},{"tick":5,"run":"unlit"}]}],
+ "rules":[
+  {"name":"start","on":{"event":"open"},"do":[{"type":"timer","op":"start","timer":"t0"}]},
+  {"name":"space","on":{"event":"key","keys":[{"char":" "}]},"do":[{"type":"run","group":"go","at":{"beat":{"timer":"t0","ticks":30}}}]},
+  {"name":"bar","on":{"event":"cue","channel":1,"number":1},"do":[{"type":"sequence","op":"start","sequence":"flash"}]}]}}
+```
 
-**RULE-41 [engine: neoteletext-web, neoteletext-rules]. The RULES record, type 21: header.**
-- **Statement.** Record type 21, `RULES`, carries one page's table in one record. Its body:
+## 8. The records and the input messages: push protocol version 10
+
+The server encodes each message for receivers as a record in the audio profile's record frame on data channel 12, packet 4/31 (the engine's REQ-AUD-003; DOC-1952): a header of version, type and a two-byte body length, the body, and a CRC-32, cut into as many fragments as it needs, the body at most 8,184 bytes (`MAX_FRAMED_BODY`). The first form took types 21 to 27 and the input extension events `0x4B` to `0x4D` (the engine's branch `rules-integrate`, `neoteletext_input::limits::VERSION` 9, subprotocol `neottx.9`), none of it deployed. The second form keeps those numbers for the records whose meaning survives, changes their bodies, and takes the next free record types, 28 to 33. It needs no new extension event: `0x4E` is the next free.
+
+| Type | Name | Second form | Requirement |
+|---|---|---|---|
+| 21 | `RULES` | changed: carries a page's table image in one or more fragments, with the sub-code | RULE-41 |
+| 22 | `RULES_QUERY` | changed: gains the sub-code | RULE-47 |
+| 23 | `ANIMATE` | changed: the sub-code "whichever is shown" is withdrawn | ANIM-6 |
+| 24, 25 | `SPRITES`, `NAPLPS_OBJECTS` | unchanged | ANIM-7, ANIM-11 |
+| 26 | `SHEET` | changed: gains the sub-code | ANIM-17 |
+| 27 | `FRAME` | unchanged | ANIM-2 |
+| 28 | `LOCAL_MIDI` | new | RULE-21 |
+| 29 | `VARIABLE` | new | RULE-99 |
+| 30 | `TIMER` | new | RULE-100 |
+| 31 | `REPORT` | new | RULE-22 |
+| 32 | `RUN` | new | RULE-102 |
+| 33 | `SEQUENCE` | new | RULE-103 |
+
+**RULE-41 [engine: neoteletext-web, neoteletext-rules]. The RULES record, type 21, and the table image.**
+- **Statement.** A page's table is one **image** of at most `MAX_TABLE_BYTES` bytes, sent in one or more RULES records. A record's body:
 
 | Bytes | Field | Values |
 |---|---|---|
 | 0–1 | page | `0x100` to `0x8FF` |
-| 2–3 | generation | 1 to 65,535 (RULE-40); a receiver that holds a table for the page replaces it when the generation differs |
-| 4 | format | 1 |
-| 5 | flags | bit 0: a table follows. Clear: the page has no table, and the body ends at byte 11 with every count 0. Bits 1 to 7 are 0 |
-| 6 | variables `V` | 0 to 32 |
-| 7 | timers `T` | 0 to 8 |
-| 8 | rectangles `R` | 0 to 16 |
-| 9 | rules `N` | 0 to 64 |
-| 10 | sub-page masks `S` | 0 to 16 |
-| 11 | reserved | 0 |
-| then | `V` variables, `T` timers, `R` rectangles, `N` rules, `S` sub-page masks, in that order (RULE-42 to RULE-45) | |
+| 2–3 | sub-code | `0x0000` to `0x3F7E` |
+| 4–5 | generation | 1 to 65,535 (RULE-40), the same in every fragment of one image |
+| 6 | flags | bit 0: a table follows. Clear: the page has no table; total and offset are 0 and the body ends at byte 11. Bits 1 to 7 are 0 |
+| 7 | reserved | 0 |
+| 8–9 | total | the image's length, 12 to `MAX_TABLE_BYTES` |
+| 10–11 | offset | the place of this fragment's first byte in the image |
+| 12– | data | 1 to `MAX_TABLE_FRAGMENT` bytes of the image |
 
-- The body ends exactly at the last sub-page mask. The whole body is at most `MAX_TABLE_BYTES` (8,184). The record is one of the channel's records, which the audio receiver leaves alone (`is_channel_type`).
-- The record's reader (`neoteletext_web::records::rules::read`) checks the page and the generation alone and gives the body on; the receiver decodes the body with `neoteletext_rules::decode`, so that a table it refuses is reported with its generation (RULE-48, fault 1). The record's writer checks the whole body with `neoteletext_rules::check`.
-- **Reason and source.** DEC-6522 item 9: decoded once into fixed arrays; one record so that a table is never half arrived.
-- **Verification.** Codec tests; the wire vectors of RULE-85.
+- A fragment with offset 0 begins an image and discards any image still incomplete for that page. Each later fragment MUST carry the same generation and total and an offset equal to the bytes already held; one that does not discards the incomplete image, and the receiver reports fault 1 (RULE-48). When the bytes held equal the total, the receiver decodes the image whole (RULE-70); until then the page keeps the table it had. A record with flag bit 0 clear removes the page's table at once. A table of at most `MAX_TABLE_FRAGMENT` bytes is one record. The records are among the channel's records, which the audio receiver leaves alone (`is_channel_type`), and inside an atomic frame they are held with the rest (ANIM-2).
+- **The image** begins with a header of 12 bytes:
 
-**RULE-42 [engine: neoteletext-rules]. Declarations.**
-- **Statement.** A variable is 12 bytes: `min`, `max`, `initial`, each a signed 32-bit integer. A timer is 1 byte: bit 0 set when it runs from opening, bits 1 to 7 zero. A rectangle is 8 bytes: `x`, `y`, `width`, `height`, each unsigned 16-bit, width and height at least 1. A sub-page mask is 10 bytes: the sub-code (2 bytes, `0x0000` to `0x3F7E`, no bit outside the thirteen a sub-code has) and a 64-bit mask whose bit `n` (bit 0 the least significant) switches rule `n` off; a bit at or above `N` MUST be 0.
+| Bytes | Field | Values |
+|---|---|---|
+| 0 | format | 2 |
+| 1 | reserved | 0 |
+| 2 | rectangles `R` | 0 to `MAX_RECTS` |
+| 3 | rows `W` | 0 to `MAX_ROWS` |
+| 4 | rules `N` | 0 to `MAX_RULES` |
+| 5 | groups `G` | 0 to `MAX_GROUPS` |
+| 6 | sequences `Q` | 0 to `MAX_SEQUENCES` |
+| 7 | reserved | 0 |
+| 8–9 | the bytes of the `G` groups together, as framed (RULE-45) | 0 to `MAX_GROUPS_BYTES` |
+| 10–11 | reserved | 0 |
+
+- then `R` rectangles, `W` rows, `N` rules, `G` groups and `Q` sequences, in that order (RULE-42 to RULE-45), and ends exactly at the last sequence.
+- The record's reader (`neoteletext_web::records::rules::read`) checks the page, the sub-code, the generation, the total and the offset alone and gives the fragment on; the receiver assembles the image and decodes it with `neoteletext_rules::decode`, so that a table it refuses is reported with its generation (RULE-48, fault 1). The server checks the whole image with `neoteletext_rules::check` before it cuts it into records.
+- **Reason and source.** DEC-6522 item 9 (decoded once into fixed arrays); DEC-6587 item 6: `MAX_GROUPS_BYTES` of groups do not fit one record's body (`MAX_FRAMED_BODY`), so the table is one image in fragments, decoded only when whole, and is still never half applied (section 15, item 37).
+- **Verification.** Codec tests; a table in one, two and four fragments; a fragment out of place discards the image and the old table stays; the wire vectors of RULE-85.
+
+**RULE-42 [engine: neoteletext-rules]. Rectangles and rows.**
+- **Statement.** A rectangle is 8 bytes: `x`, `y`, `width`, `height`, each unsigned 16-bit, width and height at least 1. A row is 16 bytes: `p0`, `p1`, `p2`, `p3`, each a signed 32-bit integer. (The first form's variable and timer declarations and sub-page masks are withdrawn: RULE-14, RULE-15, RULE-17.)
 - **Verification.** Codec tests of each bound.
 
-**RULE-43 [engine: neoteletext-rules]. A rule and its trigger.**
-- **Statement.** A rule is: a flags byte (bit 0 enabled at opening, bit 1 `echo`, bits 2 to 7 zero); the trigger's kind byte (the codes of RULE-9); the trigger's body; the condition (RULE-44); a count byte of actions, 0 to 16; the actions (RULE-45). The trigger bodies:
+**RULE-43 [engine: neoteletext-rules]. A rule and its triggers.**
+- **Statement.** A rule is: a flags byte (bit 0: it names rows; bits 1 to 7 zero); its group (1 byte, below `G`); when bit 0 is set, its first row (1 byte) and row count (1 byte, at least 1, first plus count at most `W`); a trigger count (1 byte, 1 to `MAX_TRIGGERS_PER_RULE`); that many triggers, each its kind byte (the codes of RULE-9) and body; and the condition (RULE-44). The sum, over the table's rules, of each rule's row count (1 for a rule that names none) MUST be at most `MAX_RULE_ROWS`. The trigger bodies:
 
 | Kinds | Body |
 |---|---|
-| 1 `key`, 2 `key_up` | flags (bit 0 `repeat`, kind 1 only; other bits 0); modifier mask; modifier value; key count `K`, 0 for any key, else 1 to 16; `K` keys of 5 bytes each: kind (1 character, 2 named, 3 physical) and a 32-bit code (a Unicode scalar value for kinds 1 and 3; a functional code that names a key, `neoteletext_input::keys::is_code`, for kind 2) |
+| 1 `key`, 2 `key_up` | flags (bit 0 `repeat`, kind 1 only; other bits 0); modifier mask; modifier value; key count `K`, 0 for any key, else 1 to `MAX_KEYS_PER_TRIGGER`; `K` keys of 5 bytes each: a kind byte and a 32-bit code |
+| 17 `held`, 18 `double` | flags (0); modifier mask; modifier value; ticks (unsigned 16-bit); key count and keys as above |
 | 3 `press`, 4 `release` | target (3 bytes: kind, 16-bit number); button (0, 1, 2 or 255) |
+| 19 `press_held`, 20 `double_press` | target; button; ticks (unsigned 16-bit) |
 | 5 `enter`, 6 `leave`, 14 `wheel` | target |
 | 13 `move` | target; flags (bit 0 `held`; other bits 0) |
 | 7 `open`, 8 `close`, 9 `becomes`, 12 `text`, 15 `focus`, 16 `blur` | empty |
-| 10 `every`, 11 `after` | timer (0 to `T − 1`, or 255); ticks (unsigned 32-bit, 1 to 216,000) |
+| 10 `every`, 11 `after` | timer (0 to 7, or 255); ticks (unsigned 32-bit, 1 to `MAX_TIMER_TICKS`) |
+| 21 `cue` | audio channel (0 to 3); cue number (0 to `MAX_CUE`, or 255 for any) |
 
-- A `becomes` rule's condition MUST have at least one node. In a trigger a target's kind is 0 to 3; kind 0 has number 0; kind 3's number is below `R`.
-- **Verification.** Codec tests; every reserved bit set is refused.
+- A key's kind byte is 1 (character), 2 (named) or 3 (physical) with the code a Unicode scalar value for kinds 1 and 3 and a functional code that names a key (`neoteletext_input::keys::is_code`) for kind 2; or, in a rule that names rows, that kind with bit 7 set (`0x81`, `0x82`, `0x83`), the code field then holding a parameter's index, 0 to 3. A target's kind is 0 to 3 (kind 0 has number 0; kind 3's number is below `R`); or, in a rule that names rows, kind 1, 2 or 3 with bit 7 set, the number field then holding a parameter's index. For every row such a rule names, each parameter so used MUST be a valid code or number for its kind, checked when the table is decoded. A `becomes` rule has one trigger and a condition of at least one node.
+- **Verification.** Codec tests; every reserved bit set is refused; the sum of row counts at `MAX_RULE_ROWS` accepted and one over refused.
 
 **RULE-44 [engine: neoteletext-rules]. Values and conditions.**
-- **Statement.** A value is 8 bytes: space (1 to 6), `a`, and `b`, `c`, `d` (unsigned 16-bit), with the meanings of RULE-23 to RULE-28; every unused field MUST be 0, and each field is checked against its space's ranges when decoded (a variable below `V`, a timer below `T` or 255, an audio channel 0 to 3, a part 0 to 15, a class 0 to 9, a key 0 to 127, a parameter number 0 to 255, a family code 12 to 18, a variant 0 to 2).
-- A condition is a count byte of nodes, 0 (no condition) to 16, then the nodes in prefix order (a node, then each of its children in order). Each node is its code byte (RULE-18) and:
+- **Statement.** A value is 8 bytes: space (1 to 8), `a`, and `b`, `c`, `d` (unsigned 16-bit), with the meanings of RULE-23 to RULE-28, RULE-116 and RULE-117; every unused field MUST be 0, and each field is checked against its space's ranges when decoded (a variable 0 to 15, a timer 0 to 7 or 255, an audio channel 0 to 3, a part 0 to 15, a class 0 to 9, a key 0 to 127, a parameter number 0 to 255, a family code 12 to 18, a variant 0 to 2, a `fired` property 0 to 7, a sequence below `Q`).
+- A condition is a count byte of nodes, 0 (no condition) to `MAX_CONDITION_NODES`, then the nodes in prefix order (a node, then each of its children in order). Each node is its code byte (RULE-18) and:
 
 | Node | Body |
 |---|---|
-| 1 `and`, 2 `or` | child count, 2 to 8 |
+| 1 `and`, 2 `or` | child count, 2 to `MAX_AND_OR_CHILDREN` |
 | 3 `not` | nothing; one child follows |
-| 4 compare | value (8 bytes); operator (1 to 6); constant (signed 32-bit) |
+| 4 compare | value (8 bytes); operator (1 to 6); constant (signed 32-bit); a parameter byte: 0 for none, or `0x20` to `0x23` to add `p0` to `p3` to the constant (only in a rule that names rows) |
 | 5 in range | value; `low`; `high` (signed 32-bit, `low ≤ high`) |
-| 6 in set | value; count 1 to 8; that many signed 32-bit constants |
-| 7 `overlaps`, 8 `inside` | two targets (3 bytes each) |
+| 6 in set | value; count 1 to `MAX_SET_MEMBERS`; that many signed 32-bit constants |
+| 7 `overlaps`, 8 `inside` | two targets (3 bytes each, no bit 7) |
 
 - The nodes MUST form exactly one tree that uses every node counted, and meet RULE-18's limits.
 - **Verification.** Codec tests: trees at each limit; a count that leaves nodes over, or runs short, refused.
 
-**RULE-45 [engine: neoteletext-rules]. Actions.**
-- **Statement.** An action is its code byte (RULE-20) and:
+**RULE-45 [engine: neoteletext-rules, neoteletext-web]. Groups and sequences in the image.**
+- **Statement.** A group is a count byte of commands, 1 to `MAX_GROUP_COMMANDS`, then that many **command frames**:
 
-| Action | Body |
-|---|---|
-| 1 `midi` | audio channel; status; data 1; data 2 (RULE-21) |
-| 2 `play` | audio channel; handle; generation (16-bit); gain; fade (16-bit, milliseconds); flags (bit 0 loop) |
-| 3 `stop` | audio channel; fade |
-| 4 `gain` | audio channel; gain; fade |
-| 5 `show`, 6 `hide`, 19 `stop_cycle` | target (kind 1 or 2, number not 0) |
-| 7 `look` | target; look (0 to 3) |
-| 8 `set`, 9 `add` | variable; signed 32-bit constant |
-| 10 `start_timer`, 11 `stop_timer` | timer (0 to `T − 1`) |
-| 12 `enable`, 13 `disable` | 64-bit rule mask, no bit at or above `N` |
-| 14 `send` | what (0 or 1); value (8 bytes, all zero when what is 0) |
-| 15 `move` | target (kind 2); flags (bit 0 relative); x; y (signed 16-bit) |
-| 16 `order` | target (kind 2); layer (0 to 3, or 255); order (signed 8-bit) |
-| 17 `frame` | target (kind 2); frame (0 to 15) |
-| 18 `cycle` | target (kind 2); first; last; period (16-bit, 1 to 3,600); flags (bit 0 once) |
+| Bytes | Field | Values |
+|---|---|---|
+| 0 | type | a record type RULE-119 allows |
+| 1 | bindings `B` | 0 to `MAX_COMMAND_BINDINGS` |
+| 2–3 | length `L` | the body's length, 1 to `MAX_COMMAND_BYTES` |
+| 4– | body | `L` bytes: the record's body exactly as the server sends that record, without the record frame's header and CRC-32 |
+| then | `B` bindings of 3 bytes each | item (the operation's place in an `ANIMATE` record, else 0); field code; source (RULE-106) |
 
-- A fade below the audio profile's least (`MIN_FADE_MS`, 5) is played as the least. The bodies of actions 5 to 7 and 15 to 19 are the same bytes as the ANIMATE record's operations (ANIM-6), read by one function.
-- **Verification.** Codec tests of each action and bound.
+- A sequence is: its repeat count (1 byte, 0 for until stopped); its step count (1 byte, 1 to `MAX_SEQUENCE_STEPS`); its length (unsigned 32-bit, 1 to `MAX_SEQUENCE_TICKS`); then each step: an offset (unsigned 32-bit, below the length, not below the step before) and a group (1 byte, below `G`).
+- The crate `neoteletext-rules` reads the frames and the bodies of the records it defines (types 28 to 33 and the `ANIMATE` operations); the bodies of `CONTROL`, `SPRITES` and `NAPLPS_OBJECTS` are read by their own crates' readers (`neoteletext-audio`, `neoteletext-web`), which `neoteletext-rules` reaches through a function its caller passes (RULE-56), so that the crate keeps no dependency and every body is still checked, by its one reader, when the table is decoded. The first form's action bodies are withdrawn with RULE-20.
+- **Reason and source.** DEC-6587 item 1 ("how a group is carried"): a record holding framed commands.
+- **Verification.** Codec tests of each frame bound; a body its record's reader refuses refuses the table; the wire vectors.
 
 **RULE-46 [engine: neoteletext-input]. The RULE_EVENT message, extension type `0x4B`.**
-- **Statement.** A receiver reports a rule's `send` or `echo` with the input event of extension type `0x4B`, whose payload is:
+- **Statement.** A receiver makes each report (RULE-22) with the input event of extension type `0x4B`, whose payload is:
 
 | Field | Form |
 |---|---|
 | stamp | the page and sub-code on screen, as every stamped event has them (DOC-1934) |
 | generation | 16-bit: the table's |
-| rule | 1 byte, 0 to 63 |
-| tick | unsigned 32-bit: the page tick at which the rule fired |
+| rule | 1 byte, 0 to 63; 255 when the run was not made by a rule |
+| row | 1 byte: the place of the firing row within the rule's rows, 0 to 63; 255 when none |
+| tick | unsigned 32-bit: the page tick of the firing |
 | kind | 1 byte: 0 fired (no event), 1 input, 2 value |
 | target | 3 bytes: the kind and number of the control, object or rectangle the pointer was inside for a rule whose pointer trigger named one; else all zero |
 | body | kind 0: nothing. Kind 1: one or two whole input events exactly as push protocol 8 encoded them, each from its `0xFF`: KEY, MOUSE, WHEEL, TOUCH, PASTE, COMPOSE, FOCUS_IN, FOCUS_OUT, HOVER or DRAWING_HOVER; and after a MOUSE, TOUCH or WHEEL on a page drawn by the ReGIS renderer, its PICK. In place of an event the body may be one run of raw text (UTF-8, which never begins with `0xFF`; DOC-1781), for text that came from no key. Kind 2: a value (8 bytes) and its reading (signed 32-bit) |
 
-- Under push protocol 9 the events KEY, MOUSE, WHEEL, PASTE, COMPOSE, TOUCH, FOCUS_IN, FOCUS_OUT, HOVER, PICK, DRAWING_HOVER and raw text MUST appear only inside a RULE_EVENT. A server MUST treat one at the top level of the stream as a protocol fault and close the connection, and a receiver MUST never write one there. HELLO, RESIZE, SELECT, RESUME and viewer state's three messages stay at the top level: they are the session, not the viewer's input to a page. A RULE_EVENT counts as one message for acknowledgement and resending (DOC-1923).
+- Under push protocol 10, as under 9, the events KEY, MOUSE, WHEEL, PASTE, COMPOSE, TOUCH, FOCUS_IN, FOCUS_OUT, HOVER, PICK, DRAWING_HOVER and raw text MUST appear only inside a RULE_EVENT. A server MUST treat one at the top level of the stream as a protocol fault and close the connection, and a receiver MUST never write one there. HELLO, RESIZE, SELECT, RESUME and viewer state's three messages stay at the top level. A RULE_EVENT counts as one message for acknowledgement; **one not acknowledged when its connection ends is discarded and never sent again** (RULE-111).
 - After the stamp, which is two varints as on every stamped event, every field of RULE_EVENT, PAGE_STATE (RULE-47) and RULES_FAULT (RULE-48) is big-endian and of the fixed width its table gives.
 - A target is carried by kind 1 alone: a RULE_EVENT of kind 0 or 2 that names a target is refused by its reader.
-- A RULE_EVENT counts one for acknowledgement and resending whatever it carries, so a pointer's move and an input method's composition, which push protocol 8 did not count, are acknowledged and kept for resending, and a move is never dropped or replaced while a connection is congested. PAGE_STATE and RULES_FAULT are no input: they count nothing and are never resent. The input session's limit of 120 messages a second looks at what a RULE_EVENT carries: a release always goes, a move is not held to the limit, and a firing with no event and a value are.
+- A RULE_EVENT counts one for acknowledgement whatever it carries, so a pointer's move and an input method's composition, which push protocol 8 did not count, are acknowledged, and a move is never dropped or replaced while a connection is congested. PAGE_STATE and RULES_FAULT are no input and count nothing. The input session's limit of 120 messages a second looks at what a RULE_EVENT carries: a release always goes, a move is not held to the limit, and a firing with no event and a value are.
 - An `enter` or `leave` on a control is carried as HOVER; on a ReGIS drawing as DRAWING_HOVER; on a teletext sprite, a NAPLPS object or a rectangle as the MOUSE move that caused it, with the target named.
 - **Reason and source.** REQ-6523; DEC-6522 items 7 and 8. Wrapping the existing events means the server's existing readers and the programs' existing `input` handling are reused whole.
-- **Verification.** Engine tests: each kind round-trips; a bare KEY at top level under version 9 is a fault; the wire vectors.
+- **Verification.** Engine tests: each kind round-trips; a bare KEY at top level is a fault; the wire vectors.
 
 **RULE-47 [engine: neoteletext-web, neoteletext-input]. RULES_QUERY, record type 22, and PAGE_STATE, extension type `0x4C`.**
-- **Statement.** Record type 22, `RULES_QUERY`, has a body of 6 bytes: the page (2 bytes) and the query's identifier (unsigned 32-bit, which the server chooses and maps to the program's `request`). A receiver that has that page open answers exactly once with the input event of extension type `0x4C`, `PAGE_STATE`, at the end of the next tick, and ignores a query for a page that is not open; it answers at most one query a second for a page and drops the rest, reporting fault 6 (RULE-48). The payload:
+- **Statement.** Record type 22, `RULES_QUERY`, has a body of 8 bytes: the page (2 bytes), the sub-code (2 bytes) and the query's identifier (unsigned 32-bit, which the server chooses and maps to the program's `request`). A receiver that has that page open answers exactly once with the input event of extension type `0x4C`, `PAGE_STATE`, at the end of the next tick, and ignores a query for a page that is not open or is paused; it answers at most one query a second for a page and drops the rest, reporting fault 6 (RULE-48). The payload:
 
 | Field | Form |
 |---|---|
@@ -668,29 +929,45 @@ The server encodes each message for receivers as a record in the audio profile's
 | identifier | unsigned 32-bit, the query's |
 | generation | 16-bit, the table's; 0 when the page has no table, and then nothing follows but a tick of 0 |
 | tick | unsigned 32-bit page tick of the snapshot reported |
-| enabled | 64-bit mask of the rules enabled |
-| variables | count (the table's `V`), then each value (signed 32-bit) in order |
-| timers | count (`T`), then for each: flags (bit 0 running) and elapsed ticks (unsigned 32-bit) |
-| targets | count (0 to 64), then for each control and object the table names, in the order first named: kind; number (16-bit); flags (bit 0 exists, bit 1 shown, bit 2 cycling); look; frame; x; y (signed 16-bit); layer; order (signed 8-bit) — 12 bytes |
-| values | count (0 to 64), then for each distinct value the table reads, in the order first read: the value (8 bytes) and its reading (signed 32-bit) |
+| variables | sixteen values (signed 32-bit), `v0` first |
+| timers | eight entries, `t0` first, each: flags (bit 0 running) and elapsed ticks (unsigned 32-bit) |
+| sequences | count (the table's `Q`), then for each: flags (bit 0 running); passes (unsigned 32-bit); position (unsigned 32-bit) |
+| armed | 1 byte: armed runs waiting, 0 to `MAX_ARMED_RUNS` |
+| targets | count (0 to `MAX_TABLE_TARGETS`), then for each control and object the table names by a constant, in the order first named: kind; number (16-bit); flags (bit 0 exists, bit 1 shown, bit 2 cycling); look; frame; x; y (signed 16-bit); layer; order (signed 8-bit) — 12 bytes |
+| values | count (0 to `MAX_TABLE_VALUES`), then for each distinct value the table reads, in the order first read: the value (8 bytes) and its reading (signed 32-bit) |
 
-- The answer is at most 1,800 bytes, within the input protocol's largest message (8,192).
-- **First named** and **first read** follow the rules in rule order and, within a rule, its trigger's target, then its condition's nodes in order, then its actions in order. A value of space 4 names its target.
-- **Reason and source.** DEC-6522 item 8 (c): the page variables, which targets are shown or hidden, each drawing's look, the running timers and the current values of what the rules read; once, never a stream.
+- **First named** and **first read** follow the rules in rule order and, within a rule, its trigger's target, then its condition's nodes in order, then the commands of its group in order, and after the rules the groups no rule names, in group order. A value of space 4 names its target.
+- The answer is at most `MAX_STATE_BYTES` bytes, within the input protocol's largest message (8,192).
+- **Reason and source.** DEC-6522 item 8 (c), kept by DEC-6587 item 9 for reading and debugging, not for resynchronising.
 - **Verification.** Engine codec tests; a browser test that a query for a page not open gets no answer and that two queries in one second get one.
 
 **RULE-48 [engine: neoteletext-input; neoteletext-browser; neoteletext-app-server]. RULES_FAULT, extension type `0x4D`.**
-- **Statement.** A receiver reports a fault of a page's table with the input event of extension type `0x4D`: the stamp, the table's generation (16-bit), a code (1 byte) and a count (16-bit, how many times since the last report). The codes: 1 the table could not be decoded and was refused whole (the receiver and the server disagree; the page then has no table); 2 `tick_overrun` (RULE-6); 3 sends dropped by the send budget (RULE-52); 4 input events dropped from a full queue (RULE-5); 5 actions skipped for a missing target or sound (RULE-20); 6 a state query dropped; 7 a local sound stopped for overrunning its time (RULE-62); 8 animation slowed by its budget (ANIM-16). A receiver sends at most one RULES_FAULT a second for each code and page. The server gives the program `{"type":"rules_fault","connection":7,"page":"101","generation":3,"fault":"tick_overrun","count":12}` with the fault named `undecodable`, `tick_overrun`, `sends_dropped`, `events_dropped`, `actions_skipped`, `query_dropped`, `local_overrun` or `animation_slowed`, and writes code 1 to its operator's log as an error.
+- **Statement.** A receiver reports a fault of a page's table with the input event of extension type `0x4D`: the stamp, the table's generation (16-bit), a code (1 byte) and a count (16-bit, how many times since the last report). The codes:
+
+| Code | Name | Meaning |
+|---|---|---|
+| 1 | `undecodable` | the table image could not be assembled or decoded and was refused whole (the receiver and the server disagree; the page then has no table) |
+| 2 | — | Withdrawn: `tick_overrun`. There is no limit of actions a tick (RULE-6). The code is never sent and never reused |
+| 3 | `reports_dropped` | reports dropped by the trusted core's budgets (RULE-52) |
+| 4 | `events_dropped` | input events dropped from a full queue (RULE-5) |
+| 5 | `commands_skipped` | commands that did nothing for a missing target or sound (RULE-118) |
+| 6 | `query_dropped` | a state query dropped |
+| 7 | `local_overrun` | a local sound stopped for overrunning its time (RULE-62) |
+| 8 | `animation_slowed` | animation slowed by its budget (ANIM-16) |
+| 9 | `evaluation_late` | the evaluation of the page's ticks took longer than the ticks' own time, so page time slowed (RULE-4, section 12.4) |
+| 10 | `queue_full` | an armed run not armed, a command the server sent, a cue or a sound command dropped at a full queue or budget (RULE-5, RULE-102, RULE-109, RULE-52) |
+
+- A receiver sends at most one RULES_FAULT a second for each code and page. The server gives the program `{"type":"rules_fault","connection":7,"page":"101","sub":"0001","generation":3,"fault":"evaluation_late","count":12}` with the fault named as above, and writes code 1 to its operator's log as an error.
 - **Reason and source.** DEC-6522 item 10: a refusal is reported, never silently ignored.
 - **Verification.** Browser tests that produce each code; the server's test of each name.
 
-**RULE-49 [engine: neoteletext-input; neoteletext-common]. Push protocol version 9.**
-- **Statement.** The input protocol's `VERSION` (`neoteletext_input::limits::VERSION`, the number in HELLO, in WELCOME and in the push connection's subprotocol) MUST become 9, and version 8 MUST be refused both ways, as version 8 refused 7. Version 9 adds record types 21 to 27 (21 and 22 here; 23 to 27 in animation.md), the extension events `0x4B` to `0x4D`, the OBJECT record's tag 9 (RULE-60), and the rule that input events travel only inside RULE_EVENT (RULE-46). The descriptor's `push.input` and `push.wheel` are withdrawn: a server no longer writes them and a receiver reads past them whatever value they hold; a page's table is the only thing that asks for input (REQ-6523). A receiver sends the input session's messages only to a push connection on the descriptor's own origin, as before (the engine's `Descriptor::push_takes_messages`): a push on another origin is read and is sent nothing. neoteletext-common's `wire-vectors.tsv` gains the version and the vectors of RULE-85.
-- **Reason and source.** DEC-6522 item 2 ("This replaces the channel-wide `push.input` declaration"); a hard change of version, with no compatibility shim (DEVELOPMENT.md section 2.1).
-- **Verification.** The wire vectors' test in the engine, the server and the browser; a version 8 HELLO refused.
+**RULE-49 [engine: neoteletext-input; neoteletext-common]. Push protocol version 10.**
+- **Statement.** The input protocol's `VERSION` (`neoteletext_input::limits::VERSION`, the number in HELLO, in WELCOME and in the push connection's subprotocol, `neottx.10`) MUST become 10, and every other version MUST be refused both ways. Version 10 is version 8 with: record types 21 to 33 as this section and animation.md give them; the extension events `0x4B` to `0x4D`; the OBJECT record's tag 9 (RULE-60); the Cue Point event in a block (RULE-109); and the rule that input events travel only inside RULE_EVENT (RULE-46). Version 9, the first form's, was never deployed and is not kept. The descriptor's `push.input` and `push.wheel` stay withdrawn. neoteletext-common's `wire-vectors.tsv` gains the version and the vectors of RULE-85.
+- **Reason and source.** DEC-6522 item 2; DEC-6587; a hard change of version, with no compatibility shim (DEVELOPMENT.md section 2.1).
+- **Verification.** The wire vectors' test in the engine, the server and the browser; a version 9 and a version 8 HELLO refused.
 
 **RULE-50 [neoteletext-browser]. A page with no table.**
-- **Statement.** For a page whose view holds no table, the browser MUST evaluate nothing, give the decoder no input event of that page, and send its channel nothing for anything the viewer does on it: no key, text, paste, composition, press, release, move, wheel, hover, pick or focus change. The page is still shown, its links work, its sound plays, the looks under the pointer are drawn locally as today (the browser's REQ-6374 and the teletext controls' looks), and SELECT still tells the channel which page and sub-page the tab shows.
+- **Statement.** For a page whose view holds no table, the browser MUST evaluate nothing, give the decoder no input event of that page, and send its channel nothing for anything the viewer does on it: no key, text, paste, composition, press, release, move, wheel, hover, pick or focus change. The page is still shown, its links work, its sound plays, the looks under the pointer are drawn locally as today, the commands the server sends it directly that need no table (`CONTROL`, `ANIMATE`, `SPRITES`, `NAPLPS_OBJECTS`) are applied, and SELECT still tells the channel which page the tab shows. A `VARIABLE`, `TIMER`, `REPORT`, `RUN`, `SEQUENCE` or `LOCAL_MIDI` record for a page with no table, or for a page that is not the open page, is dropped and counted.
 - **Reason and source.** REQ-6523: "A page with no rule table sends no input at all."
 - **Verification.** REQ-6523's tests: for each kind of input, the fetcher's outgoing messages are empty.
 
@@ -699,187 +976,212 @@ The server encodes each message for receivers as a record in the audio profile's
   1. a key pressed with the browser's own modifier, which steps the page and sub-page lists (REQ-6390, DEC-6389), and every key the trusted strip or a browser dialog has;
   2. a click made with the browser's modifier (REQ-1384);
   3. a press and release on a link the page declares — a teletext link, a Fastext prompt or a linked ReGIS drawing — which the browser follows itself (REQ-4111, REQ-6376, decision 122); a rule's `press` on a target under a link does not fire;
-  4. the wheel over a page with more than one sub-page, which steps the sub-pages, unless the page's table has an enabled `wheel` rule whose target the pointer is inside (this replaces the channel-wide `push.wheel` of DEC-6447). So that the trusted core can decide without reading a table, the decoder tells it, with the interest mask, at most 16 rectangles of the page's picture inside which an enabled `wheel` rule applies (the whole picture for the target `page`; an object's bounding rectangle), and tells it again when they change;
+  4. the wheel over a page whose page number has more than one sub-code, which steps them, unless the page's table has a `wheel` rule whose target the pointer is inside. So that the trusted core can decide without reading a table, the decoder tells it, with the interest mask, at most `MAX_RECTS` rectangles of the page's picture inside which a `wheel` rule applies (the whole picture for the target `page`; an object's bounding rectangle), and tells it again when they change. The rectangles are those of every `wheel` rule of the table, whatever its condition: a mode that should give the wheel back to the browser is not expressible, and a page that needs it uses another page;
   5. everything typed or clicked outside the open page's picture.
-- **Reason and source.** REQ-4112's exceptions, kept; DEC-6447's wheel rule restated on the table, since the channel-wide declaration is withdrawn.
+- **Reason and source.** REQ-4112's exceptions, kept; DEC-6447's wheel rule restated on the table. With the enabled flag withdrawn (DEC-6587 item 8) the rectangles no longer depend on a rule being enabled (section 15, item 38).
 - **Verification.** The existing tests of REQ-4112 and REQ-6390, re-pointed at the table; a test that a `wheel` rule takes the wheel from the sub-page list only inside its target.
 
 **RULE-52 [neoteletext-browser]. The trusted core is the gate: nothing leaves that the viewer did not do and the page's view did not report.**
 - **Statement.** The trusted core MUST enforce REQ-6523 itself, without reading a table:
-  1. **In.** It gives a page's decoder the viewer's input events for the open page only while that decoder has told it the page has a table, and only of the classes the decoder asked for in its **interest mask** (bit 0 keys, bit 1 text, bit 2 pointer buttons, bit 3 pointer moves, bit 4 the wheel, bit 5 focus changes), which the decoder derives from the triggers and key-state values of the table. Each event it gives carries a sequence number, the page's key, and what the core already derives for it (the cell, the pixel, the control under the cell, the ReGIS drawing the pick record names). A page that holds the keyboard is given the focus when its decoder first says its table asks for input, since nothing may be given for it before (RULE-50).
+  1. **In.** It gives a page's decoder the viewer's input events for the open page only while that decoder has told it the page has a table, and only of the classes the decoder asked for in its **interest mask** (bit 0 keys, bit 1 text, bit 2 pointer buttons, bit 3 pointer moves, bit 4 the wheel, bit 5 focus changes), which the decoder derives from the triggers and key-state values of the table. Each event it gives carries a sequence number, the page's key (page number and sub-code), and what the core already derives for it (the cell, the pixel, the control under the cell, the ReGIS drawing the pick record names).
   2. **Kept.** It keeps the last `INPUT_RING` (64) events it gave each open page.
-  3. **Out.** A decoder asks for a report with a message that names the page, the rule, the tick and either an input sequence number, or a value and its reading, or nothing (a bare firing). The decoder never supplies an event's bytes. The trusted core builds the RULE_EVENT itself: for a sequence number, from its own kept copy of that event, and only when the event was given to that decoder for that page within the last `SEND_WINDOW_TICKS` (4) ticks and has not already been reported for that rule; otherwise it drops the request and counts it, apart from fault 3, which is kept for what item 5's budgets drop.
-  4. **Where.** It gives the RULE_EVENT only to the fetcher of that page's own channel, on that view's own connection, and only while that page is still the open page of that view or for `SEND_WINDOW_TICKS` (4) ticks after it stopped being so, so that the reports of the final tick's `close` rules (RULE-5) leave. In those ticks the page's decoder is given no input, and its reports pass under the same budgets and under item 3's rule; the time ends at once when the decoder says the page asks for nothing.
-  5. **How much.** It sends at most `SEND_BUDGET` (120) reports a second for a page, holding at most 120, of which at most `TIMED_SEND_BUDGET` (20) a second may be reports with no input event (a bare firing or a value). What exceeds a budget is dropped and reported as fault 3.
+  3. **Out.** A decoder asks for a report with a message that names the page, the rule, the row, the tick and either an input sequence number, or a value and its reading, or nothing (a bare firing). The decoder never supplies an event's bytes. The trusted core builds the RULE_EVENT itself: for a sequence number, from its own kept copy of that event, and only when the event was given to that decoder for that page within the last `SEND_WINDOW_TICKS` (4) ticks and has not already been reported for that rule and row; otherwise it drops the request and counts it. A group therefore cannot make any input leave that the viewer did not make on that page in those ticks, whatever its commands.
+  4. **Where.** It gives the RULE_EVENT only to the fetcher of that page's own channel, on that view's own connection, and only while that page is still the open page of that view or within `SEND_WINDOW_TICKS` of its closing (so that a `close` rule's report leaves), and never after that connection has ended.
+  5. **How much.** It sends at most `SEND_BUDGET` (120) reports a second for a page, holding at most 120, of which at most `TIMED_SEND_BUDGET` (20) a second may be reports with no input event (a bare firing or a value). What exceeds a budget is dropped and reported as fault 3. It passes at most `SOUND_COMMAND_BUDGET` (512) sound commands a tick from a view's decoder to the sound helper, however they arose — a group, a sequence or a record of the server — and drops and counts the rest (fault 10).
   6. **State.** It passes a PAGE_STATE only in answer to a query its fetcher received for that page on that connection, once, and checks its length.
-- **Reason and source.** REQ-6523; the browser's architecture (the trusted core reads no teletext format, so it cannot check a table, but it is the origin of every input event and can refuse to send anything it did not itself receive from the viewer for that page). A decoder taken over by a hostile page can then at most cause that page's own viewer's input on that page to reach that page's own channel — which the channel could have asked for with a table.
-- **Verification.** The hostile-decoder harness: a decoder that asks to send a sequence number it was never given, one from another page, an old one, the same one twice for one rule, and 1,000 a second, gets none of them sent beyond the budget; the fuzz target of RULE-83.
+- **Reason and source.** REQ-6523; the browser's architecture (the trusted core reads no teletext format, so it cannot check a table, but it is the origin of every input event and can refuse to send anything it did not itself receive from the viewer for that page). The sound command budget is a general protection of the core and the sound helper against any decoder, not a cap on a group (section 12.4; section 15, item 39).
+- **Verification.** The hostile-decoder harness: a decoder that asks to send a sequence number it was never given, one from another page or another sub-code, an old one, the same one twice for one rule and row, and 1,000 a second, gets none of them sent beyond the budget; 10,000 sound commands in a tick pass 512; the fuzz target of RULE-83.
 
 **RULE-53 [neoteletext-app-server]. Migration: the channel's default table keeps every deployed channel working.**
-- **Statement.** The server's channel configuration (an entry of `channels.json`) MUST gain the field `default_rules`, `"none"` (the default when absent) or `"send_all"`; the field `wheel` stays and now only shapes the default table. For a channel with `"send_all"`, the server MUST send, for every page of the channel for which a connection has been given no table by the program (or was given `"table":null`), the **default table** below, as that page's RULES record, exactly as RULE-40 sends a program's table. With `"none"`, such a page gets a RULES record with no table. The default table, in the form of RULE-35:
+- **Statement.** A channel's entry in `channels.json` keeps the field `default_rules`, `"none"` (the default when absent) or `"send_all"`; the field `wheel` only shapes the default table. For a channel with `"send_all"`, the server MUST send, at every selection (RULE-40) and whenever the program removes the page's table (`"table":null`), the **default table** below as that page's RULES record. With `"none"`, a RULES record with no table. The default table, in the form of RULE-35:
 
 ```json
-{"rules":[
- {"name":"keys","on":{"event":"key","keys":"any","repeat":true},"do":[{"action":"send"}]},
- {"name":"keys_up","on":{"event":"key_up","keys":"any"},"do":[{"action":"send"}]},
- {"name":"text","on":{"event":"text"},"do":[{"action":"send"}]},
- {"name":"press","on":{"event":"press","target":"page","button":"any"},"do":[{"action":"send"}]},
- {"name":"release","on":{"event":"release","target":"page","button":"any"},"do":[{"action":"send"}]},
- {"name":"move","on":{"event":"move","target":"page","held":false},"do":[{"action":"send"}]},
- {"name":"hover_in","on":{"event":"enter","target":{"control":"any"}},"do":[{"action":"send"}]},
- {"name":"hover_out","on":{"event":"leave","target":{"control":"any"}},"do":[{"action":"send"}]},
- {"name":"drawing_in","on":{"event":"enter","target":{"object":"any"}},"do":[{"action":"send"}]},
- {"name":"drawing_out","on":{"event":"leave","target":{"object":"any"}},"do":[{"action":"send"}]},
- {"name":"focus","on":{"event":"focus"},"do":[{"action":"send"}]},
- {"name":"blur","on":{"event":"blur"},"do":[{"action":"send"}]},
- {"name":"wheel","on":{"event":"wheel","target":"page"},"do":[{"action":"send"}]}]}
+{"groups":[{"name":"send","commands":[{"type":"report"}]}],
+ "rules":[
+ {"name":"keys","on":{"event":"key","keys":"any","repeat":true},"run":"send"},
+ {"name":"keys_up","on":{"event":"key_up","keys":"any"},"run":"send"},
+ {"name":"text","on":{"event":"text"},"run":"send"},
+ {"name":"press","on":{"event":"press","target":"page","button":"any"},"run":"send"},
+ {"name":"release","on":{"event":"release","target":"page","button":"any"},"run":"send"},
+ {"name":"move","on":{"event":"move","target":"page","held":false},"run":"send"},
+ {"name":"hover_in","on":{"event":"enter","target":{"control":"any"}},"run":"send"},
+ {"name":"hover_out","on":{"event":"leave","target":{"control":"any"}},"run":"send"},
+ {"name":"drawing_in","on":{"event":"enter","target":{"object":"any"}},"run":"send"},
+ {"name":"drawing_out","on":{"event":"leave","target":{"object":"any"}},"run":"send"},
+ {"name":"focus","on":{"event":"focus"},"run":"send"},
+ {"name":"blur","on":{"event":"blur"},"run":"send"},
+ {"name":"wheel","on":{"event":"wheel","target":"page"},"run":"send"}]}
 ```
 
-- The last rule, `wheel`, is present only when the channel's `wheel` is `true`. The table is built by one function of `neoteletext-rules` (`default_send_all(wheel)`), so its bytes are the same everywhere. With it a page's program receives exactly the `input` messages version 13 gave it (each now naming its rule), so no deployed channel's code changes.
-- The deployment (`deploy/ionos/deploy.sh`) MUST give `"default_rules":"send_all"` to every channel deployed on 18 November 2026: `home`, `hackaday`, `oldhackaday`, `demosite`, `uicomponentsdemo`, `regisgallery`, `regis`, `naplps` and `audio`. A new channel is given `"none"`, and `musicplayer` is the first.
-- Each of those channels is to move to tables of its own (RULE-54) and then to `"none"`; that is one to-do for each channel, and the default table is deleted from the server when the last has moved.
-- **Reason and source.** REQ-6523 requires that the page ask. The channel's operator asking on behalf of every page of a channel, in one reviewed line of configuration, is the least risky way to keep nine deployed channels working through the change: no channel's program has to be right about which of its pages take which input on the day the protocol changes. The alternatives are weighed in section 15, item 9.
-- **Verification.** Server tests: a `send_all` channel's page with no program table gets the 12- or 13-rule table; `"table":null` puts it back; a `none` channel's page gets none. An end-to-end test for each deployed channel (the smoke tests that exist) passes unchanged against protocol 14.
+- The last rule, `wheel`, is present only when the channel's `wheel` is `true`. The table is twelve or thirteen rules that each run the one default group, which holds one `REPORT` of the firing. It is built by one function of `neoteletext-rules` (`default_send_all(wheel)`), so its bytes are the same everywhere. With it a page's program receives exactly the `input` messages version 13 gave it (each now naming its rule), so no deployed channel's code changes.
+- The deployment (`deploy/ionos/deploy.sh`) gives `"default_rules":"send_all"` to every channel deployed on 18 November 2026: `home`, `hackaday`, `oldhackaday`, `demosite`, `uicomponentsdemo`, `regisgallery`, `regis`, `naplps` and `audio`. A new channel is given `"none"`, and `musicplayer` is the first. Each of the nine is to move to tables of its own (RULE-54) and then to `"none"` (TODO-6544); the default table is deleted from the server when the last has moved.
+- **Reason and source.** REQ-6523 requires that the page ask. The channel's operator asking on behalf of every page of a channel, in one reviewed line of configuration, is the least risky way to keep nine deployed channels working through the change.
+- **Verification.** Server tests: a `send_all` channel's page is sent the 12- or 13-rule table at selection; `"table":null` puts it back; a `none` channel's page gets none. An end-to-end test for each deployed channel passes unchanged against protocol 15.
 
 **RULE-54 [neoteletext-server-ts-ui-components]. The component library writes each page's table.**
-- **Statement.** The component library MUST derive a `rules` table for every page it composes from the components mounted on it, read from their handlers each time the page is drawn, and send it to each connection when it opens the page and again only when its content changes, so that a page asks for no more than its components can take:
+- **Statement.** The component library MUST derive a `rules` table for every page it composes — every page number and sub-code it sends, each from the components mounted on that sub-page alone (RULE-112) — read from their handlers each time the page is drawn, and send it to each connection at every selection of the page and again only when its content changes, so that a page asks for no more than its components can take:
   1. **Keys and text.** The rules `keys` (any key, with repeat) and `keys_up` when any component handles a key, takes text or can hold the keys; `text` when one takes text, a paste or a composition; `focus` and `blur` when one handles the page gaining or losing the keyboard; `hover_in` and `hover_out` (`enter` and `leave` on any control) when the page declares a control and a component handles a hover there.
   2. **The pointer, on rectangles of cells.** The table declares rectangles (`rects`, in dots, a cell 12 by 20) that share no cell and cover exactly the cells where some component takes the press, the release, every move or the wheel, each named for its component's class and numbered (`button_1`), with the rules `press_<name>`, `release_<name>`, `wheel_<name>` and `move_<name>`. Control numbers are not used. The release is asked for only where a component handles it.
   3. **A drag.** The moves of a drag are asked of the whole page: the rule `drag`, a `move` on the target `page` with `held`, present when a component that follows the pointer can be reached, so that a drag is followed wherever the pointer goes. A component that takes every move has `move_<name>` on its own rectangle, without `held` and with the condition that no button is down, so that it and `drag` never send the same move.
-  4. **Every rule only sends.** The library's components act on the press and none has a pressed look, so the press is sent and no local `look` action is written.
+  4. **Every rule only reports.** The library's components act on the press and none has a pressed look, so every rule of the table runs the one group the table has, which holds one `report` of the firing, and no `animate` command is written.
   5. **Page selection.** A page whose table does not ask for every key asks for the keys the protocol kit selects pages by, each unless the page owns them: `select_digits` (the ten keys of the digit row, as physical keys), `select_keypad` (the named keys `Numpad0` to `Numpad9`) and `fastext_keys` (F1 to F4 and the four coloured keys), each the press alone. A table with no rules is sent only for a page that owns both the digits and the coloured keys and has no component that takes input.
-  6. **At the table's limits.** A page that would need more than 16 rectangles, or more rules than a table holds, asks for the pointer on the whole page under the default table's rule names (RULE-53), and the channel's log says so.
+  6. **At the table's limits.** A page that would need more than `MAX_RECTS` rectangles, or more rules than `MAX_RULES`, asks for the pointer on the whole page under the default table's rule names (RULE-53), and the channel's log says so.
   7. **Routing.** An `input` is given to its component by where it landed and by which component has the keys, as before protocol 14; its `rule` says which need asked for it.
+  9. **Every sub-page its own.** The first build derived the pointer's rectangles from "the first sub-page's cells" of a page. That is withdrawn (DEC-6599): each sub-code the library sends is a page with a table derived from its own cells, sent at its own selection, and nothing is derived for a page number as a whole.
   8. **No tables.** A channel chooses with the option `ruleTables` whether the library writes tables: `"components"` (the default), or `"none"`, with which the library sends no `rules` message for any page, so that every page is left to the channel's `default_rules` (RULE-53).
-- **Reason and source.** REQ-6523's purpose: a viewer's input goes nowhere a page has not asked for. The library already knows every interactive component of a page, so the precise table costs its authors nothing.
-- **Verification.** Library tests: for each component kind, the table of a page that holds one; a page of static text asks for the page-selection keys alone; a channel with `ruleTables` `"none"` sends no `rules` message; the demonstration channels' existing tests pass with `default_rules` set to `"none"`.
+- **Reason and source.** REQ-6523's purpose: a viewer's input goes nowhere a page has not asked for. DEC-6599 for item 9. The library already knows every interactive component of a page, so the precise table costs its authors nothing.
+- **Verification.** Library tests: for each component kind, the table of a page that holds one; a page of static text asks for the page-selection keys alone; a channel with `ruleTables` `"none"` sends no `rules` message; two sub-codes of one page number with different components get two different tables; the demonstration channels' existing tests pass with `default_rules` set to `"none"`.
 
 **RULE-55 [neoteletext-server-ts-protocol; neoteletext-server-channels]. The kits' calls.**
-- **Statement.** Both kits MUST offer, as thin calls that only build and send the messages of this section (DEC-6462), with the TypeScript names here and the Python names their snake_case forms (a handler with `on_` before it), and list them in `kit-calls.tsv`:
+- **Statement.** Both kits MUST offer, as thin calls that only build and send the messages of section 7 (DEC-6462), with the TypeScript names here and the Python names their snake_case forms (a handler with `on_` before it), and list them in `kit-calls.tsv`. Every call that concerns a page takes the page number and the sub-code:
 
 | TypeScript | Python | Message |
 |---|---|---|
-| `context.rules(to, page, table)` | `app.rules(to, page, table)` | `rules`; `table` is the typed object of RULE-35 or `null` |
-| `context.queryState(connection, page): Promise<PageState>` | `app.query_state(connection, page)` (awaitable) | `query_state`, resolved by `page_state`, rejected by `refused` |
+| `context.rules(to, page, sub, table)` | `app.rules(to, page, sub, table)` | `rules`; `table` is the typed object of RULE-35 or `null` |
+| `context.queryState(connection, page, sub): Promise<PageState>` | `app.query_state(connection, page, sub)` (awaitable) | `query_state`, resolved by `page_state`, rejected by `refused` |
+| `context.localMidi(to, page, sub, channel, message)` | `app.local_midi(…)` | `local_midi` |
+| `context.variable(to, page, sub, command)` | `app.variable(…)` | `variable`; `command` is the message's `op`, `variable` and operand |
+| `context.timer(to, page, sub, op, timer)` | `app.timer(…)` | `timer` |
+| `context.report(to, page, sub, value)` | `app.report(…)` | `report` |
+| `context.run(to, page, sub, group, at?)` | `app.run(…, at=None)` | `run` |
+| `context.sequence(to, page, sub, op, sequence)` | `app.sequence(…)` | `sequence` |
 | handler `ruleEvent(event, context)` | `on_rule_event(event)` | `rule_event` |
 | handler `rulesFault(fault, context)` | `on_rules_fault(fault)` | `rules_fault` |
-| the existing input handler | the same | `input`, whose event object gains `rule`, `tick` and `target` |
+| the existing input handler | the same | `input`, whose event object has `rule`, `row`, `tick` and `target` |
 
-- The types (`RuleTable`, `PageRule`, `RuleTrigger`, `RuleCondition`, `RuleValue`, `RuleAction`, `RuleTarget`, `PageState`) are generated from the schema; the schema's existing type `Rule` (the refusal's rule) keeps its name. The kits MAY offer small builders that only construct these objects (for example `physicalKey("a")`, `level(0)`), and MUST NOT check a table beyond the schema. Each kit's test harness gains `press`, `fire` and `answerState` calls that feed a program the `input`, `rule_event` and `page_state` a receiver would cause.
-- **The harness.** `press(connection, key)` is the call each harness already had. Every `input` a harness gives without a rule names the rule of the default table (RULE-53) that sends that event (a paste and a composition the rule `text`; a touch and a pick the rule `press`) and carries the harness's clock in ticks as its `tick`. `fire(connection, rule, event?, tick?, target?)` gives a `rule_event` of kind `fired`, the `rule_event` of a body given, or the `input` naming the rule for an input event; `answerState(query, state?)` (`answer_state`) answers a `query_state` the program wrote; `timelineSends(connection)` (`timeline_sends`) gives the `animate` messages the server would send as it plays each timeline written, once through.
-- **What a handler is given, and a refused query.** `ruleEvent` and `rulesFault` (`on_rule_event`, `on_rules_fault`) are each given the server's message whole, as the `refused` handler is. A state query the server refuses rejects with `QueryRefusedError` (Python raises `QueryRefused`), which carries the server's `refused`; that refusal reaches no `refused` handler. In the TypeScript type the `input` event's `rule`, `tick` and `target` are optional, so that an input a program's own test writes by hand still compiles; every `input` read from the server carries all three.
-- **The builders** the TypeScript kit offers are `physicalKey`, `characterKey`, `namedKey` and `level(channel)`, with the constant `TICKS_PER_SECOND` (60); they are not in `kit-calls.tsv`, which lists what both kits must offer.
-- **Reason and source.** DEC-6462: the kits are thin and equal.
-- **Verification.** Each kit's public-interface test against `kit-calls.tsv`; `server-rules` tests.
+- The types (`RuleTable`, `PageRule`, `RuleTrigger`, `RuleCondition`, `RuleValue`, `RuleGroup`, `RuleCommand`, `RuleSequence`, `RuleRow`, `Amount`, `RuleTarget`, `PageState`) are generated from the schema; the schema's existing type `Rule` (the refusal's rule) keeps its name. The kits MAY offer small builders that only construct these objects — for example `physicalKey("a")`, `level(0)`, `variable("v0")`, `plus(12, "v0")`, `row("p1")`, `noteOn(channel, part, key, velocity)`, and the mode helper of RULE-110 (`modes("v3", ["play", "help"])`, giving `in(mode)` and `enter(mode)`) — and MUST NOT check a table beyond the schema, expand rows, or turn `do` and `echo` into groups: the server does that (RULE-35). Each kit's test harness has `press`, `fire` and `answerState` calls that feed a program the `input`, `rule_event` and `page_state` a receiver would cause.
+- **Reason and source.** DEC-6462: the kits are thin and equal. DEC-6587 item 8 (the kits provide modes).
+- **Verification.** Each kit's public-interface test against `kit-calls.tsv`; `server-rules` tests; the shared fixture `rules-examples.jsonl`.
 
-## 9. Limits, and the one crate
+## 9. Identity, lifetime, limits, and the one crate
+
+**RULE-112 [every repository]. A sub-page is a page: everything is keyed on the page number and sub-code together.**
+- **Statement.** Every part of the rule table and of animation MUST treat one page number with one sub-code as one page, with no relationship to any other sub-code of the same number. Each has its own rule table, groups, sequences, rows, timers, sixteen variables, sprites, objects, sheet, animation state, frames, timelines and local sounds. Every record of section 8 and of animation.md, every program message, every kit call and every key of a map in an implementation carries or uses both. Nothing is addressed by a page number alone, and nothing means "every sub-page of" or "whichever sub-page is shown": the first form's sub-code `0x3F7F` in an `ANIMATE` record, its sheet of a page fed to each sub-page, its table for all sub-pages and its sub-page off-lists are withdrawn, and no value gives the shown sub-code. Going from one sub-code to another is leaving one page and opening another (RULE-111). The audio profile's `CONTROL` record names a page number only, which this document does not change: a local sound belongs to the page (number and sub-code) that is open in the view when its play is carried out, whose number the record names, and ends when that page is no longer open.
+- **Reason and source.** DEC-6599 (the owner, 18 November 2026: "in neoteletext a sub-page has NO relattionship to its parent page - we treat sub pages EXACTLY as pages"), which applies DEC-1500.
+- **Verification.** In each repository, a test that two sub-codes of one page number hold separate tables, variables and animation state, and a review that no map or message of the rule table or animation is keyed on a page number alone (the build plan lists the first build's places).
+
+**RULE-111 [neoteletext-browser; neoteletext-app-server; engine]. Everything local is dropped when a page is left or its connection ends; nothing is resynchronised.**
+- **Statement.** A page's **local state** is: its rule table with its groups, sequences, rows and rectangles; its variables, timers, running sequences, armed runs, edge and press memory and queued events and commands; its animation state, sprites, objects, sheet and open frame; its local sounds; its cue marks; and its watch list. There are exactly four things that can happen to an open page, and a receiver and a server MUST treat them so:
+  1. **The page is closed while its connection stands**: the viewer selects another page or another sub-code, follows a link, or closes the tab. The receiver gives the lost releases of RULE-8, runs the one `close` tick (RULE-5), lets that tick's reports leave (RULE-52 item 4), and then drops all of the page's local state. Coming back to the page later is a new selection: the server and the program send it afresh, and its `open` fires at a new page tick 0.
+  2. **The push connection ends** — the view's connection to the server closes, fails or is replaced, for any reason. The receiver MUST at once drop all local state of the page that view had open, with every local sound stopped and every note released, run no `close` tick, discard every RULE_EVENT not yet acknowledged (RULE-46) and keep presenting the last picture as it stood, frozen. When a connection is made again, the receiver selects the page as a new selection, whether or not the session is resumed (RESUME restores the session's identity and nothing of a page); the page is sent afresh and its `open` fires again. The server, when a connection ends, MUST forget everything it holds for it of any page: the names of its table, its generation counter, its timelines, its open frame, and its unanswered state queries (each refused `not_answered`).
+  3. **The program's connection to the server ends** (the program stops, fails or is restarted). The server MUST, for every connection of that channel, stop every timeline, end any open frame, and send for the page it has selected a RULES record that says the page has no table (or the channel's default table, RULE-53), which makes the receiver drop the table and with it the variables, timers, sequences and armed runs; it holds nothing over for the program's return. When the program is back it is told of each connection's selection as a new one and sends each page afresh.
+  4. **The tab stops being the active tab, or the page otherwise stops being the open page while still selected** (another tab is brought forward, the overview or a wall is shown). This is **not** a disconnect and not a close: the page is **paused**. The receiver gives the lost releases of RULE-8 in one last tick, then evaluates no tick, gives the page no input, makes no report, forgets its cue marks, and has the sound helper stop rendering the page's local sounds (their instruments are kept, silent, with every note released). The page tick does not advance. Records the server sends meanwhile are applied as for any page that is shown but not open (animation operations are; commands that need the evaluator are dropped and counted, RULE-50). When the page is the open page again, evaluation goes on from the next page tick with every variable, timer and sequence as it was; `open` does not fire.
+- No state is ever carried across a close or a disconnect, by either side, and none is rebuilt: the state query is not used for it, the server replays no animation state, table, sprites, objects or sheet to a returning viewer, and what a late viewer is sent is what the page's program sends on its selection (RULE-40).
+- **Reason and source.** DEC-6587 item 3 (the owner: "after a disconnect i think EVERYTHING should be dropped and the page reloads"); DEC-6599 item 2. Its cost, stated in that decision: a network break stops a page's local sound and resets it. Pausing a background tab, rather than closing it, is this document's (section 15, item 40): a viewer who glances at another tab should not find a counter reset, and a paused page does nothing at all, so nothing is risked by keeping it.
+- **Verification.** Browser tests: each of the four cases — after a close, the `close` report leaves and the next selection starts from zero; after the connection ends, no `close` report is made, the unacknowledged RULE_EVENT is not sent on the new connection, and `open` fires again; a paused page evaluates nothing, sounds nothing and resumes with its variables. Server tests: a connection's end forgets its names and timelines; a program's end sends the empty table to each connection; a returning viewer is sent nothing kept.
 
 **RULE-56 [engine]. One crate, `neoteletext-rules`, holds the codec, the checks and the evaluator.**
-- **Statement.** The engine repository MUST gain the crate `crates/neoteletext-rules`: `no_std`, without allocation, integer-only, with no dependency of any kind (not even another engine crate), `unsafe_code` forbidden, and denying the panic lints of DEVELOPMENT.md section 6 since it reads outside input. It holds: `limits` (every constant of RULE-57); `table` (the decoded table in fixed arrays); `decode` and `encode` of the RULES record's body, PAGE_STATE's payload and the animation operations shared with the ANIMATE record; `check` (every rule the decoder applies, callable on encoded bytes); `default_send_all`; `Evaluator` (the state of RULE-7 and the tick of RULE-5), which is given events, the metered values, and a `World` trait through which it reads target rectangles and tracked synthesizer values and to which it issues outputs (sound operations, animation operations, reports); and the interest mask and watch list of a table. Key codes, family codes and parameter numbers are plain numbers to it; the callers that know them (the server through `neoteletext-input` and `neoteletext-audio-instruments`' interface modules; the decoder through the trackers) check what the crate cannot.
+- **Statement.** The engine's crate `crates/neoteletext-rules` MUST be: `no_std`, without allocation, integer-only, with no dependency of any kind (not even another engine crate), `unsafe_code` forbidden, and denying the panic lints of DEVELOPMENT.md section 6 since it reads outside input. It holds: `limits` (every constant of RULE-57); `table` (the decoded table in fixed arrays, its groups as their checked bytes with an index of commands); `decode`, `encode` and `check` of the table image, of the bodies of the records of types 28 to 33, of PAGE_STATE's payload and of the animation operations shared with the `ANIMATE` record; `default_send_all`; `Evaluator` (the state of RULE-7, the arrival step of RULE-96 and the tick of RULE-5), which is given events, cues, the metered values, the commands the server sent, and a `World` trait through which it reads target rectangles and tracked synthesizer values and to which it issues outputs: every command of a run it does not carry out itself is handed to the `World` as its record type and body, amounts resolved, to be applied by the code that applies that record from the server; and the interest mask and watch list of a table. Because it has no dependency, it reads the bodies of `CONTROL`, `SPRITES` and `NAPLPS_OBJECTS` through a **body check** its caller passes to `decode` and `check` (a function from a record type and a body to accepted or refused, and for a `CONTROL` its page and flags); `neoteletext-web` provides the one such function, built on the records' own readers, and the server and every receiver pass that one. Key codes, family codes and parameter numbers are plain numbers to it; the callers that know them check what the crate cannot.
 - **Reason and source.** DEC-6522 item 9: the server checks a table "with the browser's own code". One implementation of decode and check means a table the server accepts is a table every receiver accepts; no dependency means it builds for every engine target, microcontrollers included.
 - **Verification.** `cargo xtask check-deps` and `check-io` list it with nothing permitted; it builds for `thumbv6m-none-eabi`; `cargo xtask features` builds it alone.
 
-**RULE-57 [engine: neoteletext-rules]. The limits, each a named constant defined once in `neoteletext_rules::limits`.**
-- **Statement.** These are maximums. A table over any of them is refused whole (RULE-70).
+**RULE-57 [engine: neoteletext-rules; every repository]. The limits: every figure in this one requirement, each a named constant defined once.**
+- **Statement.** This requirement is the one place in this document where a limit of a page's rule table is given as a figure; it is rdm requirement REQ-6608, and the two MUST agree. Every other requirement refers to a limit by its constant's name. Each limit is a maximum, never a minimum. Each MUST be one named constant, defined once, in the engine's crate `neoteletext_rules::limits`, and used by name wherever it is applied: by the server when it checks a table, by the receiver when it loads one, and in the kits' documents (generated from the constants, or compared with them by a test); no other file may state one of these figures as a literal. A table that passes any limit, when a program sends it or when a receiver is sent it, MUST be refused whole, with a refusal that names the limit's constant and its value (RULE-39, RULE-70); it is never accepted in part and never cut short. Every limit counts for one page — one page number and sub-code — alone (RULE-112).
 
 | Constant | Value | What it bounds |
 |---|---|---|
-| `TICKS_PER_SECOND` | 60 | the clock (ANIM-1 asserts the engine's and this agree) |
-| `MAX_RULES` | 64 | rules a table (DEC-6522 item 10) |
-| `MAX_ACTIONS` | 16 | actions a rule (item 10) |
-| `MAX_TIMERS` | 8 | timers a table, beside the page timer (item 10) |
-| `MAX_VARIABLES` | 32 | variables a table (item 10) |
-| `MAX_RECTS` | 16 | rectangles a table |
-| `MAX_SUBPAGE_MASKS` | 16 | sub-pages with rules switched off |
-| `MAX_KEYS_PER_TRIGGER` | 16 | keys in a key set |
-| `MAX_CONDITION_TERMS` | 8 | terms a condition (item 6) |
-| `MAX_CONDITION_NODES` | 16 | nodes a condition |
-| `MAX_CONDITION_DEPTH` | 3 | operator nesting (item 6) |
+| `MAX_GROUP_COMMANDS` | 32 | commands in one group |
+| `MAX_GROUPS` | 64 | groups a page, the unnamed ones the server makes among them |
+| `MAX_GROUP_DEPTH` | 4 | the depth to which a group may run other groups; no cycle is allowed at any depth |
+| `MAX_RUN_COMMANDS` | 128 | commands applied by one run of a group, counting every group it runs |
+| `MAX_COMMAND_BYTES` | 256 | bytes of one command's body in a group |
+| `MAX_GROUPS_BYTES` | 16,384 | bytes of all of a page's groups together, as framed |
+| `MAX_RULES` | 64 | rules a page |
+| `MAX_ROWS` | 64 | binding rows a page |
+| `MAX_SEQUENCES` | 8 | sequences a page |
+| `MAX_SEQUENCE_STEPS` | 64 | steps in one sequence |
+| `MAX_SEQUENCE_REPEAT` | 255 | the stated repeats of a sequence, 1 to this; or until stopped |
+| `TIMERS` | 8 | timers a page, exactly, `t0` to `t7`, beside the page timer |
+| `MAX_ARMED_RUNS` | 16 | runs armed and waiting, by the server or for a timer's beat |
+| `VARIABLES` | 16 | variables a page, exactly, `v0` to `v15`, each a saturating 32-bit signed integer |
+| `MAX_CONDITION_TERMS` | 8 | terms in one rule's condition |
+| `MAX_CONDITION_DEPTH` | 3 | depth of nesting in one rule's condition |
+| `MAX_CONDITION_NODES` | 16 | nodes in one rule's condition, terms and operators together |
 | `MAX_SET_MEMBERS` | 8 | constants in an `in_set` |
-| `MAX_AND_OR_CHILDREN` | 8 | children of `and` or `or` |
-| `MAX_TABLE_VALUES` | 64 | distinct values a table reads |
-| `MAX_TABLE_TARGETS` | 64 | distinct controls and objects a table names |
-| `MAX_WATCHED` | 32 | distinct metered values a table reads (RULE-33) |
-| `MAX_TABLE_BYTES` | 8,184 | an encoded table (one record body) |
-| `MAX_TIMER_TICKS` | 216,000 | `ticks` of `every` and `after` (one hour) |
-| `MAX_CYCLE_PERIOD` | 3,600 | ticks a frame of a cycle (one minute) |
-| `MAX_FRAME` | 15 | the highest frame number (ANIM-14's `MAX_OBJECT_FRAMES` is 16) |
-| `MAX_EVENTS_PER_TICK` | 16 | input events handled a tick |
+| `MAX_AND_OR_CHILDREN` | 8 | children of an `and` or an `or` |
+| `MAX_TRIGGERS_PER_RULE` | 4 | triggers on one rule, any of which fires it |
+| `MAX_KEYS_PER_TRIGGER` | 16 | keys in one trigger's key set |
+| `ROW_PARAMETERS` | 4 | parameters in a binding row, exactly, `p0` to `p3` |
+| `MAX_RULE_ROWS` | 128 | the sum, over a page's rules, of the rows each names, a rule without rows counting one: the most firings one event can cause |
+| `MAX_COMMAND_BINDINGS` | 8 | bindings on one command |
+| `MAX_RECTS` | 16 | rectangles a page's table declares |
+| `MAX_SEQUENCE_TICKS` | 216,000 | a sequence's length in ticks (one hour) |
+| `MAX_TIMER_TICKS` | 216,000 | `ticks` of `every`, `after` and a beat (one hour) |
+| `MAX_ARM_TICKS` | 216,000 | how far ahead, in ticks, a run may be armed (one hour) |
+| `MAX_HOLD_TICKS` | 3,600 | `ticks` of `held` and `press_held` (one minute) |
+| `MAX_DOUBLE_TICKS` | 120 | `ticks` of `double` and `double_press` (two seconds) |
+| `MAX_RECENT_PRESSES` | 16 | presses remembered for `double` and `double_press` |
+| `MAX_CUE` | 127 | the highest cue number |
+| `MAX_CUES_PER_TICK` | 8 | cues acted on in one tick |
+| `MAX_QUEUED_COMMANDS` | 64 | commands the server sent directly, waiting for a tick |
+| `MAX_EVENTS_PER_TICK` | 16 | input events handled in one tick |
 | `MAX_QUEUED_EVENTS` | 64 | input events waiting |
-| `MAX_ACTIONS_PER_TICK` | 256 | actions run a tick (item 10: "evaluation capped per tick") |
 | `MAX_KEYS_DOWN` | 16 | keys tracked as down |
-| `MAX_POINTER_OBJECTS` | 16 | objects the pointer is followed inside at once (RULE-9) |
+| `MAX_POINTER_OBJECTS` | 16 | objects the pointer is followed inside at once |
+| `MAX_TABLE_VALUES` | 64 | distinct values a table reads |
+| `MAX_TABLE_TARGETS` | 64 | distinct controls and objects a table names by a constant |
+| `MAX_WATCHED` | 32 | distinct metered values a table reads (RULE-33) |
+| `MAX_TABLE_BYTES` | 32,768 | a table's image |
+| `MAX_TABLE_FRAGMENT` | 8,172 | image bytes in one RULES record: `MAX_FRAMED_BODY` less the 12 bytes before them, asserted |
+| `MAX_STATE_BYTES` | 1,800 | a PAGE_STATE payload, asserted from its parts |
+| `MAX_CYCLE_PERIOD` | 3,600 | ticks a frame of a cycle (ANIM-14) |
+| `MAX_FRAME` | 15 | the highest frame number (ANIM-14) |
 | `MAX_CATCH_UP_TICKS` | 6 | overdue ticks run in one wake |
-| `MAX_STATE_BYTES` | 1,800 | a PAGE_STATE payload |
+| `TICKS_PER_SECOND` | 60 | the clock (ANIM-1 asserts the engine's and this agree) |
 
-- The trusted core's constants live in the browser's `protocol` crate: `INPUT_RING` 64, `SEND_WINDOW_TICKS` 4, `SEND_BUDGET` 120 a second, `TIMED_SEND_BUDGET` 20 a second, `QUERY_INTERVAL_TICKS` 60. The server's `MAX_KEPT_TABLES` 64 lives in `teletext-runtime`. The local sound's constants are RULE-62's.
-- `MAX_ACTIONS_PER_TICK` is never passed (RULE-6): a rule firing whose actions would take the tick's count past it is dropped whole, so that no more than 256 actions ever run in a tick, and a rule's `echo` counts as one action.
-- The fixed arrays these size make a decoded table about 76 kilobytes and an evaluator about 91; a microcontroller keeps them in static memory.
-- The worst case of one tick follows from them: 16 events × 64 rules, each a condition of at most 16 nodes, and at most 256 actions; a few tens of thousands of integer operations, far inside a tick on any target the engine supports.
-- **Reason and source.** DEC-6522 item 10; the engine's rule that every constant is defined once (REQ-GEN-014).
-- **Verification.** A test for each constant: a table at the limit is accepted and one over is refused; `cargo xtask check-constants`.
+- There is no limit on the work a run of a group costs (the owner: "i agree with constraining the number of commands in a group but not work cap"). The receiver's general budgets, which apply to every command however it arrives — the repaint budget (REQ-6368), the animation budget (ANIM-16), the trusted core's report and sound command budgets (RULE-52) and the sound helper's queue and overrun figures (RULE-62) — are not limits of the rule table; each is stated once, in the requirement named, and defined in its own crate.
+- Withdrawn with the first form: `MAX_ACTIONS` (actions a rule), `MAX_VARIABLES` (declared variables), `MAX_TIMERS` as a count of declarations, `MAX_SUBPAGE_MASKS`, `MAX_ACTIONS_PER_TICK`, and the server's `MAX_KEPT_TABLES` (the server keeps no table, RULE-40).
+- **Reason and source.** The owner, 18 November 2026: "ensure that set of limits is put into a single requirement" (REQ-6608); DEC-6587 items 2, 6 and 7; DEC-6522 items 6 and 10; the engine's rule that every constant is defined once (REQ-GEN-014, DEC-646). The limits REQ-6608's first version did not name (from `MAX_CONDITION_NODES` down in the table) are this document's (section 15, item 41), and REQ-6608 was revised to hold them.
+- **Verification.** In the engine, for each constant: a table exactly at the limit is accepted and one over is refused whole with that limit's name; a table with a cycle of groups is refused; a test asserts the constants' values are this table's; `cargo xtask check-constants`. In the server: the same pairs of tables as program messages. In the kits: the documents' table of limits generated from, or compared with, the constants. A check script step fails if one of these figures appears as a literal beside the name of a limit outside `neoteletext-rules`.
 
 **RULE-58 [neoteletext-browser]. Where the table lives in the browser: the decoder evaluates, the trusted core gates.**
-- **Statement.** The decoder process of the page's channel — confined, with no network, no file access and no secrets, and already the reader of every record of that channel — MUST decode the RULES record (with `neoteletext-rules`), hold the table and run the evaluator on its own presentation clock. The trusted core MUST NOT decode or evaluate a table, and `neoteletext-rules`' evaluator MUST NOT be linked into it; it does only RULE-52. A table is evaluated only for the **open page**: the one page of the active tab that keys would go to (the browser's REQ-1378). A page that is merely visible in the overview or a wall, or in a tab that is not active, has no evaluator running, plays no local sound and is given no input. While no open page has a table, the decoder keeps no 60-a-second wake for rules (it still wakes for flash and animation, ANIM-1).
-- **Reason and source.** Evaluation of an untrusted table belongs in a confined process (the browser's requirement 1.2, DEVELOPMENT.md section 1 item 5); the decoder already holds the page, its objects and its instruments' trackers, so the evaluator needs no new message to read them. A waiting program waits on what it needs (decision 46): no table, no rule wake.
-- **Verification.** The browser's dependency-tree check lists `neoteletext-rules` in the decoder and (for RULE-59's check only) nowhere in the trusted core; a test that an idle page with no table causes no 60-a-second wake.
+- **Statement.** The decoder process of the page's channel — confined, with no network, no file access and no secrets, and already the reader of every record of that channel — MUST assemble and decode the table (with `neoteletext-rules`), hold it, run the evaluator on its own presentation clock, and apply each command of a run with the code that applies the same record from the server. It holds one table at most for each view: that of the page the view has selected, keyed by page number and sub-code. The trusted core MUST NOT decode or evaluate a table, and `neoteletext-rules`' evaluator MUST NOT be linked into it; it does only RULE-52. A table is evaluated only for the **open page**: the one page of the active tab that keys would go to (the browser's REQ-1378). A page that is merely visible in the overview or a wall, or in a tab that is not active, is paused (RULE-111): no evaluator runs, no local sound plays and it is given no input. While no open page has a table, the decoder keeps no 60-a-second wake for rules (it still wakes for flash and animation, ANIM-1).
+- **Reason and source.** Evaluation of an untrusted table belongs in a confined process (the browser's requirement 1.2, DEVELOPMENT.md section 1 item 5); the decoder already holds the page, its objects and its instruments' trackers and already applies every record a group can hold.
+- **Verification.** The browser's dependency-tree check finds `neoteletext-rules`' evaluator in the decoder and not in the trusted core; a test that an idle page with no table causes no 60-a-second wake.
 
-**RULE-59 [neoteletext-app-server]. The server checks and encodes with the same crate.**
-- **Statement.** The server MUST depend on `neoteletext-rules` at the engine revision it pins, build each RULES record with its `encode`, and pass the result through its `check` before sending (RULE-39). It MUST resolve key names with `neoteletext_input::keys::code` and synthesizer field names with the families' `PARAMETERS` tables (RULE-29), and has no table, key list or parameter list of its own.
-- **Reason and source.** DEC-6522 item 9; DEC-6462. It is how the server already checks ReGIS: with the renderer's own code.
+**RULE-59 [neoteletext-app-server]. The server checks and encodes with the same crates.**
+- **Statement.** The server MUST depend on `neoteletext-rules` and `neoteletext-web` at the engine revision it pins, build each table image and each command record with their `encode` — one function for a command whether it is sent directly or put in a group — and pass each image through `check`, with `neoteletext-web`'s body check, before sending (RULE-39). It MUST resolve key names with `neoteletext_input::keys::code` and synthesizer field names with the families' `PARAMETERS` tables (RULE-29), and has no table, key list or parameter list of its own.
+- **Reason and source.** DEC-6522 item 9; DEC-6462; DEC-6587 ("the server checks a group by the checks it already runs").
 - **Verification.** A server property test: every table the server accepts decodes in `neoteletext-rules` to the same table.
 
 ## 10. Latency: from a key to sound and to the picture
 
-**RULE-60 [engine: neoteletext-audio; neoteletext-browser]. A local sound: an instrument the page keeps open, played by rules.**
-- **Statement.** The audio profile MUST gain the **local sound**: a synthesizer sound of any family that plays notes (codec codes 13 to 18; not the synth6581 family, which has no note messages) whose OBJECT record carries the new tag 9, `TAG_LOCAL`, with one value byte, 1. It is announced as a stored sound of one block of that family, and its one block is the **setup**: an event list in the block form of midi-architecture.md MIDI-23 with every event at tick 0, at most `MOST_BLOCK_BYTES` (1,005) bytes, applied in order when the instrument is made. It names its banks as other sounds of its family do. A receiver never renders a local sound from blocks and never streams it: when a play command (from the server or from a rule's `play`) starts it on an audio channel, the receiver makes the family's instrument in its sound output stage, applies the setup, and from then on gives it the messages of rules' `midi` actions (RULE-21) as they arrive. `stop` and `gain` act on its audio channel as on any sound. A local sound MUST be played with a page scope (the play command's page) and ends, with all notes released, when that page is no longer the open page. At most `MOST_LOCAL_SOUNDS` (2) play at once in a view; a third play is refused and counted. A receiver without a sound output stage of this kind ignores a local sound's OBJECT, as it ignores a codec it does not have.
-- **Reason and source.** The owner's goal: "INSTANTLY PLAYING ON A KEYPRESS". Today every synthesizer sound is rendered ahead in the decoder and streamed, and the mixer holds a stream silent until `STREAM_TARGET_MS` (400 milliseconds) is buffered, so no message can reach a sounding instrument in less. A local sound has no timeline of the server's to keep, so it needs no buffer.
-- **Verification.** Engine tests: the OBJECT with tag 9 parses, and the audio receiver gives a sink the local sound's start instead of a stream; a browser test that a local sound ends when its page closes.
+**RULE-60 [engine: neoteletext-audio; neoteletext-browser]. A local sound: an instrument the page keeps open, played by `LOCAL_MIDI`.**
+- **Statement.** The audio profile has the **local sound**: a synthesizer sound of any family that plays notes (codec codes 13 to 18; not the synth6581 family, which has no note messages) whose OBJECT record carries tag 9, `TAG_LOCAL`, with one value byte, 1. It is announced as a stored sound of one block of that family, and its one block is the **setup**: an event list in the block form of midi-architecture.md MIDI-23 with every event at tick 0, at most `MOST_BLOCK_BYTES` (1,005) bytes, applied in order when the instrument is made. It names its banks as other sounds of its family do. A receiver never renders a local sound from blocks and never streams it: when a play command (a `CONTROL` record, from the server or in a group) starts it on an audio channel, the receiver makes the family's instrument in its sound output stage, applies the setup, and from then on gives it the messages of `LOCAL_MIDI` commands (RULE-21) as they arrive. Stop and gain act on its audio channel as on any sound. A local sound MUST be played with a page scope and belongs to the page that is open when it starts (RULE-112); it is silent while that page is paused and ends, with all notes released, when that page is closed or its connection ends (RULE-111). At most `MOST_LOCAL_SOUNDS` (2) play at once in a view; a third play is refused and counted. A receiver without a sound output stage of this kind ignores a local sound's OBJECT, as it ignores a codec it does not have.
+- **Reason and source.** The owner's goal: "INSTANTLY PLAYING ON A KEYPRESS". A local sound has no timeline of the server's to keep, so it needs no buffer.
+- **Verification.** Engine tests: the OBJECT with tag 9 parses, and the audio receiver gives a sink the local sound's start instead of a stream; browser tests that a local sound ends when its page closes and when its connection ends.
 
 **RULE-61 [neoteletext-app-server]. The local sound in the program protocol.**
-- **Statement.** The `sound` message MUST gain the kinds `synth7_local`, `synth106_local`, `synth60_local`, `synthd_local`, `synth53_local`, `synth52_local`, `synth51_local`, `synth8_local` and `synth80_local`. Each has the fields of its family's `_live` kind (`connections`, `handle`, `generation`, `banks`, and the family's own options such as synth8's key mode), and `setup`: a list of at most 64 of the family's events (`Synth106Event` and the others), each with `time_us` 0, which the server packs into the setup block and refuses with `block_full` when they do not fit. `play` of a local sound MUST name a `page`, with `loop` and `after` false, else `out_of_range`. Example:
+- **Statement.** The `sound` message has the kinds `synth7_local`, `synth106_local`, `synth60_local`, `synthd_local`, `synth53_local`, `synth52_local`, `synth51_local`, `synth8_local` and `synth80_local`. Each has the fields of its family's `_live` kind (`connections`, `handle`, `generation`, `banks`, and the family's own options such as synth8's key mode), and `setup`: a list of at most 64 of the family's events (`Synth106Event` and the others), each with `time_us` 0, which the server packs into the setup block and refuses with `block_full` when they do not fit. `play` of a local sound sent directly MUST name a `page`, with `loop` and `after` false, else `out_of_range`, and reaches only connections that have a sub-code of that page number selected; in a group it takes its page from the table. Example:
 
 ```json
 {"type":"sound","kind":"synth106_local","connections":"all","handle":1,"generation":1,"banks":[2],
  "setup":[{"event":"program_change","channel":1,"program":0,"time_us":0}]}
-{"type":"sound","kind":"play","connections":"all","channel":0,"handle":1,"generation":1,"gain":100,"fade_ms":5,"duck":0,"loop":false,"after":false,"page":"101"}
 ```
-- The server names the variant (the OBJECT's tag 5) on every sound of the synth106 and synth53 families, a local one too; an OBJECT that names no variant is of variant 0, so the two forms are the same sound. `wire-vectors.tsv` holds both forms of this example (RULE-85).
 - **Reason and source.** DEC-6462: the server packs; the kits send typed fields.
 - **Verification.** Server tests: the records built for each family; the refusals.
 
 **RULE-62 [neoteletext-browser; engine: neoteletext-audio-mix]. The sound helper renders a local sound in blocks of 128 samples.**
 - **Statement.** The sound helper MUST link `neoteletext-audio-instruments` and hold each local sound's instrument. The engine mixer MUST gain a **pulled voice**: a voice whose samples the mixer asks for as it mixes, at 48,000 samples a second, through the mixer's existing resampler to the device's rate. For each device buffer the helper renders each pulled voice just in time, in blocks of `LOCAL_BLOCK_SAMPLES` (128 samples, 2.67 milliseconds), and before each block applies every MIDI message queued for that instrument, in arrival order; the queue holds `LOCAL_MIDI_QUEUE` (256) messages, and one arriving at a full queue is dropped and counted. No buffer is held ahead: a message waits at most one block. While a local sound is open the helper asks the output device for a small buffer (RULE-97). While a local sound plays, the helper keeps the output device running, so that a note never waits for the device to start; a view's speaker mark still follows what is heard (a level above 0). When rendering a view's local sounds takes longer than the time of the buffer it fills for `LOCAL_OVERRUN_BUFFERS` (8) buffers running, the helper stops that view's local sounds with all notes released and reports it (fault 7). Each constant is defined once, in `neoteletext-audio-mix` (`LOCAL_BLOCK_SAMPLES`) and the browser's `sound` crate (the queue and the overrun count).
+- While the page a local sound belongs to is paused (RULE-111 case 4) the helper renders nothing for it, with every note released first, and keeps its instrument; when its page is closed or its connection ends the instrument is dropped. The device buffer the helper asks for while a local sound is open is RULE-97's.
 - **Reason and source.** Rendering inside the audio callback is the only place where the delay is one block and the device's own buffer. The instruments are `no_std`, integer-only and never allocate, which is what code on an audio thread must be.
 - **Verification.** A helper test with a scripted device: a note on queued before a buffer sounds within the first 128 samples of that buffer; the overrun stop; a measured figure for each family's cost of rendering one buffer of eight held notes, recorded with the date.
 
-**RULE-63 [neoteletext-browser]. The messages that carry a local sound.**
-- **Statement.** The voice operations of `protocol::audio` MUST gain, in the next operation numbers free (12 to 15 on 18 November 2026):
+**RULE-63 [neoteletext-browser]. The messages that carry a local sound, metering and cues.**
+- **Statement.** The voice operations of `protocol::audio` are, beside those that existed before the first form:
 
 | Operation | From | Fields |
 |---|---|---|
-| 12 `LocalBank` | the decoder | audio channel; the sound (handle, generation); bank index 0 to 9; the bank image, at most 16,384 bytes (`MOST_BANK_BYTES`) |
-| 13 `Local` | the decoder | audio channel; the sound; family code 13 to 18; variant; the family's option byte (synth8's key mode, else 0); synth8's split key; gain; the duck percentage; fade; the setup block, at most 1,005 bytes. Starts the instrument with the banks given for that channel and sound since the last `Local` |
-| 14 `LocalMidi` | the decoder | audio channel; status; data 1; data 2 — to the local sound on that channel |
-| 15 `Watch` | the trusted core alone | the watch list of RULE-33: a count 0 to 32 and that many slots of audio channel, kind and part |
+| `LocalBank` | the decoder | audio channel; the sound (handle, generation); bank index 0 to 9; the bank image, at most 16,384 bytes (`MOST_BANK_BYTES`) |
+| `Local` | the decoder | audio channel; the sound; family code 13 to 18; variant; the family's option byte; split; gain; fade; duck; the setup block, at most 1,005 bytes. Starts the instrument with the banks given for that channel and sound since the last `Local` |
+| `LocalMidi` | the decoder | audio channel; status; data 1; data 2 — to the local sound on that channel |
+| `Watch` | the trusted core alone | the watch list of RULE-33: a count 0 to 32 and that many slots of audio channel, kind and part |
+| `Cue` | the decoder | a cue mark of RULE-109: audio channel; the sound (handle, generation); the position, an unsigned 64-bit count of samples from the stream's start; the cue number 0 to 127 |
+| `Pause` | the trusted core alone | the view's local sounds are silenced with notes released, or resumed (RULE-111 case 4) |
 
-- and the sound helper's messages to the trusted core gain kind 5, `Metered`: the view's channel number, a count and that many bytes (RULE-33); and kind 6, `LocalOverrun`: the view's channel number, which the trusted core turns into fault 7 for that view's open page (RULE-62). The trusted core checks every field's bounds, never reads a bank image or a setup block, and passes them on unread, as it passes samples. The new messages between the trusted core and the other processes take the next kind numbers free across every pipe, as the protocol crate's rule for kind numbers requires:
-
-| Kind | Message | Between | Carries |
-|---|---|---|---|
-| 178 | `RuleInput` | trusted core to decoder | one input event of the open page with its sequence number (RULE-52 item 1) |
-| 179 | `Metered` | trusted core to decoder | the sound helper's report (RULE-33) |
-| 180 | `RulesOpen` | decoder to trusted core | the interest mask, the watch list and the wheel rectangles of RULE-51 |
-| 181 | `Report` | decoder to trusted core | a request for a report (RULE-52 item 3) |
-| 182 | `PageState` | decoder to trusted core | the answer to a state query (RULE-47) |
-| 183 | `RulesFault` | decoder to trusted core | a fault and its count (RULE-48) |
-| 184 | `RulesQuery` | trusted core to decoder | a state query for the open page |
-| 185 | `RuleCounters` | decoder to trusted core | the counts of RULE-72 |
-| 186 | `RulesQuery` | fetcher to trusted core | a RULES_QUERY record the fetcher received, so that the trusted core passes a state only in answer to one (RULE-52 item 6) |
-| 187 | `RulesPage` | trusted core to decoder | which page of the channel is the open page of the active tab, or none, so that the decoder stops evaluating and stops local sound when its tab is no longer the active one (RULE-58) |
-
+- and the sound helper's messages to the trusted core have `Metered` (the view's channel number, a count and that many bytes, RULE-33), `LocalOverrun`, and `CueHeard` (the view's channel number, the audio channel, the cue number). The trusted core checks every field's bounds, never reads a bank image or a setup block, and passes them on unread, as it passes samples. Between the trusted core and a decoder the messages are: `Input` to the decoder with its sequence number; `Metered` and `CueHeard` to the decoder; `Paused` and `Resumed` to the decoder; `RulesOpen` from the decoder with the interest mask, the watch list and the wheel rectangles of RULE-51; `Report` from the decoder (RULE-52 item 3, with the rule and the row); `PageState` from the decoder; `Fault` from the decoder. The first build took voice operations 12 to 15 (`LocalBank`, `Local`, `LocalMidi`, `Watch`), the sound helper's kinds 5 (`Metered`) and 6 (`LocalOverrun`), and the pipe kinds 178 to 187 (`RuleInput`, `Metered`, `RulesOpen`, `Report`, `PageState`, `RulesFault`, `RulesQuery` to the decoder, `RuleCounters`, `RulesQuery` from the fetcher, `RulesPage`), which stay; `RulesPage` now names the page number and sub-code, or none, and its "none" is the pause of RULE-111. The messages the second form adds (`Cue`, `Pause`, `CueHeard`, and RULE-98's `FramePhase`) take the next operation and kind numbers free across every pipe at the browser's head, as the protocol crate's rule for kind numbers requires.
 - **Reason and source.** The existing shape: one payload form on both pipes, each side accepting only the operations meant for it.
-- **Verification.** Protocol tests for each message at its bounds, and that the decoder may not send `Watch`.
+- **Verification.** Protocol tests for each message at its bounds, and that the decoder may send neither `Watch` nor `Pause`.
 
 **RULE-64 [neoteletext-browser]. The latency budget from a key to sound.**
 - **Statement.** With a local sound playing, the path of a key press is, hop by hop, with the most each may add:
@@ -908,7 +1210,7 @@ The server encodes each message for receivers as a record in the audio profile's
 - **Verification.** RULE-66's measurement.
 
 **RULE-65 [neoteletext-browser]. The latency budget from a key to the picture.**
-- **Statement.** A rule's `show`, `hide`, `look`, `move`, `frame` or `order` MUST be painted by the decoder in the tick that ran it, as a damage repaint of the changed rectangle only (ANIM-4), and its frame given to the trusted core in that tick, marked as the answer to input so that the core's and the interface's "drawn as it arrives" rule applies (the browser's requirement 18.12, REQ-6400). Picture changes stay on the tick (RULE-5): only sound leaves on arrival. With the tick locked to the display's refresh (RULE-98), a tick is due `TICK_LEAD_MICROSECONDS` (4,000) before the interface composes a frame, and the frame the decoder paints in that tick MUST be in that composition. The path, with the most each part may add:
+- **Statement.** A command that changes the picture (`ANIMATE`, `SPRITES`, `NAPLPS_OBJECTS`) MUST be painted by the decoder in the tick that ran it, as a damage repaint of the changed rectangle only (ANIM-4), and its frame given to the trusted core in that tick, marked as the answer to input so that the core's and the interface's "drawn as it arrives" rule applies (the browser's requirement 18.12, REQ-6400). Picture changes stay on the tick (RULE-5): only sound leaves on arrival. With the tick locked to the display's refresh (RULE-98), a tick is due `TICK_LEAD_MICROSECONDS` (4,000) before the interface composes a frame, and the frame the decoder paints in that tick MUST be in that composition. The path, with the most each part may add:
 
 | Part | Most | Median |
 |---|---|---|
@@ -926,18 +1228,6 @@ The server encodes each message for receivers as a record in the audio profile's
 - The test MUST be able to run the browser with each of the three changes of DEC-6580 switched off for the measurement alone — evaluation at the tick (the decoder calling `push` in place of `push_now`), the device buffer left at 480 frames, and the tick left unlocked — by a setting of the test's own that no shipped configuration and no page can reach, so that the same test on the same machine on the same day gives the figures before and after each change. The six sets of figures (each change off, then on) are recorded with the date, the machine and the output device in the rdm requirement that carries this rule, and the change is not called done without them.
 - **Reason and source.** DEVELOPMENT.md section 2.1: performance claims carry before and after numbers from an instrument shown to exercise the changed code. DEC-6580: "Each is measured before and after, between real processes". The figures of 18 November 2026 were taken between threads of one process, which leaves out the processes' scheduling and their pipes.
 - **Verification.** It is the verification.
-
-**RULE-96 [engine: neoteletext-rules; neoteletext-browser]. An input event's rules are evaluated when it arrives.**
-- **Statement.** `neoteletext-rules`' evaluator MUST offer both ways of RULE-5 on one evaluator, freely mixed: `Evaluator::push(event)`, which leaves the event for the tick, and `Evaluator::push_now(event, world)`, which takes step 2 for it at once and gives the world the sound operations of the rules it fires (`World::sound_operation`) before it returns. `Evaluator::tick(world)` then runs the tick with those events already handled. The bounds are the tick's and are the same either way:
-  1. at most `MAX_EVENTS_PER_TICK` (16) events are handled for one tick, counting those handled on arrival; the 17th arrival of an interval waits in the queue for the next tick, and its sound operations leave when it is handled, on a later arrival or at a tick;
-  2. an event handled on arrival keeps its place among the `MAX_QUEUED_EVENTS` (64) waiting until its tick has run, so the 65th waiting event is dropped and counted whichever way events are given;
-  3. every firing counts against its tick's `MAX_ACTIONS_PER_TICK` (256), and one past it is dropped whole (RULE-6);
-  4. the snapshot is taken once a tick (RULE-7), never once an event.
-- When the page closes with events handled on arrival whose tick has not run, that tick is run before the final tick, so that what those events' rules wrote and reported is not lost when their sound has left.
-- **In the browser** the decoder MUST call `push_now` for each input event of the open page as soon as it has read the event from the trusted core's pipe, before any other work that is waiting (a record to decode, a repaint, a tick that is not yet due), and MUST write the `LocalMidi`, play, stop and gain messages its world is given during that call to the trusted core, and flush them, before it returns to that other work. It reads the pipe by waiting on it, never by looking at intervals (the browser's decision 46). Its world's answers during `push_now` are the page as it stands; its own record of what plays on each audio channel (RULE-27) MUST change for a sound operation at the end of the tick the operation belongs to, not when the operation leaves, so that no condition sees a sound operation in its own tick (RULE-6). A tick that falls due while an event is being handled runs after it. Everything else the decoder does for a tick — steps 3 to 7, the repaint, the reports to the trusted core (RULE-52), the animation — is unchanged and happens at the tick.
-- The interface and the trusted core change nothing for this rule: they already pass an event as it arrives. A receiver without a sound output of its own (`neottx rules-run`, the server's checks) may use either way; `neottx rules-run --on-arrival` uses the second, and writes the same lines.
-- **Reason and source.** The owner's decision DEC-6580 item 1. A table gains nothing from it that it could not do one tick later: see threat 16 of section 12.3.
-- **Verification.** The tests of RULE-5, RULE-7 and RULE-8 for arrivals; tests of each bound above (the 17th arrival, the 65th waiting, the cap, the close); the fuzz targets `rules_evaluate` and `rules_no_unasked_send` driven both ways (RULE-83). In the browser: a decoder test that an event read from the pipe while a tick is 10 milliseconds away writes `LocalMidi` before the tick, and RULE-66's interval from the key to `LocalMidi`.
 
 **RULE-97 [neoteletext-browser]. A small device buffer while a local sound is open.**
 - **Statement.** The sound helper opens its output device with a buffer of `USUAL_DEVICE_FRAMES` (480 frames at 48,000 a second, 10 milliseconds; at another rate the same time). While at least one local sound is open in any view — from the `Local` operation that starts it (RULE-63) until it ends — the helper MUST instead run the output device with a buffer of `LOCAL_DEVICE_FRAMES` (256 frames at 48,000 a second, 5.33 milliseconds; at another device rate the number of frames nearest that time):
@@ -960,26 +1250,26 @@ The server encodes each message for receivers as a record in the audio profile's
 - **Reason and source.** The owner's decision DEC-6580 item 3: "The presentation clock's ticks are phased so that a tick's work finishes just before the interface composes a frame … On a display refreshing faster than 60 times a second the tick stays 60 a second and falls on a frame boundary. No record or protocol changes." The slew and what is done on a display that is no multiple of 60 are section 15, items 20 and 21.
 - **Verification.** Decoder tests with a scripted clock and scripted `FramePhase` messages: at 60 hertz the ticks come to rest 4,000 microseconds before each composition within 200, having moved no more than 100 a tick; at 120 hertz every tick is 4,000 before a composition; a display of 59.94 hertz is followed with no tick skipped or repeated over 10 minutes; 144 hertz and a stale phase leave the clock free; a page's tick 0 is on the target. A protocol test of `FramePhase` at its bounds. RULE-66's figures with the lock off and on.
 
-Numbers RULE-67 to RULE-69 are not used. RULE-96 to RULE-98, added on 18 November 2026 for DEC-6580, stand above with the latency rules they belong to.
+Numbers RULE-67 to RULE-69 are not used. RULE-96 (section 2), RULE-97 and RULE-98 were added on 18 November 2026 for DEC-6580.
 
 ## 11. Refusal, faults and counters
 
 **RULE-70 [engine: neoteletext-rules; neoteletext-browser]. A table is accepted whole or refused whole.**
-- **Statement.** `decode` MUST refuse a body when any field is outside its range, any reserved bit or byte is not 0, any count exceeds its limit, any number refers to a variable, timer, rectangle or rule the table does not have, the condition is not one tree, the body is short, or bytes follow its end. Nothing of a refused table is kept or evaluated: the page then has no table (and so sends no input, RULE-50), and the receiver reports fault 1 (RULE-48). A receiver never repairs a table, skips a faulty rule, or holds a limit lower or higher than RULE-57's.
-- **Reason and source.** DEC-6522 item 10; the MHEG-5 lesson that errors silently ignored hide a divergence.
+- **Statement.** `decode` MUST refuse an image when any field is outside its range, any reserved bit or byte is not 0, any count exceeds its limit, any number refers to a rectangle, row, group or sequence the table does not have, a condition is not one tree, a command's type is not allowed or its body is refused by its record's reader, a binding names a field or a source RULE-106 does not allow, the groups run each other in a ring or too deep or a run would pass 128 commands, a row's parameter is not valid where a trigger uses it, the image is short, or bytes follow its end. Nothing of a refused table is kept or evaluated: the page then has no table (and so sends no input, RULE-50), and the receiver reports fault 1 (RULE-48). A receiver never repairs a table, skips a faulty rule or command, or holds a limit lower or higher than RULE-57's.
+- **Reason and source.** DEC-6522 item 10; DEC-6587 item 6 ("a table over any of them is refused whole").
 - **Verification.** The fuzz target `rules_decode`; a test that each single-byte corruption of a valid table either decodes to a valid table or is refused whole.
 
 **RULE-71 [neoteletext-browser]. A table is trusted for nothing.**
-- **Statement.** The decoder MUST treat every number in a table as untrusted when it is used as well as when decoded: an object number that names nothing, a handle with no sound, an audio channel with no local sound and a frame beyond an object's frames each make the action a counted no-op (RULE-20). No table can make the decoder allocate: every structure the evaluator uses is a fixed array sized by RULE-57.
-- **Verification.** The fuzz target `rules_evaluate`. That no table makes the evaluator allocate holds by construction and is checked by the engine's dependency check: `neoteletext-rules` is `no_std` and does not link `alloc` (RULE-56). No counting allocator is used, because a global allocator needs unsafe code, which the engine's fuzzing crate forbids.
+- **Statement.** The decoder MUST treat every number in a table as untrusted when it is used as well as when decoded: an object number that names nothing, a handle with no sound, an audio channel with no local sound and a frame beyond an object's frames each make the command a counted no-op (RULE-118). No table can make the decoder allocate: every structure the evaluator uses is a fixed array sized by RULE-57.
+- **Verification.** The fuzz target `rules_evaluate` under a counting allocator that fails the test on any allocation inside a tick.
 
 **RULE-72 [neoteletext-browser]. Counters.**
-- **Statement.** For the open page the decoder MUST count, and the browser's console MUST show to the page's author (as it shows a channel's log): ticks evaluated; rules fired; actions run; actions skipped; events dropped; sends asked for, sent and dropped; overruns; the newest metered values. The counts are the receiver's own and are sent to the channel only as the faults of RULE-48.
+- **Statement.** For the open page the decoder MUST count, and the browser's console MUST show to the page's author (as it shows a channel's log): ticks evaluated; rules fired; groups run; commands applied; commands skipped; events dropped; runs armed, run late and not armed; cues heard and dropped; reports asked for, sent and dropped; ticks evaluated late and the longest tick's time; the sixteen variables; the newest metered values. The counts are the receiver's own and are sent to the channel only as the faults of RULE-48.
 - **Verification.** A console test.
 
 ## 12. Security analysis
 
-This section is the analysis DEVELOPMENT.md sections 2.3 and 14 require of a feature that reads outside input and adds an output. Its findings are applied in the requirements named.
+This section is the analysis DEVELOPMENT.md sections 2.3 and 14 require of a feature that reads outside input and adds an output. It is the first form's analysis revised for the second form. Its findings are applied in the requirements named.
 
 ### 12.1 What is protected
 
@@ -996,198 +1286,275 @@ A hostile channel (its server and its program) that sends any bytes it likes as 
 
 | # | Threat | Answer | Remains |
 |---|---|---|---|
-| 1 | A table that is a program: loops, recursion, unbounded work | RULE-1, RULE-5, RULE-6: one pass a tick in a fixed order, nothing an action does is seen in the same tick, `MAX_ACTIONS_PER_TICK`; RULE-57's worst case | Nothing: the work of a tick is bounded by constants |
+| 1 | A table that is a program: loops, recursion, unbounded work | RULE-1, RULE-5, RULE-6: one pass a tick in a fixed order; no condition sees a command's effect in the same tick; groups nest to depth 4 with no ring and no condition inside, so a run is a constant list of at most `MAX_RUN_COMMANDS` commands (RULE-120); a sequence is a constant list of steps | The work of a tick is bounded by the table's constants, but the bound is large and there is no cap below it: section 12.4 |
 | 2 | A table built to exhaust memory or to crash the decoder | RULE-56 (no allocation, panic lints denied), RULE-70 (refused whole), RULE-71, the fuzz targets of RULE-83 | A fault in the crate would be confined to that channel's decoder, which holds only that channel's pages |
-| 3 | A page that takes input the viewer did not mean for it | RULE-58: only the open page of the active tab is given input, and only the classes its table asks for; RULE-51: the browser's own keys, links and the strip are never given; the insecure badge is unchanged | A page the viewer has open and is typing at can ask for every key typed at it, as every page could before this document; it can no longer have them without a table saying so |
+| 3 | A page that takes input the viewer did not mean for it | RULE-58: only the open page of the active tab is given input, and only the classes its table asks for; RULE-51: the browser's own keys, links and the strip are never given | A page the viewer has open and is typing at can ask for every key typed at it; it cannot have them without a table saying so |
 | 4 | Input leaving for somewhere else | RULE-52 items 3 and 4: the trusted core builds each report from its own copy of the event, for the page's own channel on its own connection | Nothing |
 | 5 | A decoder taken over, asking the core to send what the viewer never did | RULE-52 item 3: the decoder supplies no event bytes; a sequence number it was never given, or an old one, is dropped | It can cause real input on its own page to reach its own channel, which the channel's table could have asked for |
-| 6 | A covert channel out through values: a `send` of a value, or the state answer, carrying data chosen by a compromised decoder | RULE-52 item 5: 20 valued or bare reports a second; item 6: one state answer a query, a query a second | A compromised decoder can already send its channel nothing it does not already hold (its own pages and its own page's input); the budget bounds the rate |
-| 7 | Learning the viewer's settings or other tabs through metered values | RULE-32: `level` is measured before the master volume and the mute, per view; RULE-33: the helper reports a view's values only to that view | Nothing in the design. See 8 |
-| 8 | A sound helper taken over through an instrument (a hostile bank image or MIDI stream), reporting another view's sound as this view's levels, which a colluding table then sends home | The instruments and the mixer are `no_std`, allocation-free and forbid `unsafe`, and every family's bank reader and message reader is fuzzed (RULE-83); the trusted core accepts a report only of the length of the list it passed (RULE-33 item 4), so at most 32 bytes a tick | A fault in the instruments that gave control of the helper would let a page learn which other tabs sound, at up to 32 bytes a tick. The helper already held every tab's sound before this document; what is new is a path back. It is recorded for the owner (section 15, item 12) |
-| 9 | Sound as a nuisance or a weapon: a table that plays loud notes for ever | The viewer's volume and mute are outside a page's reach; a local sound ends when its page is no longer open (RULE-60); the audio profile's limiter is unchanged | A page can make sound while open, as it could with the audio profile |
-| 10 | Processor exhaustion through local instruments | `MOST_LOCAL_SOUNDS` 2 a view, only for the open page; RULE-62's overrun stop | A page can cost up to the overrun bound of processor on the audio thread for 8 buffers before it is stopped |
-| 11 | Processor exhaustion through animation actions | The animation budget (ANIM-16) and the repaint budget (REQ-6368) | As animation.md states |
-| 12 | Timing: a table as a clock for measuring the machine | A page tick is all a table can read of time, and `send` reports it; ticks slow under load (RULE-4) | A channel can learn that the machine was late by comparing ticks with its own clock: about one bit a second, of the machine's load |
-| 13 | Fingerprinting the keyboard layout through `physical` and `char` keys | The KEY event already carries both (`key` and `base`), so a page that is sent keys learns the layout today | Unchanged |
-| 14 | A table that survives the page: acting after the viewer has left | RULE-58: evaluation stops, and local sounds end, when the page is not the open page; variables are not kept (RULE-14) | Nothing |
-| 15 | The default table (RULE-53) sending more than a page needs | It is the behaviour of 18 November 2026 made explicit, chosen for each channel by its operator; RULE-54 and the per-channel to-dos replace it | Until a channel moves, its pages ask for everything, as they did |
-| 16 | Evaluation on arrival (RULE-96) used to do more work than a tick allows, to act sooner than the page's own channel could, or to see what a tick would not; the small device buffer (RULE-97) or the phase message (RULE-98) used against the machine | RULE-96: an arrival is the viewer's own input, passed by the trusted core under RULE-52 as before; at most 16 are handled for a tick whichever way, each firing counts against that tick's 256 actions, the snapshot is taken once a tick, and an arrival reads only what its tick's step 2 would read. Only `midi`, `play`, `stop` and `gain` leave early, to the page's own audio channels, which the table could command one tick later; a report never leaves before its tick, so nothing reaches the channel sooner. RULE-97: the buffer is small only while a local sound is open, at most 2 a view (RULE-60), and one underrun or overrun returns it to 480 frames. RULE-98: the phase comes from the interface through the trusted core; a table reads nothing of it | A page with a local sound makes the audio thread wake 187 times a second in place of 100 while it is open, until the first overrun |
+| 6 | **A group that widens what is sent**: a `REPORT` in a sequence, an armed run or a nested group reporting input no rule asked for, or reporting it later | RULE-22 and RULE-52: a report carries an input event only as the trusted core's own copy, only for an event given to that page within 4 ticks; a run not made by an input's rule has no event to name. REQ-6523 is enforced where it was, in the core | Nothing new. A table can report that a key was pressed by storing the firing's `key` in a variable and reporting the variable later: that is the page's own viewer's input on that page reaching its own channel, which a `REPORT` in the key's own group does more directly |
+| 7 | A covert channel out through values: a report of a value, or the state answer, carrying data chosen by a compromised decoder | RULE-52 item 5: 20 valued or bare reports a second; item 6: one state answer a query, a query a second | A compromised decoder can already send its channel nothing it does not already hold; the budget bounds the rate |
+| 8 | Learning the viewer's settings or other tabs through metered values | RULE-32: `level` is measured before the master volume and the mute, per view; RULE-33: the helper reports a view's values only to that view | Nothing in the design. See 9 |
+| 9 | A sound helper taken over through an instrument (a hostile bank image or MIDI stream), reporting another view's sound as this view's levels or cues, which a colluding table then sends home | The instruments and the mixer are `no_std`, allocation-free and forbid `unsafe`, and every family's bank reader and message reader is fuzzed (RULE-83); the trusted core accepts a metering report only of the length of the list it passed, and a `CueHeard` only for a sound that view plays, at most 8 a tick | A fault in the instruments that gave control of the helper would let a page learn which other tabs sound, at up to 32 bytes a tick. Recorded for the owner (DEC-6525 item 12) |
+| 10 | Sound as a nuisance or a weapon: a table that plays loud notes for ever, or a sequence that never stops | The viewer's volume and mute are outside a page's reach; a local sound is silent while its page is paused and ends when it is closed or disconnected (RULE-111); a group cannot start a sound for the whole service (RULE-119); the audio profile's limiter is unchanged | A page can make sound while it is the open page, as it could with the audio profile |
+| 11 | Processor exhaustion through local instruments | `MOST_LOCAL_SOUNDS` 2 a view, only for the open page; RULE-62's overrun stop; the core's `SOUND_COMMAND_BUDGET` | A page can cost up to the overrun bound of processor on the audio thread for 8 buffers before it is stopped |
+| 12 | Processor exhaustion through animation commands | The animation budget (ANIM-16) and the repaint budget (REQ-6368), which hold painting however the operations arrive | The state changes themselves are not budgeted: section 12.4 |
+| 13 | Timing: a table as a clock for measuring the machine | A page tick is all a table can read of time, and a report carries it; ticks slow under load (RULE-4); fault 9 says so once a second at most | A channel can learn that the machine was late: about one bit a second, of the machine's load |
+| 14 | Fingerprinting the keyboard layout through `physical` and `char` keys | The KEY event already carries both, so a page that is sent keys learns the layout today | Unchanged |
+| 15 | A table that survives the page: acting after the viewer has left, or after a reconnect | RULE-111: a paused page evaluates nothing, sounds nothing and reports nothing; a closed or disconnected page's state is dropped whole; armed runs and sequences are dropped with it; nothing is kept by the server | Nothing |
+| 16 | **Self-modification**: a table that rewrites its rules, groups, sequences or rows when triggered, so that what was checked is not what runs | RULE-119: no command defines or changes any of them; a table changes only by a new RULES record from the server, checked whole | Nothing |
+| 17 | **Computed addresses**: a variable choosing which sound, object, group or variable a command acts on | RULE-106: no audio channel, handle, group, timer, sequence, variable or status takes a binding; a target's number takes only a constant of the table (a row) or the object the viewer's own pointer event named | Nothing |
+| 18 | A stored `REDIRECT`, link change or stream write applied at a local time | RULE-119 forbids every record but the ten listed | Nothing |
+| 19 | The server arming runs to act when the viewer is not looking | An armed run is run only at a tick of the open page; a paused page runs none, and they are dropped at close | Nothing |
+| 20 | The default table (RULE-53) sending more than a page needs | It is the behaviour of 18 November 2026 made explicit, chosen for each channel by its operator; RULE-54 and TODO-6544 replace it | Until a channel moves, its pages ask for everything, as they did |
+| 22 | Evaluation on arrival (RULE-96) used to do more work than a tick allows, to act sooner than the page's own channel could, or to see what a tick would not; the small device buffer (RULE-97) or the phase message (RULE-98) used against the machine | RULE-96: an arrival is the viewer's own input, passed by the trusted core under RULE-52 as before; at most `MAX_EVENTS_PER_TICK` are handled for a tick whichever way, the snapshot is taken once a tick, and an arrival reads only what its tick would read. Only sound commands leave early, to the page's own audio channels, which the table could command one tick later; a report never leaves before its tick, so nothing reaches the channel sooner. RULE-97: the buffer is small only while a local sound is open, and one underrun or overrun returns it. RULE-98: no page, record or channel can read or change the phase | Nothing |
+| 21 | State left on the server about a viewer | RULE-40, RULE-111: the server keeps no table, animation state or local state for a connection beyond its end | Less than the first form kept |
 
-### 12.4 Requirements of the analysis
+### 12.4 What a hostile table can do with no work cap
+
+The owner ruled that a group is limited by its number of commands and not by a cap on its work (DEC-6587 item 2), and the first form's limit of actions a tick is withdrawn with it. This is what that leaves, stated plainly.
+
+**The bound that remains.** The work of one tick is still bounded by constants of the table, because nothing loops: an event fires at most `MAX_RULE_ROWS` rule-and-row pairs; each firing is one run of at most `MAX_RUN_COMMANDS` commands; at most `MAX_EVENTS_PER_TICK` events are handled a tick. So one tick applies at most `MAX_EVENTS_PER_TICK × MAX_RULE_ROWS × MAX_RUN_COMMANDS` commands for input (262,144 at RULE-57's figures), and without any input — from timers that fire every tick, sequences and armed runs — at most `(MAX_RULE_ROWS + MAX_SEQUENCES × MAX_SEQUENCE_STEPS + MAX_ARMED_RUNS) × MAX_RUN_COMMANDS` (83,968). A command is small (a record of at most `MAX_COMMAND_BYTES`; an `ANIMATE` of that size holds about 45 operations, each a few writes to the animation state), but 84,000 of them sixty times a second is several million small operations a tick: more than a tick's time on an ordinary machine.
+
+**What a hostile page can therefore do**, while it is the open page of the active tab and for no longer:
+1. **Keep one processor core busy in its own decoder process.** The decoder is confined and holds only that channel's pages. Its ticks then run late, page time slows (RULE-4), fault 9 is reported, and the console shows the longest tick. Other channels' decoders, the trusted core and the interface are other processes and are not slowed by it, except as any busy process slows a machine.
+2. **Ask for more painting than can be done.** It cannot make it happen: the animation budget and the repaint budget hold painting to their figures however the operations arrived, and slow the animation, never the viewer's input (ANIM-16).
+3. **Flood the sound path** with `LOCAL_MIDI` and `CONTROL` commands. The trusted core passes at most 512 a tick for a view (RULE-52 item 5) and the sound helper queues at most 256 a block and stops a sound that overruns (RULE-62); the rest are dropped and counted. This budget is general — it applies to the server's records too — and is the one protection the second form adds, because the sound path crosses the trusted core, which every tab shares.
+4. **Flood reports.** It cannot: the trusted core's report budgets are unchanged.
+
+**Why this is accepted.** A hostile channel could already do the first of these by sending records without pause, at the cost of its own bandwidth; a table does it at no cost to the channel, which is the difference. What is at risk is the viewer's processor for as long as they keep a hostile page in front of them, in a process that can reach nothing: not their input, their files, their network, other channels or other tabs. Closing the page, or bringing another tab forward, ends it at once (RULE-111). No general budget is needed for the variable, timer, sequence and run commands themselves, which cost a few instructions each.
+
+**The residual risk, for the owner.** A page can make its own tab stutter and use a core's worth of power while it is open, and the only thing that stops it is the viewer leaving. If that proves to matter, the remedy that keeps the owner's ruling is not a cap on a group but a watchdog on the page: suspend a table whose ticks have run late for some seconds, and say so on the page. It is not built; DEC-6587's "when to reconsider" names the case, and RULE-72's counters and fault 9 are how it would be seen.
+
+### 12.5 Requirements of the analysis
 
 **RULE-80 [neoteletext-browser; engine]. The threat models are updated.**
-- **Statement.** The engine's `THREAT-MODEL.md` and the browser's `docs/security-analysis.md` MUST gain the table of section 12.3, and the browser's `docs/architecture.md` the processes' new messages (section 6.4) and the decoder's and the sound helper's new holdings (section 6.1: the decoder holds the open page's rule state and input; the sound helper holds local instruments and reports levels).
+- **Statement.** The engine's `THREAT-MODEL.md` and the browser's `docs/security-analysis.md` MUST hold the table of section 12.3 and the statement of section 12.4, and the browser's `docs/architecture.md` the processes' messages (section 6.4) and the decoder's and the sound helper's holdings (section 6.1: the decoder holds the open page's table, groups and rule state and input; the sound helper holds local instruments and cue marks and reports levels and cues).
 - **Verification.** Review, recorded with its date.
 
 **RULE-81 [neoteletext-common]. Privacy: what a channel learns, and the rule channels are bound by.**
-- **Statement.** The protocol's privacy rules (viewer-state.md section 11, and the protocol document's items on input) MUST state that: a channel receives a viewer's input on a page only through that page's table; `send`, `echo` and the state query's answer reveal what the viewer did on that page — keys, clicks, the variables their keys changed, which objects the page showed — to that page's own channel and to no one else; a channel MUST use them only to provide what the page offers the viewer, as it is bound for the viewer's handle (viewer-state.md VS-409); and a channel MUST NOT ask for input a page does not use. The browser's privacy page says the same in the viewer's terms.
-- **Where it is stated.** viewer-state.md VS-704 states it among the protocol's privacy rules, and the protocol document states it as the normative item DOC-6593, "Privacy of the rule table: what send, echo and the state query reveal, and to whom", which documents REQ-6523 and REQ-6540. The text for the browser's privacy page is VS-704's last paragraph.
-- **Reason and source.** DEC-6522 item 12.
+- **Statement.** The protocol's privacy rules (viewer-state.md section 11, and the protocol document's items on input) MUST state that: a channel receives a viewer's input on a page only through that page's table; `REPORT` and the state query's answer reveal what the viewer did on that page — keys, clicks, the variables their keys changed, which objects the page showed — to that page's own channel and to no one else; a channel MUST use them only to provide what the page offers the viewer, as it is bound for the viewer's handle (viewer-state.md VS-503); a channel MUST NOT ask for input a page does not use; and neither side keeps a page's local state after the page is left or the connection ends (RULE-111). The browser's privacy page says the same in the viewer's terms.
+- **Reason and source.** DEC-6522 item 12; DEC-6587 item 3.
 - **Verification.** Review of the generated protocol document's items.
 
-**RULE-82 [neoteletext-browser]. The amendment to REQ-661.**
-- **Statement.** The browser's requirement 1.3 (REQ-661) MUST read: "The application MUST NOT execute code supplied by a page, a channel, a server or a file, with one exception: the decoder MAY evaluate a page's rule table as neoteletext-common's `docs/page-rules.md` defines it (DEC-6522) — a declarative list of event bindings evaluated once per tick of one sixtieth of a second — provided that the table is decoded and evaluated only by the engine crate `neoteletext-rules`, only in the confined decoder process and never in the trusted core; that it stays within every bound of that document's RULE-57 (at most 64 rules, 16 actions a rule, 8 timers and 32 variables a page; conditions of at most 8 integer comparisons nested at most 3 deep; at most 256 actions a tick; no rule firing another within a tick); and that nothing reaches the network because of it but the reports the trusted core itself builds under RULE-52 and the answer to a state query, to the page's own channel on its own connection. The rule table is not a script engine, a web engine or a general interpreter, and the inspection of the application's dependency tree continues to find none other than the decoder's WebAssembly interpreter, which runs only the application's own decoder module." Its reason gains the owner's ruling of 18 November 2026, and its verification gains the fuzz targets of RULE-83 and the hostile-decoder harness of RULE-52.
-- **Reason and source.** DEC-6522 item 1 amends REQ-417; REQ-661 is the browser's statement of the same rule and needs the same exception.
-- **Verification.** rdm: REQ-661 revised with this text.
+**RULE-82 [neoteletext-browser; engine]. The amendments to REQ-417 and REQ-661.**
+- **Statement.** The engine's REQ-417 (REQ-SEC-004) and the browser's REQ-661 (requirement 1.3) MUST state the exception as the second form has it: a page's rule table — rules that bind events to groups of protocol commands, evaluated once per tick of one sixtieth of a second — may be evaluated, provided that it is decoded and evaluated only by the engine crate `neoteletext-rules`, in the browser only in the confined decoder process and never in the trusted core; that it stays within every limit of RULE-57 (REQ-6608), which is the one place their figures are stated; that its only arithmetic beyond comparison is the saturating addition and subtraction of signed 32-bit integers in the variable commands and in a command's value held to the field's range, with no multiplication, division, loop within a tick or computed address; that no command changes a table, a group, a sequence or a row; that no rule fires another within a tick; and that nothing reaches the network because of it but the reports the trusted core itself builds under RULE-52 and the answer to a state query, to the page's own channel on its own connection.
+- **Reason and source.** DEC-6522 item 1 and DEC-6587 item 5 amend REQ-417; REQ-661 is the browser's statement of the same rule.
+- **Verification.** rdm: REQ-417 and REQ-661 revised with this text.
 
 **RULE-83 [engine; neoteletext-browser; neoteletext-app-server]. Fuzz targets.**
 - **Statement.** These targets MUST exist, each replaying first every input that ever found a fault (DEVELOPMENT.md section 8):
 
 | Target | Where | It holds that |
 |---|---|---|
-| `rules_decode` | engine | any bytes decode to a table within every limit or are refused whole; `encode(decode(x))` decodes to the same table |
-| `rules_evaluate` | engine | any valid table with any script of events, metered values and world answers runs any number of ticks without panic or allocation, never runs more than `MAX_ACTIONS_PER_TICK` actions in a tick, never reports an input event it was not given, and gives the same outputs when run twice; all of it with the events given at the tick and given on arrival (RULE-96), and both ways give the same sound operations, the same other outputs and the same counters at every tick |
-| `rules_no_unasked_send` | engine | (REQ-6523's) for any table and events, every report of an input event is of an event that matched an enabled rule holding `send` or `echo`, with the events given at the tick and given on arrival |
+| `rules_decode` | engine | any bytes decode to a table within every limit or are refused whole; `encode(decode(x))` decodes to the same table; no accepted table has a ring of groups, a run over 128 commands or a command RULE-119 forbids |
+| `rules_evaluate` | engine | any valid table with any script of events, cues, server commands, metered values and world answers runs any number of ticks without panic or allocation, never applies more commands in one run than the table's constant, never reports an input event it was not given, and gives the same outputs when run twice |
+| `rules_arrival` | engine | for any table and events, the sound commands delivered on arrival are exactly those the same events give when every command is run at the tick, with the same amounts (RULE-96) |
+| `rules_no_unasked_send` | engine | (REQ-6523's) for any table and events, every report of an input event is of an event that fired a rule whose run, in that event's tick, applied a `REPORT` of the firing |
+| `rule_commands` | engine (`neoteletext-web`) | the readers and writers of record types 28 to 33 agree and refuse what is out of range |
 | `rule_event`, `page_state` | engine (`neoteletext-input`) | the two messages' readers and writers agree and refuse what is out of range |
-| `local_midi` | engine (`neoteletext-audio-instruments`) | for each family, any setup block, bank images and MIDI messages render without panic, and `meter` and the parameter reads stay in range |
-| `rules_json` | server | any JSON line as a `rules` message is refused or encodes to a record `neoteletext-rules` accepts |
-| `core_report_gate` | browser | any sequence of decoder messages and viewer events never makes the trusted core send an event it did not receive from the viewer for that page, or exceed its budgets |
-| `protocol_audio_local` | browser | the new voice operations' readers hold their bounds |
+| `local_midi` | engine (`neoteletext-audio-instruments`) | for each family, any setup block, bank images, MIDI messages and blocks with cue events render without panic, and `meter` and the parameter reads stay in range |
+| `rules_json` | server | any JSON line as a `rules` message or as a command message is refused or encodes to an image or record the engine accepts |
+| `core_report_gate` | browser | any sequence of decoder messages and viewer events never makes the trusted core send an event it did not receive from the viewer for that page, or exceed its budgets, the sound command budget among them |
+| `protocol_audio_local` | browser | the voice operations' readers, `Cue` and `Pause` among them, hold their bounds |
 
 - **Verification.** The full gates run each for their stated time.
 
 ## 13. Verification
 
 **RULE-84 [every repository]. Each requirement's tests name it.**
-- **Statement.** Every test written for this document MUST name the `RULE-n` it verifies and the rdm requirement that carries it, and each requirement above lists the tests it needs under its Verification. In summary, by kind: codec tests at every bound (RULE-3, 9 to 22, 41 to 48, 57, 70); evaluator tests with a scripted clock and world (RULE-4 to 8, 11, 14 to 17, 96); instrument tests for every family (RULE-28, 29, 31); mixer and helper tests with a scripted device (RULE-32, 33, 62, 97); decoder tests with a scripted clock and frame phase (RULE-98); pipe protocol tests (RULE-63); trusted core tests with a hostile decoder (RULE-50 to 52); server protocol tests for every example and refusal (RULE-34 to 40, 53, 59, 61); kit tests against `kit-calls.tsv` and the server's refusals (RULE-55); library tests per component (RULE-54); the timed test (RULE-64 to 66); the fuzz targets (RULE-83); and the music player's end-to-end test (RULE-95).
+- **Statement.** Every test written for this document MUST name the `RULE-n` it verifies and the rdm requirement that carries it, and each requirement above lists the tests it needs under its Verification. A test of the first form whose requirement is withdrawn is deleted with the code it tested.
 - **Verification.** Each repository's check that test names cite records that exist.
 
 **RULE-85 [neoteletext-common; engine; neoteletext-app-server; neoteletext-browser]. Shared wire vectors.**
-- **Statement.** neoteletext-common's `wire-vectors.tsv` MUST gain, as hexadecimal bytes with the JSON they stand for: the RULES record body of each worked example of section 7.5 and of the default table with and without `wheel`; one RULE_EVENT of each kind; one PAGE_STATE; one RULES_FAULT; one local sound's OBJECT. The engine produces its rows (`cargo xtask wire-vectors`); the server produces the RULES bodies of the worked examples and of the music player's table (RULE-93), which need its reading of the `rules` message, and the local sound's OBJECT as it writes it, with the variant's tag (RULE-61). The engine's, the server's and the browser's tests each check their own code against the same file.
+- **Statement.** neoteletext-common's `wire-vectors.tsv` MUST hold, as hexadecimal bytes with the JSON they stand for, at push protocol version 10: the table image of each worked example of section 7.5, of the default table with and without `wheel`, and of the music player's table (section 14), and the RULES record or records each travels in; one record of each of the types 28 to 33, and each `VARIABLE` operation with each operand kind; one RULE_EVENT of each kind; one PAGE_STATE; one RULES_FAULT; one RULES_QUERY; one local sound's OBJECT; one block with a cue. The engine produces them (`cargo xtask`), and the engine's, the server's and the browser's tests each check their own code against the same file. The first form's vectors (version 9) are replaced in the same change.
 - **Reason and source.** The existing practice (DEC-6462 item 5).
 - **Verification.** The three repositories' vector tests.
 
-Numbers RULE-86 to RULE-89 are not used.
+Numbers RULE-73 to RULE-79, RULE-86 to RULE-89, RULE-101, RULE-104 and RULE-115 are not used.
 
 ## 14. The demonstration: the music player
 
-**RULE-90 [neoteletext-server-channel-musicplayer]. A new channel.**
-- **Statement.** A new repository, `neoteletext-server-channel-musicplayer`, MUST hold a channel written in TypeScript on the TypeScript kit, as `neoteletext-server-channel-audiodemo` is, served by the deployed server in the folder `musicplayer` (so at `https://app.neottx.com/musicplayer/`), with the `channels.json` entry `{"folder":"musicplayer","name":"Music player","command":["node","src/main.ts"],"directory":"current/neoteletext-server-channel-musicplayer"}` and no `default_rules`, so that every input it receives is one its own tables ask for. It keeps a `CLAUDE.md` importing DEVELOPMENT.md, a `README.md`, `BUILD.md` and `DEPLOYMENT.md`, and the shared gates.
+**RULE-90 [neoteletext-server-channel-musicplayer]. The channel.**
+- **Statement.** The repository `neoteletext-server-channel-musicplayer` MUST hold a channel written in TypeScript on the TypeScript kit, served by the deployed server in the folder `musicplayer` (so at `https://app.neottx.com/musicplayer/`), with the `channels.json` entry `{"folder":"musicplayer","name":"Music player","command":["node","src/main.ts"],"directory":"current/neoteletext-server-channel-musicplayer"}` and no `default_rules`, so that every input it receives is one its own tables ask for. It keeps a `CLAUDE.md` importing DEVELOPMENT.md, a `README.md`, `BUILD.md` and `DEPLOYMENT.md`, and the shared gates.
 - **Reason and source.** The owner, 18 November 2026: "A MUSIC PLAYER THAT SHOWS SYNTHESIZERS INSTANTLY PLAYING ON A KEYPRESS AND INSTANTLY DISPLAYING LEVELS VISUALLY ALSO IN RESPONSE TO THE KEYPRESS".
 - **Verification.** The channel's gate; the deployment's smoke test fetches its index page.
 
 **RULE-91 [neoteletext-server-channel-musicplayer]. Its pages.**
-- **Statement.** The channel has these pages:
+- **Statement.** The channel has these pages, each at sub-code `0001`:
 
 | Page | What it is |
 |---|---|
-| 100 | The index: a teletext page naming the seven instruments, each with its page number, which the browser follows as it stands; its green key leads to page 101. It has a table with no rules, so nothing typed on it is sent |
+| 100 | The index: a teletext page naming the instruments, each a link to its page. It has a table with no rules, so nothing typed on it is sent |
 | 101 | synth106 |
 | 102 | synth7 |
 | 103 | synthD |
 | 104 | synth53 |
 | 105 | synth8 |
 | 106 | synth80 |
-| 107 | synth60, with the synth106's four patches written in the synth60's fields |
+| 107 | synth60 (the first build added it, TODO-6565) |
 | 111 | The teletext variant of page 101 (RULE-94) |
 
-- Pages 101 to 107 are each a ReGIS picture over a teletext page whose Fastext row is drawn beneath it (the browser's REQ-6379): red the previous instrument, green the next, yellow the index, and blue page 111 once that page is built (RULE-94); until then no blue link is declared, so that none leads to a page that is not there. Each has one local sound of its instrument: handle 1 on audio channel 0, with one bank (handle 2) of four patches chosen for contrast, programs 0 to 3, the first one that speaks at once. The synth8's local sound is sent with the key mode `whole`, so that the table's program change on MIDI channel 1 chooses the patch every key plays. When a connection selects one of these pages the program sends, in a frame (ANIM-2): the bank, the local sound with a setup of program change 0, the picture, and the page's table. It sends nothing more while the viewer plays: every note and every change of the picture is the receiver's.
-- **Verification.** The channel's tests: the messages sent on selecting each page; none sent for a played key.
+- Pages 101 to 107 are each a ReGIS picture over a teletext page whose Fastext row is drawn beneath it (the browser's REQ-6379): red the previous instrument, green the next, yellow the index, blue page 111. Each has one local sound of its instrument: handle 1 on audio channel 0, with one bank (handle 2) of four patches chosen from the instrument's own bank for contrast, programs 0 to 3. At every selection of one of these pages (`selected`, including a viewer who returns or reconnects, RULE-111) the program sends that connection, in a frame (ANIM-2): the bank, the local sound with a setup of program change 0, the picture, and the page's table. It sends nothing more while the viewer plays: every note and every change of the picture is the receiver's.
+- **Verification.** The channel's tests: the messages sent on selecting each page, the same again on a second selection; none sent for a played key.
 
 **RULE-92 [neoteletext-server-channel-musicplayer]. The picture.**
 - **Statement.** Each instrument page's ReGIS picture (800 by 480) is built of these numbered drawings (regis-v2.md):
 
 | Drawings | What | Layer |
 |---|---|---|
-| 1 | The background: the instrument's name in large text at the top, the line "PLAY: A W S E D F T G Y H U J K   SOUND: 1 2 3 4", and the meter's frame | 0 |
-| 101 to 113 | The thirteen keys for notes 60 to 72 (C4 to C5), drawing `100 + note − 59`: the eight white keys (notes 60, 62, 64, 65, 67, 69, 71, 72) 64 pixels wide and 200 tall from x = 72, 66 pixels apart, top at y = 200; the five black keys (61, 63, 66, 68, 70) 40 wide and 120 tall, centred on the gaps, at a higher order. Each is labelled with its computer key. Each names its pressed look: `D(S101(A201))` and so on | 1 |
+| 1 | The background: the instrument's name in large text at the top, the lines "PLAY: A W S E D F T G Y H U J K OR CLICK   SOUND: 1 2 3 4" and "OCTAVE: UP DOWN   ARPEGGIO: Z   SILENCE: SPACE SPACE", and the meter's frame | 0 |
+| 101 to 113 | The thirteen keys for notes 60 to 72 (C4 to C5), drawing `100 + note − 59`: the eight white keys (notes 60, 62, 64, 65, 67, 69, 71, 72) 64 pixels wide and 200 tall from x = 72, 66 pixels apart, top at y = 200; the five black keys (61, 63, 66, 68, 70) 40 wide and 120 tall, centred on the gaps, at a higher order. Each is labelled with its computer key, is detectable (so that a pointer press finds it), and names its pressed look: `D(S101(A201))` and so on | 1 |
 | 201 to 213 | The pressed look of each key, drawing `200 + note − 59`: the key filled in a bright colour. Hidden (`V0`), so each is drawn only as a look | 1 |
 | 301 to 308 | The meter's eight segments, bottom to top, each 56 wide and 28 tall at x = 700, the lowest with its top at y = 400 and each next 36 higher; segments 1 to 5 green, 6 and 7 yellow, 8 red. Hidden (`V0`) at the start | 2 |
 | 401 to 404 | The four sound names, each with a marker; hidden at the start but 401 | 2 |
+| 405 | The word "ARPEGGIO" beside the sound names; hidden at the start | 2 |
 
-- The keys' pressed looks are forced by the table's `look` actions; nothing is redrawn by the channel.
-- Where the table above is silent the channel chose: drawing 1 also holds the four sound names dim, side by side over the keyboard, the word "LEVEL" over the meter, a dark slot behind each meter segment and a dark bed behind the keys, and a line saying that no key goes to the server; drawing 40n is its sound's name in bright white over a yellow bar at the same place, so that showing it lights the name; a key's label is part of the key's own contents and of its pressed look's.
+- The keys' pressed looks are forced by the table's `animate` commands; nothing is redrawn by the channel.
 - **Verification.** The picture passes the server's ReGIS check; a golden image of each page at rest and with keys 60, 64 and 67 down and the meter at level 100, made by `regis-render` with a rule script (ANIM-18).
 
 **RULE-93 [neoteletext-server-channel-musicplayer]. The table.**
-- **Statement.** Every instrument page carries the table below. It reads no synthesizer field, so it is the same table for all seven pages. It has 47 rules: for each of the thirteen keys, a `key` rule on the physical key that sends note on (velocity 100, MIDI channel 1) to audio channel 0 and forces the key's pressed look, and a `key_up` rule that sends note off and returns the look; for each of the eight meter segments, a `becomes` rule that shows it when audio channel 0's `level` reaches its threshold (4, 8, 16, 32, 64, 96, 128, 192) and one that hides it when the level falls below; for each of the number keys 1 to 4, a rule that sends the program change and shows that sound's name and hides the other three; and an `open` rule that starts the local sound. No rule has `send` or `echo`: the page sends its channel no input at all.
+- **Statement.** Every instrument page carries the table below; it reads no synthesizer field, so it is the same for all seven pages. It has 14 rules, 19 groups, one sequence and three row sets of 25 rows in all, where the first form needed 47 rules and could not afford the pointer. It uses: binding rows for the thirteen keys (each row a computer key, a note and a drawing), for the four sounds and for the eight meter segments; a rule fired by either of two triggers (the key, or a press on its drawing); the variables `v0` (the octave's shift in semitones, −24 to 24), `v1` (the mode: 0 playing, 1 arpeggio) and `v2` (the note being worked out); an amount that is a constant plus a variable (the note's key); a mode tested by conditions; a sequence that repeats until stopped (the arpeggio: the held key's note, then 4, 7 and 12 semitones above it, a note every eight ticks); a `becomes` rule with a row parameter as its threshold; and a double press (Space twice within twenty ticks silences everything). No group has a `report`: the page sends its channel no input at all.
 
 ```json
-{"type":"rules","connections":[7],"page":"101","table":{"rules":[
- {"name":"start","on":{"event":"open"},"do":[{"action":"play","channel":0,"handle":1,"generation":1,"gain":100,"fade_ms":5,"loop":false}]},
- {"name":"note60_on","on":{"event":"key","keys":[{"physical":"a"}]},"do":[{"action":"midi","channel":0,"message":{"event":"note_on","channel":1,"key":60,"velocity":100}},{"action":"look","target":{"object":101},"look":"pressed"}]},
- {"name":"note60_off","on":{"event":"key_up","keys":[{"physical":"a"}]},"do":[{"action":"midi","channel":0,"message":{"event":"note_off","channel":1,"key":60,"velocity":64}},{"action":"look","target":{"object":101},"look":"normal"}]},
- {"name":"note61_on","on":{"event":"key","keys":[{"physical":"w"}]},"do":[{"action":"midi","channel":0,"message":{"event":"note_on","channel":1,"key":61,"velocity":100}},{"action":"look","target":{"object":102},"look":"pressed"}]},
- {"name":"note61_off","on":{"event":"key_up","keys":[{"physical":"w"}]},"do":[{"action":"midi","channel":0,"message":{"event":"note_off","channel":1,"key":61,"velocity":64}},{"action":"look","target":{"object":102},"look":"normal"}]},
- {"name":"note62_on","on":{"event":"key","keys":[{"physical":"s"}]},"do":[{"action":"midi","channel":0,"message":{"event":"note_on","channel":1,"key":62,"velocity":100}},{"action":"look","target":{"object":103},"look":"pressed"}]},
- {"name":"note62_off","on":{"event":"key_up","keys":[{"physical":"s"}]},"do":[{"action":"midi","channel":0,"message":{"event":"note_off","channel":1,"key":62,"velocity":64}},{"action":"look","target":{"object":103},"look":"normal"}]},
- {"name":"note63_on","on":{"event":"key","keys":[{"physical":"e"}]},"do":[{"action":"midi","channel":0,"message":{"event":"note_on","channel":1,"key":63,"velocity":100}},{"action":"look","target":{"object":104},"look":"pressed"}]},
- {"name":"note63_off","on":{"event":"key_up","keys":[{"physical":"e"}]},"do":[{"action":"midi","channel":0,"message":{"event":"note_off","channel":1,"key":63,"velocity":64}},{"action":"look","target":{"object":104},"look":"normal"}]},
- {"name":"note64_on","on":{"event":"key","keys":[{"physical":"d"}]},"do":[{"action":"midi","channel":0,"message":{"event":"note_on","channel":1,"key":64,"velocity":100}},{"action":"look","target":{"object":105},"look":"pressed"}]},
- {"name":"note64_off","on":{"event":"key_up","keys":[{"physical":"d"}]},"do":[{"action":"midi","channel":0,"message":{"event":"note_off","channel":1,"key":64,"velocity":64}},{"action":"look","target":{"object":105},"look":"normal"}]},
- {"name":"note65_on","on":{"event":"key","keys":[{"physical":"f"}]},"do":[{"action":"midi","channel":0,"message":{"event":"note_on","channel":1,"key":65,"velocity":100}},{"action":"look","target":{"object":106},"look":"pressed"}]},
- {"name":"note65_off","on":{"event":"key_up","keys":[{"physical":"f"}]},"do":[{"action":"midi","channel":0,"message":{"event":"note_off","channel":1,"key":65,"velocity":64}},{"action":"look","target":{"object":106},"look":"normal"}]},
- {"name":"note66_on","on":{"event":"key","keys":[{"physical":"t"}]},"do":[{"action":"midi","channel":0,"message":{"event":"note_on","channel":1,"key":66,"velocity":100}},{"action":"look","target":{"object":107},"look":"pressed"}]},
- {"name":"note66_off","on":{"event":"key_up","keys":[{"physical":"t"}]},"do":[{"action":"midi","channel":0,"message":{"event":"note_off","channel":1,"key":66,"velocity":64}},{"action":"look","target":{"object":107},"look":"normal"}]},
- {"name":"note67_on","on":{"event":"key","keys":[{"physical":"g"}]},"do":[{"action":"midi","channel":0,"message":{"event":"note_on","channel":1,"key":67,"velocity":100}},{"action":"look","target":{"object":108},"look":"pressed"}]},
- {"name":"note67_off","on":{"event":"key_up","keys":[{"physical":"g"}]},"do":[{"action":"midi","channel":0,"message":{"event":"note_off","channel":1,"key":67,"velocity":64}},{"action":"look","target":{"object":108},"look":"normal"}]},
- {"name":"note68_on","on":{"event":"key","keys":[{"physical":"y"}]},"do":[{"action":"midi","channel":0,"message":{"event":"note_on","channel":1,"key":68,"velocity":100}},{"action":"look","target":{"object":109},"look":"pressed"}]},
- {"name":"note68_off","on":{"event":"key_up","keys":[{"physical":"y"}]},"do":[{"action":"midi","channel":0,"message":{"event":"note_off","channel":1,"key":68,"velocity":64}},{"action":"look","target":{"object":109},"look":"normal"}]},
- {"name":"note69_on","on":{"event":"key","keys":[{"physical":"h"}]},"do":[{"action":"midi","channel":0,"message":{"event":"note_on","channel":1,"key":69,"velocity":100}},{"action":"look","target":{"object":110},"look":"pressed"}]},
- {"name":"note69_off","on":{"event":"key_up","keys":[{"physical":"h"}]},"do":[{"action":"midi","channel":0,"message":{"event":"note_off","channel":1,"key":69,"velocity":64}},{"action":"look","target":{"object":110},"look":"normal"}]},
- {"name":"note70_on","on":{"event":"key","keys":[{"physical":"u"}]},"do":[{"action":"midi","channel":0,"message":{"event":"note_on","channel":1,"key":70,"velocity":100}},{"action":"look","target":{"object":111},"look":"pressed"}]},
- {"name":"note70_off","on":{"event":"key_up","keys":[{"physical":"u"}]},"do":[{"action":"midi","channel":0,"message":{"event":"note_off","channel":1,"key":70,"velocity":64}},{"action":"look","target":{"object":111},"look":"normal"}]},
- {"name":"note71_on","on":{"event":"key","keys":[{"physical":"j"}]},"do":[{"action":"midi","channel":0,"message":{"event":"note_on","channel":1,"key":71,"velocity":100}},{"action":"look","target":{"object":112},"look":"pressed"}]},
- {"name":"note71_off","on":{"event":"key_up","keys":[{"physical":"j"}]},"do":[{"action":"midi","channel":0,"message":{"event":"note_off","channel":1,"key":71,"velocity":64}},{"action":"look","target":{"object":112},"look":"normal"}]},
- {"name":"note72_on","on":{"event":"key","keys":[{"physical":"k"}]},"do":[{"action":"midi","channel":0,"message":{"event":"note_on","channel":1,"key":72,"velocity":100}},{"action":"look","target":{"object":113},"look":"pressed"}]},
- {"name":"note72_off","on":{"event":"key_up","keys":[{"physical":"k"}]},"do":[{"action":"midi","channel":0,"message":{"event":"note_off","channel":1,"key":72,"velocity":64}},{"action":"look","target":{"object":113},"look":"normal"}]},
- {"name":"meter1_on","on":{"event":"becomes","condition":{"read":{"of":"sound","channel":0,"property":"level"},"op":">=","value":4}},"do":[{"action":"show","target":{"object":301}}]},
- {"name":"meter1_off","on":{"event":"becomes","condition":{"read":{"of":"sound","channel":0,"property":"level"},"op":"<","value":4}},"do":[{"action":"hide","target":{"object":301}}]},
- {"name":"meter2_on","on":{"event":"becomes","condition":{"read":{"of":"sound","channel":0,"property":"level"},"op":">=","value":8}},"do":[{"action":"show","target":{"object":302}}]},
- {"name":"meter2_off","on":{"event":"becomes","condition":{"read":{"of":"sound","channel":0,"property":"level"},"op":"<","value":8}},"do":[{"action":"hide","target":{"object":302}}]},
- {"name":"meter3_on","on":{"event":"becomes","condition":{"read":{"of":"sound","channel":0,"property":"level"},"op":">=","value":16}},"do":[{"action":"show","target":{"object":303}}]},
- {"name":"meter3_off","on":{"event":"becomes","condition":{"read":{"of":"sound","channel":0,"property":"level"},"op":"<","value":16}},"do":[{"action":"hide","target":{"object":303}}]},
- {"name":"meter4_on","on":{"event":"becomes","condition":{"read":{"of":"sound","channel":0,"property":"level"},"op":">=","value":32}},"do":[{"action":"show","target":{"object":304}}]},
- {"name":"meter4_off","on":{"event":"becomes","condition":{"read":{"of":"sound","channel":0,"property":"level"},"op":"<","value":32}},"do":[{"action":"hide","target":{"object":304}}]},
- {"name":"meter5_on","on":{"event":"becomes","condition":{"read":{"of":"sound","channel":0,"property":"level"},"op":">=","value":64}},"do":[{"action":"show","target":{"object":305}}]},
- {"name":"meter5_off","on":{"event":"becomes","condition":{"read":{"of":"sound","channel":0,"property":"level"},"op":"<","value":64}},"do":[{"action":"hide","target":{"object":305}}]},
- {"name":"meter6_on","on":{"event":"becomes","condition":{"read":{"of":"sound","channel":0,"property":"level"},"op":">=","value":96}},"do":[{"action":"show","target":{"object":306}}]},
- {"name":"meter6_off","on":{"event":"becomes","condition":{"read":{"of":"sound","channel":0,"property":"level"},"op":"<","value":96}},"do":[{"action":"hide","target":{"object":306}}]},
- {"name":"meter7_on","on":{"event":"becomes","condition":{"read":{"of":"sound","channel":0,"property":"level"},"op":">=","value":128}},"do":[{"action":"show","target":{"object":307}}]},
- {"name":"meter7_off","on":{"event":"becomes","condition":{"read":{"of":"sound","channel":0,"property":"level"},"op":"<","value":128}},"do":[{"action":"hide","target":{"object":307}}]},
- {"name":"meter8_on","on":{"event":"becomes","condition":{"read":{"of":"sound","channel":0,"property":"level"},"op":">=","value":192}},"do":[{"action":"show","target":{"object":308}}]},
- {"name":"meter8_off","on":{"event":"becomes","condition":{"read":{"of":"sound","channel":0,"property":"level"},"op":"<","value":192}},"do":[{"action":"hide","target":{"object":308}}]},
- {"name":"sound1","on":{"event":"key","keys":[{"char":"1"}]},"do":[{"action":"midi","channel":0,"message":{"event":"program_change","channel":1,"program":0}},{"action":"show","target":{"object":401}},{"action":"hide","target":{"object":402}},{"action":"hide","target":{"object":403}},{"action":"hide","target":{"object":404}}]},
- {"name":"sound2","on":{"event":"key","keys":[{"char":"2"}]},"do":[{"action":"midi","channel":0,"message":{"event":"program_change","channel":1,"program":1}},{"action":"hide","target":{"object":401}},{"action":"show","target":{"object":402}},{"action":"hide","target":{"object":403}},{"action":"hide","target":{"object":404}}]},
- {"name":"sound3","on":{"event":"key","keys":[{"char":"3"}]},"do":[{"action":"midi","channel":0,"message":{"event":"program_change","channel":1,"program":2}},{"action":"hide","target":{"object":401}},{"action":"hide","target":{"object":402}},{"action":"show","target":{"object":403}},{"action":"hide","target":{"object":404}}]},
- {"name":"sound4","on":{"event":"key","keys":[{"char":"4"}]},"do":[{"action":"midi","channel":0,"message":{"event":"program_change","channel":1,"program":3}},{"action":"hide","target":{"object":401}},{"action":"hide","target":{"object":402}},{"action":"hide","target":{"object":403}},{"action":"show","target":{"object":404}}]}]}}
+{"type":"rules","connections":[7],"page":"101","sub":"0001","table":{
+ "rows":{
+  "keys":[
+   {"p0":{"physical":"a"},"p1":60,"p2":101},{"p0":{"physical":"w"},"p1":61,"p2":102},{"p0":{"physical":"s"},"p1":62,"p2":103},
+   {"p0":{"physical":"e"},"p1":63,"p2":104},{"p0":{"physical":"d"},"p1":64,"p2":105},{"p0":{"physical":"f"},"p1":65,"p2":106},
+   {"p0":{"physical":"t"},"p1":66,"p2":107},{"p0":{"physical":"g"},"p1":67,"p2":108},{"p0":{"physical":"y"},"p1":68,"p2":109},
+   {"p0":{"physical":"h"},"p1":69,"p2":110},{"p0":{"physical":"u"},"p1":70,"p2":111},{"p0":{"physical":"j"},"p1":71,"p2":112},
+   {"p0":{"physical":"k"},"p1":72,"p2":113}],
+  "sounds":[
+   {"p0":{"char":"1"},"p1":0,"p2":401},{"p0":{"char":"2"},"p1":1,"p2":402},{"p0":{"char":"3"},"p1":2,"p2":403},{"p0":{"char":"4"},"p1":3,"p2":404}],
+  "meter":[
+   {"p0":4,"p1":301},{"p0":8,"p1":302},{"p0":16,"p1":303},{"p0":32,"p1":304},
+   {"p0":64,"p1":305},{"p0":96,"p1":306},{"p0":128,"p1":307},{"p0":192,"p1":308}]},
+ "groups":[
+  {"name":"start","commands":[
+   {"type":"sound","kind":"play","channel":0,"handle":1,"generation":1,"gain":100,"fade_ms":5,"duck":0,"loop":false,"after":false}]},
+  {"name":"note_on","commands":[
+   {"type":"variable","op":"set","variable":"v2","value":{"plus":0,"fired":"p1"}},
+   {"type":"variable","op":"add","variable":"v2","value":{"plus":0,"variable":"v0"}},
+   {"type":"local_midi","channel":0,"message":{"event":"note_on","channel":1,"key":{"plus":0,"variable":"v2"},"velocity":100}},
+   {"type":"animate","ops":[{"action":"look","target":{"object":{"row":"p2"}},"look":"pressed"}]}]},
+  {"name":"note_off","commands":[
+   {"type":"variable","op":"set","variable":"v2","value":{"plus":0,"fired":"p1"}},
+   {"type":"variable","op":"add","variable":"v2","value":{"plus":0,"variable":"v0"}},
+   {"type":"local_midi","channel":0,"message":{"event":"note_off","channel":1,"key":{"plus":0,"variable":"v2"},"velocity":64}},
+   {"type":"animate","ops":[{"action":"look","target":{"object":{"row":"p2"}},"look":"normal"}]}]},
+  {"name":"silence","commands":[
+   {"type":"local_midi","channel":0,"message":{"event":"control_change","channel":1,"controller":123,"value":0}}]},
+  {"name":"arp_start","commands":[
+   {"type":"animate","ops":[{"action":"look","target":{"object":{"row":"p2"}},"look":"pressed"}]},
+   {"type":"sequence","op":"start","sequence":"arpeggio"}]},
+  {"name":"arp_stop","commands":[
+   {"type":"sequence","op":"stop","sequence":"arpeggio"},
+   {"type":"run","group":"silence","at":null},
+   {"type":"animate","ops":[{"action":"look","target":{"object":{"row":"p2"}},"look":"normal"}]}]},
+  {"name":"arp_note","commands":[
+   {"type":"run","group":"silence","at":null},
+   {"type":"variable","op":"set","variable":"v2","value":{"plus":0,"fired":"p1"}},
+   {"type":"variable","op":"add","variable":"v2","value":{"plus":0,"variable":"v0"}}]},
+  {"name":"arp_0","commands":[{"type":"run","group":"arp_note","at":null},
+   {"type":"local_midi","channel":0,"message":{"event":"note_on","channel":1,"key":{"plus":0,"variable":"v2"},"velocity":100}}]},
+  {"name":"arp_1","commands":[{"type":"run","group":"arp_note","at":null},
+   {"type":"local_midi","channel":0,"message":{"event":"note_on","channel":1,"key":{"plus":4,"variable":"v2"},"velocity":90}}]},
+  {"name":"arp_2","commands":[{"type":"run","group":"arp_note","at":null},
+   {"type":"local_midi","channel":0,"message":{"event":"note_on","channel":1,"key":{"plus":7,"variable":"v2"},"velocity":90}}]},
+  {"name":"arp_3","commands":[{"type":"run","group":"arp_note","at":null},
+   {"type":"local_midi","channel":0,"message":{"event":"note_on","channel":1,"key":{"plus":12,"variable":"v2"},"velocity":90}}]},
+  {"name":"arp_toggle","commands":[
+   {"type":"sequence","op":"stop","sequence":"arpeggio"},
+   {"type":"run","group":"silence","at":null},
+   {"type":"variable","op":"toggle","variable":"v1"},
+   {"type":"animate","ops":[
+    {"action":"look","target":{"object":101},"look":"normal"},{"action":"look","target":{"object":102},"look":"normal"},
+    {"action":"look","target":{"object":103},"look":"normal"},{"action":"look","target":{"object":104},"look":"normal"},
+    {"action":"look","target":{"object":105},"look":"normal"},{"action":"look","target":{"object":106},"look":"normal"},
+    {"action":"look","target":{"object":107},"look":"normal"},{"action":"look","target":{"object":108},"look":"normal"},
+    {"action":"look","target":{"object":109},"look":"normal"},{"action":"look","target":{"object":110},"look":"normal"},
+    {"action":"look","target":{"object":111},"look":"normal"},{"action":"look","target":{"object":112},"look":"normal"},
+    {"action":"look","target":{"object":113},"look":"normal"}]}]},
+  {"name":"arp_shown","commands":[{"type":"animate","ops":[{"action":"show","target":{"object":405}}]}]},
+  {"name":"arp_hidden","commands":[{"type":"animate","ops":[{"action":"hide","target":{"object":405}}]}]},
+  {"name":"sound_pick","commands":[
+   {"type":"local_midi","channel":0,"message":{"event":"program_change","channel":1,"program":{"plus":0,"row":"p1"}}},
+   {"type":"animate","ops":[
+    {"action":"hide","target":{"object":401}},{"action":"hide","target":{"object":402}},
+    {"action":"hide","target":{"object":403}},{"action":"hide","target":{"object":404}},
+    {"action":"show","target":{"object":{"row":"p2"}}}]}]},
+  {"name":"meter_show","commands":[{"type":"animate","ops":[{"action":"show","target":{"object":{"row":"p1"}}}]}]},
+  {"name":"meter_hide","commands":[{"type":"animate","ops":[{"action":"hide","target":{"object":{"row":"p1"}}}]}]},
+  {"name":"octave_up","commands":[
+   {"type":"run","group":"silence","at":null},
+   {"type":"variable","op":"add","variable":"v0","value":12},
+   {"type":"variable","op":"min","variable":"v0","value":24}]},
+  {"name":"octave_down","commands":[
+   {"type":"run","group":"silence","at":null},
+   {"type":"variable","op":"sub","variable":"v0","value":12},
+   {"type":"variable","op":"max","variable":"v0","value":-24}]}],
+ "sequences":[
+  {"name":"arpeggio","length":32,"repeat":0,"steps":[
+   {"tick":0,"run":"arp_0"},{"tick":8,"run":"arp_1"},{"tick":16,"run":"arp_2"},{"tick":24,"run":"arp_3"}]}],
+ "rules":[
+  {"name":"start","on":{"event":"open"},"run":"start"},
+  {"name":"down","rows":"keys","when":{"read":{"of":"variable","variable":"v1"},"op":"==","value":0},"run":"note_on",
+   "on":[{"event":"key","keys":[{"physical":{"row":"p0"}}]},{"event":"press","target":{"object":{"row":"p2"}},"button":0}]},
+  {"name":"up","rows":"keys","when":{"read":{"of":"variable","variable":"v1"},"op":"==","value":0},"run":"note_off",
+   "on":[{"event":"key_up","keys":[{"physical":{"row":"p0"}}]},{"event":"release","target":{"object":{"row":"p2"}},"button":0}]},
+  {"name":"arp_down","rows":"keys","when":{"read":{"of":"variable","variable":"v1"},"op":"==","value":1},"run":"arp_start",
+   "on":[{"event":"key","keys":[{"physical":{"row":"p0"}}]},{"event":"press","target":{"object":{"row":"p2"}},"button":0}]},
+  {"name":"arp_up","rows":"keys","when":{"read":{"of":"variable","variable":"v1"},"op":"==","value":1},"run":"arp_stop",
+   "on":[{"event":"key_up","keys":[{"physical":{"row":"p0"}}]},{"event":"release","target":{"object":{"row":"p2"}},"button":0}]},
+  {"name":"arp_key","on":{"event":"key","keys":[{"physical":"z"}]},"run":"arp_toggle"},
+  {"name":"arp_on","on":{"event":"becomes"},"when":{"read":{"of":"variable","variable":"v1"},"op":"==","value":1},"run":"arp_shown"},
+  {"name":"arp_off","on":{"event":"becomes"},"when":{"read":{"of":"variable","variable":"v1"},"op":"==","value":0},"run":"arp_hidden"},
+  {"name":"sound","rows":"sounds","on":{"event":"key","keys":[{"char":{"row":"p0"}}]},"run":"sound_pick"},
+  {"name":"meter_on","rows":"meter","on":{"event":"becomes"},
+   "when":{"read":{"of":"sound","channel":0,"property":"level"},"op":">=","value":{"plus":0,"row":"p0"}},"run":"meter_show"},
+  {"name":"meter_off","rows":"meter","on":{"event":"becomes"},
+   "when":{"read":{"of":"sound","channel":0,"property":"level"},"op":"<","value":{"plus":0,"row":"p0"}},"run":"meter_hide"},
+  {"name":"octave_up","on":{"event":"key","keys":[{"name":"ArrowUp"}]},"run":"octave_up"},
+  {"name":"octave_down","on":{"event":"key","keys":[{"name":"ArrowDown"}]},"run":"octave_down"},
+  {"name":"panic","on":{"event":"double","keys":[{"char":" "}],"ticks":20},"run":"silence"}]}}
 ```
 
-(`connections` names the connection that selected the page; the program sends the same table to each.)
+(`connections` names the connection that selected the page; the program sends the same table to each, at every selection.)
 
-- **Reason and source.** The owner's demonstration; it exercises `key` and `key_up` on physical keys, `midi` on a local sound, forced looks, `becomes` on a metered value, `show` and `hide`, and `open` with `play`.
-- **Verification.** The server accepts the table; the encoded record is a wire vector (RULE-85); RULE-95's test.
+- How it runs. A key in mode 0 fires one row of `down`; on arrival (RULE-96) the group's two `variable` commands are applied to the arrival copy and the note on leaves at once with its key `p1 + v0`; the pressed look follows at the tick. In mode 1 the same key starts the sequence, which holds the row's parameters, so each step works out the note from the held `p1`; the first arpeggio note sounds at the tick after the key (a sequence runs from the next tick, RULE-103), and the key's release stops the sequence and silences the part. Changing the octave or the mode silences the part first (all notes off, controller 123), so that no note is left sounding under a key whose note has moved. Neither cue points nor a quantised start are used here: a local sound has no cues (RULE-109), and a start held for a beat is the opposite of what this page demonstrates; both are shown by example 7 of section 7.5 and by the audio demonstration channel's page (the build plan).
+- **Reason and source.** The owner's demonstration; DEC-6587 item 5's ideas 1, 2, 3, 6, 7, 9, 10, 11 and 12 on one page.
+- **Verification.** The server accepts the table; its image is a wire vector (RULE-85); RULE-95's test.
 
 **RULE-94 [neoteletext-server-channel-musicplayer]. The teletext variant.**
-- **Statement.** Page 111 SHOULD show the same instrument as page 101 on a plain teletext page: the thirteen keys as thirteen teletext controls on rows 12 to 17 (controls 1 to 13 in note order, each three cells wide), the meter as eight teletext sprites (ANIM-7) numbered 1 to 8, each one row of three mosaic cells, placed in a column at the right and hidden at the start. Its table is page 101's with each key's `look` action naming `{"control":n}` in place of the drawing and each meter rule naming sprite `{"object":n}`, and no rules for the sound names, which it shows as text. It is built only if the teletext sprites of animation.md are built first; it is the smallest page that exercises them.
+- **Statement.** Page 111 SHOULD show the same instrument as page 101 on a plain teletext page: the thirteen keys as thirteen teletext controls on rows 12 to 17 (controls 1 to 13 in note order, each three cells wide), the meter as eight teletext sprites (ANIM-7) numbered 1 to 8, each one row of three mosaic cells, placed in a column at the right and hidden at the start. Its table is page 101's with the `keys` rows' `p2` the control numbers 1 to 13 and the operations and pointer triggers naming `{"control":{"row":"p2"}}`, the `meter` rows' `p1` the sprite numbers 1 to 8, and no `sounds` rule's name objects or arpeggio marker, which it shows as text.
 - **Verification.** A golden image sequence made by `neottx` (ANIM-18).
 
 **RULE-95 [neoteletext-server-channel-musicplayer; neoteletext-browser]. The end-to-end test.**
-- **Statement.** A test on the private display (the browser and the server together, as the ReGIS end-to-end test runs) MUST open page 101, press and release the key A, and hold: the sound helper's test device received samples of the note within RULE-64's bound; the picture's key 101 showed its pressed look within RULE-65's bound and lost it on release; at least the lowest meter segment was shown while the note sounded and hidden within one second of its release; and the fetcher sent the channel nothing between the selection and the end of the test.
+- **Statement.** A test on the private display (the browser and the server together, as the ReGIS end-to-end test runs) MUST open page 101, press and release the key A, and hold: the sound helper's test device received samples of the note within RULE-64's bound; the picture's key 101 showed its pressed look within RULE-65's bound and lost it on release; at least the lowest meter segment was shown while the note sounded and hidden within one second of its release; a press of Z and then of A gave four different notes within 40 ticks; breaking and remaking the connection left the page silent and then playable again from its opening state; and the fetcher sent the channel nothing but selections between the start and the end of the test.
 - **Verification.** It is the verification of the demonstration.
 
 ## 15. What this document decided without the owner
 
-These are recorded in rdm as DEC-6525 of neoteletext-common, "What specifying the page rule table and the animation mechanisms decided without the owner", for the owner's confirmation. Items 17 to 27 of that decision are animation.md's.
+Items 1 to 16 were the first form's and are recorded in rdm as DEC-6525 of neoteletext-common (items 17 to 27 of that decision are animation.md's). Those that the second form withdraws are marked. Items 28 to 44 are the second form's and are recorded as DEC-6610, "What specifying the second form of the page rule table decided without the owner". Both wait for the owner's confirmation.
 
-1. **Five more triggers** than DEC-6522 item 5 lists — `text`, `move`, `wheel`, `focus`, `blur` — because REQ-6523 requires a rule for every kind of input before it can be sent, and pages use these today.
-2. **Key naming** by the input protocol's three existing identities (character, named, physical), a `repeat` flag and a modifier mask; **targets** as a kind (page, control, object, rectangle) and a number, with "any" in pointer triggers only.
-3. **The order's unstated steps**: `open` after the timers and before `becomes` on tick 0; frame cycling after `becomes`; `close` in a final tick of its own.
-4. **Two writes in one tick** apply in order to a working copy; reads see the tick's start.
-5. **`becomes` fires at opening** when its condition already holds, and again on enabling.
-6. **Variables** are signed 32-bit with declared `min`, `max` and `initial`, saturating; **timers** are declared, with a page timer that is not one of the eight.
-7. **`level`** is linear, 0 to 255, the peak of a tick, measured before the master volume and the mute. **Envelope position** is a stage 0 to 4 and a level 0 to 255 of the part's newest voice; for synth7, operator 1's envelope.
+1. **Five more triggers** than DEC-6522 item 5 lists — `text`, `move`, `wheel`, `focus`, `blur`.
+2. **Key naming** by the input protocol's three existing identities, a `repeat` flag and a modifier mask; **targets** as a kind and a number, with "any" in pointer triggers only.
+3. Withdrawn: the first order's unstated steps. RULE-5 is rewritten (item 31).
+4. Withdrawn in part: two writes in one tick apply in order to a working copy, which stands; "reads see the tick's start" now holds for conditions only (item 32).
+5. **`becomes` fires at opening** when its condition already holds. (Its firing again on enabling is withdrawn with enabling.)
+6. Withdrawn: declared variables with ranges and declared timers (DEC-6587 item 4; item 33).
+7. **`level`** is linear, 0 to 255, the peak of a tick, measured before the master volume and the mute. **Envelope position** is a stage 0 to 4 and a level 0 to 255 of the part's newest voice.
 8. **Tracked values are read in the decoder**, from the family's tracker; only `level`, and a local sound's envelope and voice count, are metered by the sound helper.
-9. **Migration by a channel-wide default table** (`default_rules: "send_all"`), set for the nine deployed channels, with the component library writing precise tables and each channel then moving to `"none"`. Considered and not chosen: the kits silently attaching a send-everything table to every page (it would hide the request inside a library, and a raw kit user could not tell); the server deriving a table from the controls a page declares (controls do not say whether a page takes typing, and ReGIS and NAPLPS pages declare none); changing every channel's program on the day of the protocol change (the most risk: one page missed is a page that stops answering).
-10. **Input travels only inside RULE_EVENT** under push protocol 9, wrapping the unchanged events, and the server gives programs the unchanged `input` message with `rule`, `tick` and `target` added.
+9. **Migration by a channel-wide default table** (`default_rules: "send_all"`), now a table of rules that run one default group of one `REPORT`.
+10. **Input travels only inside RULE_EVENT**, wrapping the unchanged events.
 11. **The trusted core gates without reading tables**: it builds every report from its own copy of the viewer's event.
-12. **Local sounds are rendered in the sound helper**, which therefore links the instruments and reads bank images, and whose level reports flow back to decoders. The residual risk is threat 8 of section 12.3. The alternative — rendering in the decoder and streaming small blocks through the trusted core — keeps the helper as it is and adds two pipe hops of samples 375 times a second and the decoder's scheduling to the delay.
-13. **The synth6581 family has no local sound**, since rules send MIDI notes and that family takes register writes.
-14. **REQ-1333 gains exceptions**: a rule's reports leave at the tick that evaluated them, and timer- and condition-triggered reports are allowed within `TIMED_SEND_BUDGET`.
-15. **The wheel over sub-pages** goes to the page only where an enabled `wheel` rule's target is under the pointer, replacing the channel-wide `push.wheel`.
-16. **The music player** has thirteen computer keys and no mouse playing, because a `press` and `release` rule for each key as well would pass 64 rules.
+12. **Local sounds are rendered in the sound helper**; the residual risk is threat 9 of section 12.3.
+13. **The synth6581 family has no local sound**.
+14. **REQ-1333 gains exceptions**: a rule's reports leave at the tick that evaluated them, and reports with no input event are allowed within `TIMED_SEND_BUDGET`.
+15. **The wheel over sub-pages** goes to the page only where a `wheel` rule's target is under the pointer.
+16. Withdrawn: the music player's thirteen keys with no mouse playing. Rows and several triggers on a rule give it the pointer (RULE-93).
 
-The amendment of 18 November 2026 for the owner's decision DEC-6580 decided these beyond its three items; they are recorded in rdm with the requirements that carry them (REQ-6526 and REQ-6535) and wait for the owner's confirmation:
+The amendment of 18 November 2026 for DEC-6580 (items 17 to 22; the numbers 17 to 27 of DEC-6525 itself are animation.md's):
 
 17. **A tick's snapshot is taken once, at the first arrival of its interval** (RULE-7), not at the end of the tick before and not again at the tick. Every condition of a tick then reads one state however its events are timed, and the evaluator used the old way is unchanged. The cost is that a change to the world after that arrival waits one tick more.
 18. **Metered values are the exception**: steps 3 to 5 read the newest report at the tick (RULE-7), so that a meter is not a tick late in exactly the intervals in which a key arrived. A level may therefore show, in a tick, the sound of a note that an event of that tick began (RULE-6).
@@ -1196,26 +1563,54 @@ The amendment of 18 November 2026 for the owner's decision DEC-6580 decided thes
 21. **A display that is no whole multiple of 60 is not locked to** (RULE-98): its ticks cannot all fall the same time before a frame, and RULE-65 adds one refresh period there.
 22. **The fallback is reported as fault 7 with count 0** (RULE-97), the decision's "existing local-overrun fault", told from RULE-62's stop by its count; **the small buffer lingers 2 seconds** after the last local sound ends; and **the meter's bound is restated as 57 milliseconds** (RULE-65), counting the report's own interval, which the earlier 45 did not.
 
+The second form's:
+
+28. **The command set**: the ten record types of RULE-119, six of them new (types 28 to 33), one record a command, and one function in the server and one in the receiver for a command whether it arrives directly or in a group.
+29. **Binding rows are held by the receiver**, four parameters a row, and may be shared between rules; the server expands nothing (RULE-105, with the alternative weighed there).
+30. **An amount is a constant plus one source**, held to its field's range; the fields that take one are RULE-106's table and no others; a target's number takes a row parameter or the firing's target and never a variable.
+31. **The evaluation order of RULE-5**: `open` first and alone on tick 0; inputs; holds; the server's commands; armed runs; timers; sequences; cues; `becomes`; animation; apply.
+32. **The arrival copy of the variables** (RULE-96), so that a sound command delivered at once reads the variables its own group has just changed; and commands read variables from the working state while conditions read the snapshot (RULE-7).
+33. **Timers are fixed and undeclared**, `t0` to `t7`, all stopped at opening, as the variables are fixed.
+34. **What is forbidden in a group**, each with its reason (RULE-119): among them every record of page content, of sound assets, of links and of navigation.
+35. **`echo` is not part of a rule on the wire**: it is a `REPORT` command, and `"echo": true` remains in the program protocol as a way of writing it.
+36. **The server, not each kit, turns `do` and `echo` into groups** (DEC-6462: the kits hold no logic), where DEC-6587 item 9 proposed the kits.
+37. **A table is one image sent in fragments** of the RULES record, since the groups' bytes can pass one record.
+38. **The wheel rectangles are those of every `wheel` rule**, whatever its condition.
+39. **A sound command budget in the trusted core** (512 a tick for a view, for commands however they arrive), the one general protection the second form adds (section 12.4).
+40. **A tab in the background is paused**, not closed and not disconnected: state kept, nothing evaluated, sounded or reported (RULE-111 case 4).
+41. **Limits the owner's list does not name**: the triggers a rule, the parameters a row, the rule-and-row pairs a table, the bindings a command, the hold, double-press, cue and queue figures and the table image's size (their constants and figures are in RULE-57 and REQ-6608).
+42. **`min` and `max` name the operation, not the bound**: `min` leaves the lesser (an upper bound), `max` the greater (a lower bound); **`wrap` goes to the other end** of its range and never divides (RULE-99).
+43. **A cue is the Standard MIDI Files Cue Point meta event with one byte**, carried in a block; the mark goes to the sound helper with the stream and comes back when heard (RULE-109). midi-architecture.md MIDI-8 and MIDI-115 are amended by it.
+44. **The server keeps no table and no animation state for a later viewer** (RULE-40): a page's opening state is what its program sends at each selection; and **a run armed for a tick already past runs at the next tick**, counted as late, rather than being dropped (RULE-102).
+
 ## 16. The rdm records
 
 | Record | Repository | Carries |
 |---|---|---|
-| DEC-6522 | neoteletext-common | The owner's decision: the page rule table |
+| DEC-6522 | neoteletext-common | The owner's decision: the page rule table (items 5, 7 and 8 replaced by DEC-6587) |
+| DEC-6580 | neoteletext-common | The owner's decision: a key's sound commands run at once; the device buffer; the tick locked to the refresh |
+| DEC-6587 | neoteletext-common | The owner's decision: the second form |
+| DEC-6599 | neoteletext-common | The owner's decision: a sub-page is exactly a page |
 | REQ-6523 | neoteletext-common | No input is sent for a page unless its rule table asks |
-| DEC-6525 | neoteletext-common | What this document and animation.md decided without the owner (awaiting confirmation) |
-| DEC-6580 | neoteletext-common | The owner's decision of 18 November 2026: a key's sound actions run at once, a smaller device buffer while a local sound is open, the tick locked to the display's refresh |
-| REQ-6526 | neoteletext-renderer-teletext | The crate `neoteletext-rules`: RULE-1 to RULE-22, RULE-41 to RULE-45, RULE-56, RULE-57, RULE-70, and the engine's part of RULE-96 |
+| REQ-6608 | neoteletext-common | The limits of a page's rule table, in one requirement: RULE-57 |
+| DEC-6525 | neoteletext-common | What the first form and animation.md decided without the owner (awaiting confirmation) |
+| DEC-6610 | neoteletext-common | What the second form decided without the owner, items 28 to 44 (awaiting confirmation) |
+| REQ-6526 | neoteletext-renderer-teletext | The crate `neoteletext-rules`: RULE-1 to RULE-19, RULE-41 to RULE-45, RULE-56, RULE-70, and the engine's part of RULE-96 |
+| REQ-6612 | neoteletext-renderer-teletext | Groups and commands: RULE-118 to RULE-120, RULE-21, RULE-22, RULE-99, RULE-100, RULE-102, RULE-106 |
+| REQ-6613 | neoteletext-renderer-teletext | Rows, several triggers, held and double press, sequences, variables' spaces: RULE-103, RULE-105, RULE-107, RULE-108, RULE-116, RULE-117 |
+| REQ-6614 | neoteletext-renderer-teletext | Cue points in the engine's audio crates: RULE-109 |
 | REQ-6527 | neoteletext-renderer-teletext | Readable synthesizer state and the local sound in the audio crates: RULE-28, RULE-29, RULE-31, RULE-32, RULE-60, RULE-62 |
-| REQ-6528 | neoteletext-renderer-teletext | Push protocol version 9: RULE-41, RULE-46 to RULE-49, RULE-85 |
-| REQ-6532 | neoteletext-app-server | Program protocol 14 for the rule table: RULE-34 to RULE-40, RULE-53, RULE-59, RULE-61 |
+| REQ-6528 | neoteletext-renderer-teletext | Push protocol version 10: RULE-41, RULE-46 to RULE-49, RULE-85 |
+| REQ-6532 | neoteletext-app-server | Program protocol 15: RULE-34 to RULE-40, RULE-53, RULE-59, RULE-61, RULE-114 |
 | REQ-6534 | neoteletext-browser | The decoder evaluates, the trusted core gates: RULE-30, RULE-33, RULE-47, RULE-48, RULE-50 to RULE-52, RULE-58, RULE-63, RULE-70 to RULE-72, RULE-80 |
-| REQ-6535 | neoteletext-browser | Local sounds in the sound helper and the latency bounds: RULE-32, RULE-60, RULE-62 to RULE-66, the browser's part of RULE-96, RULE-97 and RULE-98 |
-| REQ-6537 | neoteletext-server-ts-protocol | The TypeScript kit: RULE-55 (and ANIM-19) |
-| REQ-6538 | neoteletext-server-channels | The Python kit: RULE-55 (and ANIM-19) |
+| REQ-6535 | neoteletext-browser | Local sounds, cues and the latency bounds: RULE-32, RULE-60, RULE-62 to RULE-66, the browser's part of RULE-96, RULE-97, RULE-98, RULE-109 |
+| REQ-6615 | neoteletext-common | The disconnect rule and the page identity, for every repository: RULE-111, RULE-112 |
+| REQ-6537 | neoteletext-server-ts-protocol | The TypeScript kit: RULE-55, RULE-110 (and ANIM-19) |
+| REQ-6538 | neoteletext-server-channels | The Python kit: RULE-55, RULE-110 (and ANIM-19) |
 | REQ-6539 | neoteletext-server-ts-ui-components | The component library's tables: RULE-54 |
 | REQ-6540 | neoteletext-common | Security analysis applied, privacy, fuzz targets, wire vectors: RULE-80, RULE-81, RULE-83 to RULE-85 (and ANIM-23) |
 | REQ-6541 | neoteletext-common, until the channel's repository is in rdm (TODO-6545) | The music player: RULE-90 to RULE-95 |
-| REQ-417, REQ-661 | engine, browser | "No executable content", each amended to allow the table (RULE-82) |
+| REQ-417, REQ-661 | engine, browser | "No executable content", each amended for the second form (RULE-82) |
 | DEC-649, REQ-1384, REQ-4112, REQ-1333 | engine, browser, common | Amended on 18 November 2026 by DEC-6522 and REQ-6523 |
 | TODO-6542 | neoteletext-common | Restate the remaining input requirements and write the protocol's documentation items |
 | TODO-6544 | neoteletext-common | Move each deployed channel to tables of its own, then delete the default table |
@@ -1224,7 +1619,7 @@ The amendment of 18 November 2026 for the owner's decision DEC-6580 decided thes
 
 The table, its carriage and the music player were built on 18 November 2026 in each repository at once, from this document at commit 85904b0. This section lists every place where what was built departs from that text or settles what it left open (DEVELOPMENT.md section 2.3, step 4). Each reading was taken without the owner and is recorded in rdm, in the record named, for the owner to confirm; where a reading is stated here as built, the requirement it concerns was corrected in place in the same change. Section 17.2 lists the places where the text was left as it is because what was built falls short of it or goes against it: those are faults to correct in code. RULE-5, RULE-7 and RULE-64 to RULE-66 are being revised separately for the owner's decision DEC-6580 (a key's sound actions run at once, a smaller device buffer, the tick locked to the display's refresh) and are not touched here.
 
-**Decided since, and not in this text.** Three decisions of the owner's of 18 November 2026, made after the build, change this specification, and the requirements above do not yet say them: DEC-6580 (a key's sound actions run at once, a smaller device buffer while a local sound is open, the tick locked to the display's refresh), DEC-6587 (the second form of the rule table: a rule runs only a group of protocol commands, sixteen fixed variables, everything dropped on disconnect, no enabling and disabling of rules) and DEC-6599 (a sub-page is treated exactly as a page: its own table, sheet, animation state and timelines, addressed by page and sub-code together, with nothing shared between sub-pages of one page number). This document describes the first build, which those decisions name as the baseline they change; DEC-6599 makes every place where it keys on a page without its sub-code a fault of the first build, listed in the last table below.
+**Since written into this text.** This section is the record of the first build, kept as it was written on 18 November 2026. The three decisions of the owner's that followed the build — DEC-6580, DEC-6587 and DEC-6599 — are now what sections 1 to 16 say (the second form), so where this section cites a requirement that the second form rewrote or withdrew (RULE-3, RULE-14, RULE-16, RULE-17, RULE-20, RULE-40 to RULE-45), the citation is to the first form's text at commit 85904b0 as corrected at 595f58c. Section 18 lists every change of the second form; rows 13 and 14 of section 17.2 are answered by it.
 
 ### 17.1 Departures and readings, now stated in the requirements
 
@@ -1299,6 +1694,43 @@ Each is recorded in the rdm record named, and none is a reading to confirm: the 
 | 12 | RULE-94, RULE-95: page 111 and the end-to-end test | Neither exists | TODO-6564 |
 | 13 | The owner's decision DEC-6599: a sub-page's rule table is its own | RULE-2, RULE-17 and RULE-40 as written and built give a page one table for all its sub-pages, a list of rules switched off for a sub-page (RULE-42's sub-page masks), and no RULES record when only the sub-page changes; the server keeps tables by connection and page, the browser's decoder by page, and the component library takes its rectangles from the first sub-page | DEC-6599 |
 | 14 | The owner's decision DEC-6587: a rule runs only a group of protocol commands, with sixteen fixed variables | RULE-3, RULE-14, RULE-16, RULE-20 and RULE-41 to RULE-45 as written and built give a rule its own list of actions, declared variables with ranges, and the enabling and disabling of rules | DEC-6587 |
+
+## 18. What changed in the second form
+
+Every change against the first form (this document at commit `85904b0`), which was built on the branches the audit of 18 November 2026 names and never deployed.
+
+| # | First form | Second form | By |
+|---|---|---|---|
+| 1 | A rule holds up to 16 actions of 19 kinds (RULE-20, RULE-45) | A rule names one group; a group is a list of protocol commands, the same records the server sends (RULE-118, RULE-119). RULE-20 withdrawn; RULE-45 rewritten | DEC-6587 item 1 |
+| 2 | `midi`, `set`, `add`, `start_timer`, `stop_timer`, `send` exist only as actions | Each is a record the server may also send: `LOCAL_MIDI` 28, `VARIABLE` 29, `TIMER` 30, `REPORT` 31; and `RUN` 32 and `SEQUENCE` 33 are new (RULE-21, RULE-22, RULE-99, RULE-100, RULE-102, RULE-103, RULE-114) | DEC-6587 item 1 |
+| 3 | 256 actions a tick, then firings dropped (RULE-6, fault 2) | No cap on a tick's work; a group is capped by its commands (RULE-120); fault 2 withdrawn, fault 9 reports late evaluation | DEC-6587 item 2 |
+| 4 | A page closed is reopened from a table the receiver and the server keep; the server keeps tables for 64 pages a connection and replays animation state to a late viewer; the state query is for resynchronising | Everything local is dropped at a close and at a disconnect; the page is sent afresh and `open` fires again; the server keeps nothing; a background tab is paused (RULE-40, RULE-111) | DEC-6587 items 3 and 9 |
+| 5 | Up to 32 declared, named variables with ranges; `set` and `add` of constants | Exactly sixteen, `v0` to `v15`, undeclared, zero at opening; ten operations with constant, variable, firing and value operands (RULE-14, RULE-99) | DEC-6587 items 4 and 7 |
+| 6 | Up to 8 declared, named timers, optionally running from opening | Exactly eight, `t0` to `t7`, undeclared, stopped at opening (RULE-15) | DEC-6587 item 6; item 33 of section 15 |
+| 7 | `enable`, `disable`, the enabled flag, sub-page off-lists (RULE-16, RULE-17) | Withdrawn; a mode is a variable (RULE-110) | DEC-6587 item 8; DEC-6599 |
+| 8 | One table for a page and all its sub-pages; sheets, records and messages keyed on a page, some with "whichever sub-page is shown" | A sub-page is a page: everything keyed on page number and sub-code; `rules`, `query_state`, `sprite_sheet`, `timeline_stop`, RULES, RULES_QUERY and SHEET gain the sub-code (RULE-2, RULE-112) | DEC-6599 |
+| 9 | One trigger a rule | One to four, any of which fires it (RULE-107) | DEC-6587 idea 9 |
+| 10 | — | Binding rows (RULE-105) | idea 2 |
+| 11 | — | Sequences with repeat counts (RULE-103) | ideas 3 and 11 |
+| 12 | — | Cue points (RULE-109); the `cue` trigger; the `Cue` and `CueHeard` messages | idea 4 |
+| 13 | — | Armed runs, quantised start, groups running groups (RULE-102) | ideas 5, 8 and 10 |
+| 14 | — | `held`, `double`, `press_held`, `double_press` (RULE-108) | idea 7 |
+| 15 | — | Amounts: a constant plus a variable, a row parameter or a value of the firing (RULE-106) | idea 12 |
+| 16 | Values in six spaces | Eight: the firing (RULE-116) and sequences (RULE-117) added; a compare's constant may add a row parameter | DEC-6587 item 7 |
+| 17 | A key waits for the tick; every action runs at the tick | An input's rules are decided on arrival and their sound commands delivered at once, with the arrival copy of the variables (RULE-96); the order of RULE-5 rewritten with `open` first | DEC-6580; DEC-6587 item 9 |
+| 18 | A `send` of a value reads the snapshot | A `REPORT` of a variable reads its working value (RULE-7, RULE-22) | item 32 |
+| 19 | `echo` is a flag of a rule in the record | A `REPORT` command; `"echo": true` only in the program protocol (RULE-22, RULE-35) | item 35 |
+| 20 | The RULES record is one body of at most 8,184 bytes, format 1 | A table image of format 2, at most `MAX_TABLE_BYTES`, in fragments (RULE-41 to RULE-45) | item 37 |
+| 21 | RULE_EVENT names a rule; PAGE_STATE has an enabled mask and declared variables and timers | RULE_EVENT adds the row and allows "no rule"; PAGE_STATE has the sixteen variables, eight timers, the sequences and the armed count (RULE-46, RULE-47) | — |
+| 22 | Program protocol 14, push protocol 9 (`neottx.9`) | 15 and 10 (`neottx.10`); 14 and 9 are not kept (RULE-34, RULE-49) | DEC-6587 |
+| 23 | `rules` has `variables`, `timers`, `subpages`, and rules with `do` actions tagged by `action` | `rules` has `rows`, `groups`, `sequences`, and rules with `run` or a `do` list of commands tagged by `type`; the server makes `do` and `echo` into groups (RULE-35) | DEC-6587 item 9; item 36 |
+| 24 | The kits' `rules(to, page, table)`, `queryState(connection, page)` | Both take the sub-code; six command calls and the mode helper added (RULE-55, RULE-110) | DEC-6599 |
+| 25 | Key to sound at most 34 ms, 20 in the median; device buffer 480 frames; meter at most 45 ms | The budgets of RULE-64 and RULE-65 as the amendment for DEC-6580 wrote them (12 ms at most and 6 in the median on a device buffer of `LOCAL_DEVICE_FRAMES`), unchanged by the second form | DEC-6580 |
+| 26 | REQ-417 and REQ-661 allow comparison only | They allow bounded saturating addition and subtraction; no multiplication, division, loop within a tick or computed address (RULE-1, RULE-82) | DEC-6587 item 5 |
+| 27 | Security analysis of fifteen threats | Twenty-one, and section 12.4 on the absence of a work cap; a sound command budget in the trusted core | DEC-6587 item 2 |
+| 28 | The music player: 47 rules, keys only | 14 rules, 19 groups, 25 rows, one sequence; pointer playing, octaves, an arpeggio mode, a double-press silence (RULE-93) | DEC-6587 |
+| 29 | RULE-96 to RULE-98 (DEC-6580) written for actions and a cap of 256 a tick | RULE-96 rewritten for groups, with the arrival copy of the variables and no cap; RULE-97 and RULE-98 unchanged | DEC-6587 item 9 |
+| 30 | Limits stated in several requirements | Every limit in RULE-57 alone, named, and every other requirement refers to it by the constant's name | REQ-6608 |
 
 ## Appendix A. The readable patch fields of each family
 
