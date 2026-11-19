@@ -1,6 +1,6 @@
 # The public calls, handlers, audiences and harness calls of the TypeScript kit
 # (neoteletext-server-ts-protocol) and the Python kit (neoteletext-server-channels
-# kits/python) for program protocol 15: typescript.md TS-2 and python.md PY-18 and PY-19,
+# kits/python) for program protocol 16: typescript.md TS-2 and python.md PY-18 and PY-19,
 # with the calls of the page rule table in its second form (page-rules.md RULE-55,
 # RULE-110, RULE-114) and of animation (animation.md ANIM-17, ANIM-19).
 # Each kit keeps a byte-for-byte copy, pinned by COMMON_FROM in its scripts/check.sh,
@@ -70,7 +70,10 @@
 # builder of the contents to. docs/picture-examples.jsonl lists builder calls and the
 # parts they give, as the message carries them, which each kit keeps a copy of and its
 # tests replay: a call's arguments are given as TypeScript takes them, the options last,
-# and its name in TypeScript's form (the Python kit's is its snake_case).
+# and its name in TypeScript's form (the Python kit's is its snake_case). A naplps row's
+# coordinates are dots of the 480 by 500 teletext raster, written at six-byte operands,
+# and text's row (1 to 23) and column (0 to 39) name the cell its field and point are set
+# at (neoteletext-common docs/naplps-raster.md RAS-6, RAS-8; program protocol 16, RAS-10).
 what	typescript	python	message	arguments
 call	sound	sound	sound	to, member
 call	authorLog	author_log	author_log	to, level, text, page
@@ -245,7 +248,7 @@ naplps	point	point	-	x, y
 naplps	line	line	-	x, y
 naplps	rect	rect	-	x, y, width, height, options (filled)
 naplps	polygon	polygon	-	points, options (filled)
-naplps	text	text	-	text, options (language; outside)
+naplps	text	text	-	text, options (row; column; language; outside)
 naplps	bytes	bytes	-	raw
 naplps	defineMacro	define_macro	-	code, build
 naplps	object	object	naplps_objects	object
