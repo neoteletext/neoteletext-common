@@ -204,7 +204,7 @@ The table is not a program. It has no loops, no jumps, no multiplication or divi
 - **Verification.** Tests of each kind's inside rule, with a pointer on an edge pixel; `any` firing once per object with the object named in the report.
 
 **RULE-13 [engine: neoteletext-rules]. Rectangles and the pixel grid.**
-- **Statement.** A table MAY declare 0 to `MAX_RECTS` rectangles, each `x`, `y`, `width`, `height` (each 0 to 65,535, width and height at least 1) in the pixels of the page's picture, origin at the top left, x to the right, y down: a teletext page is 480 by 500 dots (a cell is 12 by 20, DOC-1938); a ReGIS picture 800 by 480; a NAPLPS picture 640 by 480. The pointer's pixel given to the evaluator is in the same grid. A rectangle that lies partly outside the picture is cut to it.
+- **Statement.** A table MAY declare 0 to `MAX_RECTS` rectangles, each `x`, `y`, `width`, `height` (each 0 to 65,535, width and height at least 1) in the pixels of the page's picture, origin at the top left, x to the right, y down: a teletext page is 480 by 500 dots (a cell is 12 by 20, DOC-1938); a ReGIS picture 800 by 480; a NAPLPS picture the same 480 by 500 dots as a teletext page, its picture drawn on rows 1 to 23, lines 20 to 479 (DEC-6853, DEC-6857). The pointer's pixel given to the evaluator is in the same grid. A rectangle that lies partly outside the picture is cut to it.
 - **Reason and source.** DEC-6522 item 5 ("a screen rectangle"); the grids are those the browser already uses for each kind of page (the browser's REQ-6377 for ReGIS).
 - **Verification.** Tests on each grid's last pixel.
 
