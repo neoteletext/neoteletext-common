@@ -643,6 +643,37 @@ Renderer parity (`../renderer-parity.md`, the owner's decision DEC-6638 and the 
 - Source: renderer-parity.md PAR-39 to PAR-41; the VT330/VT340 Programmer Reference Manual, Volume 2; ANSI X3.110-1983; animation.md ANIM-11.
 - Verification: Kit tests of each method's bytes and each refusal; the call list's rows of the two builders; every example of `docs/picture-examples.jsonl` replayed through the Python builders gives the parts and the object written there, the TypeScript kit's.
 
+### 4.11 Snapshots: a page drawn for no one in particular
+
+A snapshot (`../tab-thumbnails.md` sections 6 and 7; the owner's decision DEC-6875, the choices of DEC-6878) is the server asking a program for a page drawn for no one in particular, which a browser shows as a tab's picture. It is part of program protocol 16, which the kit takes as PY-2 says, from the server's `protocol/schema-16.json`. rdm requirement REQ-6902 carries what the kit gives, and the TypeScript kit's REQ-6901 the same behaviour; the requirements below say how. The kit answers a snapshot itself: an application needs no new handler to be pictured. A sub-page is exactly a page (DEC-6599): a gathered or kept picture is the one of the page and sub-code answered, never of another sub-page.
+
+**PY-91. A snapshot runs the page's selection for a stranger.** On the server's `snapshot` (its number, page, sub-code and path, and nothing that names a viewer), the kit MUST decline at once with `snapshot_declined`, calling no handler, a page it does not serve or one named in `App(..., no_snapshots=...)`. Otherwise it MUST run the page's selection on a connection of its own numbered the snapshot's number made negative, held apart from the server's connections so that no fan-out reaches it: it awaits `on_joined`, `on_request` with the path and an empty query, and `on_opened`, as for a connection that has just arrived; answers `snapshot_page` with the sub-page that connection would be shown first (its own copy, else the channel's; the sub-page asked for, or the first for 3F7F) and its picture (PY-92), or `snapshot_declined`; then awaits the request's end, `on_left_page` and `on_gone`, and forgets the connection and any copy published for it.
+- Reason: Section 7.1 items 1 to 3: the picture is what a stranger who arrived would see, drawn by the page's own code.
+- Source: tab-thumbnails.md section 7.1; DEC-6875 item 3.
+- Verification: Kit tests in `kits/python/tests/test_snapshot.py` that a snapshot calls the handlers in order and answers the first sub-page, and that a page in `no_snapshots` is declined without a handler called.
+
+**PY-92. The picture is what was sent to that connection alone.** A `regis`, `naplps` or `naplps_objects` call addressed with `connection_hears(snapshot connection)` MUST be gathered for the sub-page it names (a restart begins it again; data parts are joined) and not written; the answer carries the gathered picture of the answered sub-page, with a NAPLPS picture's objects, or else `{"kept": sub}` when a kept picture of that sub-page was sent and not forgotten, or no picture. A call to `connections_hear([...])` that names the snapshot's connection among other connections goes to the others alone and is not gathered, since it may carry what is meant for those viewers: a stranger's snapshot holds only what is addressed to a stranger. A gathered picture past 262,144 bytes of data (text parts are the server's to count) or 64 parts declines the snapshot.
+- Reason: Section 7.1 item 4 ("the bytes or parts the application sent to that connection alone"), and the coordinator's ruling on TODO-6911 step 1 that both kits read "alone" literally.
+- Source: tab-thumbnails.md sections 6.3 and 7.1 item 4.
+- Verification: Kit tests of a gathered ReGIS and NAPLPS picture, a kept picture named by its sub-code, a picture past the bound declining, and a picture sent to a list naming the snapshot among viewers not gathered.
+
+**PY-93. Nothing else reaches a snapshot connection.** Every other message an application addresses to a snapshot connection (sound, rule table, command, animation, link, cursor, author's log line, viewer state) MUST be dropped, and a list that names it with others goes to the others alone; nothing sent to `everyone()`, to a page's viewers or to the channel's copy reaches it. `request_state` on it MUST call `on_state_refused(connection, "stateless")`, which the kit awaits before the answer and again before `on_gone`; `offer_remember` on it writes nothing; `query_state` on it MUST raise `QueryRefused` at once with the rule `unknown_connection`, writing no `query_state`. A `deny` (any status) or a redirect on it declines the snapshot, as does a handler that raises (reported, not raised to the server).
+- Reason: Section 7.1 item 5: a snapshot connection has no viewer, no receiver and no state; security overrides every other requirement, and no line the program writes names a connection below zero.
+- Source: tab-thumbnails.md sections 6.5 and 7.1 items 4 and 5.
+- Verification: Kit tests that every other call to a snapshot connection writes nothing, that `request_state` is refused `stateless`, that `query_state` raises, and that a deny, a redirect and a raising handler each decline.
+
+**PY-94. `is_snapshot` and the advice to authors.** `App.is_snapshot(connection)` MUST answer whether the connection is a snapshot's. The kit's documentation MUST give section 7.2's advice: what is drawn for a snapshot may be shown to any stranger for a minute, so draw it from nothing that belongs to one viewer; decline with `deny` where the page is not one to show strangers, or name the page in `no_snapshots`; check `is_snapshot` before an effect beyond drawing, such as counting visitors or telling others that someone arrived.
+- Reason: Section 7.2; the kit cannot know whether a page's content belongs to one viewer (threat T18).
+- Source: tab-thumbnails.md section 7.2.
+- Verification: A kit test that `is_snapshot` is true inside the snapshot's handlers and false for a viewer; review of `app.py`'s module documentation.
+
+**PY-95. The harness's snapshot.** `Harness.snapshot(page, sub=0x3F7F)` MUST deliver a `snapshot` as the server writes it, numbering each from 1 and never reusing a number, and answer the program's one `snapshot_page` or `snapshot_declined` of that number, failing the test when there is not exactly one. `kit-calls.tsv` lists `call isSnapshot is_snapshot` and `harness snapshot snapshot` for both kits.
+- Reason: PY-19 and PY-41: one call list and one harness for both kits.
+- Source: `kit-calls.tsv` at a8d9163.
+- Verification: The harness's test and the kit's call list test.
+
+The two kits differ in two forms of their languages, accepted as each language's own (TODO-6911 step 2): the TypeScript kit calls `stateRefused` synchronously inside `requestState` and its `queryState` rejects with a `RangeError`, where the Python kit awaits `on_state_refused` and raises `QueryRefused`; what an application hears, and in which order relative to the answer, is the same.
+
 ---
 
 ## 5. Worked examples
