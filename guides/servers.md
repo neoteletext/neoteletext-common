@@ -296,16 +296,16 @@ The server needs no program to start. `--channels` may name any file you like, a
 This describes `deploy/ionos/deploy.sh`, read and not run. It deploys to the `neoteletext` container on crowdwaveaudio.
 
 ```
-internet ── caddyrouter, TLS ── container Caddy :8080 ── 127.0.0.1:8090 teletext-server
-                                                     └── /opt/neoteletext/current/www, the static site
+internet ── caddyrouter, TLS ─┬─ app.neottx.com ── 10.70.0.18:8090 teletext-server
+                              └─ other names ──── container Caddy :8080 ── /opt/neoteletext/current/www, the static site, and the redirects
 ```
 
-- **Names.** `app.neottx.com` is the server's origin. `www.neottx.com` is the static site. `neottx.com` and the `neoteletext.com` names redirect. `caddyrouter` terminates TLS, and `deploy/ionos/caddyrouter.caddy` is its block. The container's Caddy, `deploy/ionos/Caddyfile`, serves port 8080 with `auto_https off`.
+- **Names.** `app.neottx.com` is the server's origin. `www.neottx.com` is the static site. `neottx.com` and the `neoteletext.com` names redirect. `caddyrouter` terminates TLS, and `deploy/ionos/caddyrouter.caddy` holds its blocks: `app.neottx.com` goes straight to the server's socket, one proxy and no more, and the other names to the container's Caddy, `deploy/ionos/Caddyfile`, which serves port 8080 with `auto_https off` (the server's DEC-6959).
 - **The script's order.** It takes dated backups on the container, builds a static musl server on the Linux build host, and installs the binary. It copies each channel with rsync **from the working trees beside the repository**, so what is deployed is what is on the disk and not a commit. Then it runs `npm ci`, copies the dataset, sets up the Python channel, writes `channels.json` (with each deployed channel's `default_rules`), the service and the socket units and the Caddyfile, validates and restarts, and replaces caddyrouter's block in a checked candidate.
-- **The service.** It runs as `ubuntu`, with `StateDirectory=neoteletext`, `--listen 127.0.0.1:8090 --origin https://app.neottx.com --admin-listen 127.0.0.1:9464`, and `TimeoutStopSec=15`. The socket unit keeps connections waiting across a restart.
-- **The check.** The script ends by asking each channel's `channel.ttx` from inside the container.
+- **The service.** It runs as `ubuntu`, with `StateDirectory=neoteletext`, `--listen 10.70.0.18:8090 --origin https://app.neottx.com --admin-listen 127.0.0.1:9464 --trusted-proxy 10.70.0.17`, and `TimeoutStopSec=15`. Only the host's network namespace reaches 10.70.0.18, and caddyrouter connects from 10.70.0.17, so its `X-Forwarded-For` alone names viewers' addresses; the administration listener stays on the container's loopback. The socket unit keeps connections waiting across a restart, and the script restarts it when its address changes.
+- **The check.** The script ends by asking each channel's `channel.ttx` from inside the container, at 10.70.0.18:8090.
 
-`--no-build` reuses the binary already on the build host. DNS is not touched.
+`--no-build` reuses the server binary already built in the repository's `target/deploy` and deploys everything else as usual. DNS is not touched.
 
 A server of protocol 15 needs every channel's kit at 17.0.0 (or the Python kit at protocol 15) and a browser of push protocol 10 deployed with it: there is no compatibility path in either protocol.
 
