@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Asked** | By the owner on 23 October 2026: a full analysis of the structure of the files and code of `neoteletext-engine` and `neoteletext-browser`, as an expert Rust developer would make it, and a plan in several documents for how the code and files should be organised, with the source broken into as many smaller files as makes sense. Not to be implemented yet. |
-| **State** | Plan. Nothing here has been carried out. Each document says what it rests on; the readings behind them are of the code at engine `fb2dd8a` and browser `494aa91`. |
+| **State** | Plan. Nothing here has been carried out. Each document says what it rests on; the readings behind them are of the code at engine `fb2dd8a` and browser `494aa91`. *Amended 20 November 2026:* the cookie code these readings describe and place (the engine's cookie jar and `dbsc` feature, the browser's cookie store, file, panel and messages) was removed when the owner's DEC-6471 of 18 November 2026 replaced cookies with viewer state (`docs/viewer-state.md`); a step that moves it has nothing left to move. |
 | **Where** | Here, in the shared repository, because the plan spans both repositories and `DEVELOPMENT.md` is where the shared process lives. Each repository's own document on where code lives (`ARCHITECTURE.md`, `docs/architecture.md` section 14) is updated when a part of the plan is carried out, not before. |
 
 ## The documents

@@ -29,7 +29,7 @@ A file holds one concept: one type and its behaviour, one mechanism, one spec cl
 
 ## 4. Naming
 
-- **Files are nouns naming the concept**: `session.rs`, `strip.rs`, `cookie_jar.rs`; a file that holds the drawing of a thing is `draw.rs` inside that thing's directory, not `thing_draw.rs` beside it.
+- **Files are nouns naming the concept**: `session.rs`, `strip.rs`, `viewer_keys.rs`; a file that holds the drawing of a thing is `draw.rs` inside that thing's directory, not `thing_draw.rs` beside it.
 - **Siblings agree.** Inside one directory, files follow one scheme. The interface core's `browser/*_ui.rs` suffix is dropped once each panel is a directory (`browser/history/{state,draw,input}.rs`), because the directory already says it is the window's.
 - **Tests** are `tests.rs` inside the concept's directory, or a `tests` module at the end of a small file; never `foo_tests.rs` beside `foo.rs` and `foo/tests.rs` in the same crate (the engine's `render/` has both forms today).
 - **Types are named by what they are**, in the words the standards use (`DEVELOPMENT.md` section 6; EN 300 706 for teletext, the RFCs for the web). No abbreviation but a standard's own.
