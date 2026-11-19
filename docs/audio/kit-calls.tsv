@@ -248,7 +248,7 @@ naplps	point	point	-	x, y
 naplps	line	line	-	x, y
 naplps	rect	rect	-	x, y, width, height, options (filled)
 naplps	polygon	polygon	-	points, options (filled)
-naplps	text	text	-	text, options (row; column; language; outside)
+naplps	text	text	-	text, options (row; column; rows; language; outside)
 naplps	bytes	bytes	-	raw
 naplps	defineMacro	define_macro	-	code, build
 naplps	object	object	naplps_objects	object
