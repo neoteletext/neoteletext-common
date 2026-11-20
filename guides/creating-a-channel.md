@@ -1616,7 +1616,6 @@ Each of these is written somewhere as the plan, or is a gap you will meet.
 | A live channel's first page in `neottx view` | `neottx view` sends no selection before its first page, so the table a program sends for the initial page does not reach it, and that page sends nothing: open a page by its address (section 13) |
 | Opus in the Python kit | Not built (TODO-1310) |
 | Levels 2.5 and 3.5 on a live channel | Packets X/26 to X/28 go with a sub-page through TTI. How object pages reach a receiver is not designed (TODO-2023 item 7) |
-| The Cloudflare host | Its code exists and has never run |
 
 ## 20. Where to read next
 

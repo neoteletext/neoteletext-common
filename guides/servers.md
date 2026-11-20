@@ -51,7 +51,6 @@ The workspace is in `~/devel/neoteletext-app-server`. Teletext itself, the page 
 |---|---|---|
 | `teletext-runtime` | One channel as a state machine: connections, selections, the program protocol's types and checks, rule tables and their names, timelines, the changed-rows sender, viewer state's handles, and what a channel's address answers | No input or output, no clock, no threads. It is `no_std` |
 | `teletext-native` | The server on Linux, macOS and Windows: tokio, hyper, the program supervisor, WebSocket framing, the state directory, the log and the figures. It builds `teletext-server` and the load client `teletext-load` | No teletext logic |
-| `teletext-cloudflare` | The same runtime as a Worker and one Durable Object for each channel. See section 1.13 | It is empty on every target but `wasm32` |
 
 The runtime takes events and answers with effects. A host gives it what happened, with the time, and carries out the result:
 
@@ -308,10 +307,6 @@ internet ── caddyrouter, TLS ─┬─ app.neottx.com ── 10.70.0.18:8090
 `--no-build` reuses the server binary already built in the repository's `target/deploy` and deploys everything else as usual. DNS is not touched.
 
 A server of protocol 15 needs every channel's kit at 17.0.0 (or the Python kit at protocol 15) and a browser of push protocol 10 deployed with it: there is no compatibility path in either protocol.
-
-### 1.13 The Cloudflare host
-
-`crates/teletext-cloudflare` compiles for `wasm32-unknown-unknown` and the gates hold it to that, and it has never run on Cloudflare (TODO-1709). The design is one Durable Object for each channel, running the same `teletext-runtime`. Viewers connect to `/<channel>/push`. A program connects to `/<channel>/program` over a WebSocket with the channel's secret, through `scripts/bridge.ts`, which runs an unchanged program over standard input and output. Its `default_rules` is fixed at `"none"` (page-rules.md section 17, item 8). Do not plan on it yet.
 
 ## Part 2: Node and TypeScript
 
@@ -815,7 +810,6 @@ The document's own list is under [troubleshooting](../PROTOCOL.html#DOC-1789).
 ## What this guide could not settle
 
 - **A real receiver.** No browser and no `neottx view` was run for this edition. Whether a table's group sounds and draws as it should was not seen.
-- **Cloudflare.** Nothing here was run on it.
 - **The reply limit.** 5,000 ms is marked provisional in the code, until TODO-1521 measures it.
 - **Real systemd.** Socket activation and `deploy/ionos/deploy.sh` were read, not run.
 - **The branches.** Everything here is on unmerged branches; names and figures may move when they are merged.

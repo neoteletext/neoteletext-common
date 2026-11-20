@@ -1702,7 +1702,7 @@ A phone's text goes as raw text, and its named keys as their functional codes, w
 
 **A small page for web visitors.** A channel's address asked for by a web browser or search engine answers 200: a small page naming the channel, with a `neottx://` link and a link to get NeoTeletext. It runs no script.
 
-**Public pages.** A page is public on the web only when its program says so. The server asks with `describe`, carrying the page number and nothing else, and a kit says no unless told otherwise. A public page shows its title, a picture drawn by the server and its text. Everything in it is readable by anyone. TypeScript: `describe(page)` on an `Application`. Python: `describe(self, page)`. The Cloudflare host asks nothing and answers every page as not public. `neottx html`, which writes the same for a static channel, is on the engine's branch `req-1728-engine` and not in the build this guide was checked against.
+**Public pages.** A page is public on the web only when its program says so. The server asks with `describe`, carrying the page number and nothing else, and a kit says no unless told otherwise. A public page shows its title, a picture drawn by the server and its text. Everything in it is readable by anyone. TypeScript: `describe(page)` on an `Application`. Python: `describe(self, page)`. `neottx html`, which writes the same for a static channel, is on the engine's branch `req-1728-engine` and not in the build this guide was checked against.
 
 **The wall and contents.** The browser's overview of a channel's pages, drawn from its page cache, and its contents view. A channel gives them through `contents.txt` or its index.
 
