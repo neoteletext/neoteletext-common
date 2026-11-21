@@ -12,7 +12,7 @@
 #          the name begins `skipped`, and a server told it does as meaning says.
 # refused  value is a message a reader must refuse at the top level of the
 #          stream: a protocol error, closed with close code 4000 (DOC-1919).
-#          Under push protocol 10 that includes a well-formed event of the
+#          From push protocol 10 on that includes a well-formed event of the
 #          viewer's input, which may stand only inside a RULE_EVENT
 #          (docs/page-rules.md RULE-46).
 # record   value is one 42-byte packet 4/31 on data channel 12, service 0,
@@ -23,7 +23,8 @@
 # docs/animation.md ANIM-23). The engine writes them with
 # `cargo xtask wire-vectors`, and its tests hold that this table has what
 # that prints; they are never typed by hand. Every one is for page 101,
-# sub-code 0001.
+# sub-code 0001. The `records` row `paint` is painting's PAINT record, added
+# at push protocol 11 (DEC-7031).
 # rules       value is the image of one page's table, in hexadecimal
 #             (RULE-41): a header of twelve bytes, then its rectangles,
 #             rows, rules, groups and sequences. It holds neither its page
@@ -47,7 +48,7 @@
 #             21, or rules_query, 22), local_midi (28), variable (29), timer
 #             (30), report (31), run (32), sequence (33), animate (23),
 #             sprites (24), naplps_objects (25), sheet (26), frame (27),
-#             drawing_links (15) or regis_cursor (16).
+#             paint (34), drawing_links (15) or regis_cursor (16).
 # object      value is one whole OBJECT record of the audio profile as it is
 #             framed, before it is cut into fragments: version, type, a
 #             two-byte body length, the body and a CRC-32 (RULE-60).
@@ -101,8 +102,8 @@
 #               meaning is the part as a program gives it in a `regis` or
 #               `naplps` message's `parts` (PAR-21), then the language.
 #               A server given that part writes those bytes.
-version	input	10	HELLO's and WELCOME's version
-version	subprotocol	neottx.10	Sec-WebSocket-Protocol, asked for and echoed
+version	input	11	HELLO's and WELCOME's version
+version	subprotocol	neottx.11	Sec-WebSocket-Protocol, asked for and echoed
 close	broke_protocol	4000	stop
 close	wrong_version	4001	stop
 close	unnamed_stop	4050	stop
@@ -110,9 +111,9 @@ close	restarting	4100	retry
 close	unnamed_retry	4150	retry
 close	normal	1000	retry
 close	above_the_ranges	4200	retry
-input	hello	ff090a80808802	hello version=10 caps=4325376
-input	hello_pictures	ff090a8080880e	hello version=10 caps=29491200
-input	hello_snapshot	ff090a8080801eff4003313030	hello version=10 caps=62914560, select 100
+input	hello	ff090b80808802	hello version=11 caps=4325376
+input	hello_pictures	ff090b8080880e	hello version=11 caps=29491200
+input	hello_snapshot	ff090b8080801eff4003313030	hello version=11 caps=62914560, select 100
 input	select_page	ff4003333032	select 302
 input	select_sub_page	ff40083330322f30303032	select 302/0002
 input	select_query	ff40073330323f613d31	select 302?a=1
@@ -134,9 +135,9 @@ refused	select_small_digits	ff4003336130	a spelling the map does not write
 refused	select_query_alone	ff4004613d3132	a query with no page
 refused	select_query_not_pairs	ff40053330323f78	a query that is not pairs
 refused	not_shortest_varint	ff09870080808802	a varint longer than it need be
-record	welcome	a1ead05e000002050007ff010a80808802dde5959000000000000000000000000000000000000000c467	welcome version=10 caps=4325376 record=0
-record	welcome_pictures	a1ead05e000002050007ff010a8080880ed453d9bb000000000000000000000000000000000000006000	welcome version=10 caps=29491200 record=0
-record	welcome_snapshot	a1ead05e000002050007ff010a8080801e013d43d7000000000000000000000000000000000000009cfb	welcome version=10 caps=62914560 record=0
+record	welcome	a1ead05e000002050007ff010b80808802e085bc200000000000000000000000000000000000000089e2	welcome version=11 caps=4325376 record=0
+record	welcome_pictures	a1ead05e000002050007ff010b8080880ee933f00b000000000000000000000000000000000000002d85	welcome version=11 caps=29491200 record=0
+record	welcome_snapshot	a1ead05e000002050007ff010b8080801e3c5d6a6700000000000000000000000000000000000000d17e	welcome version=11 caps=62914560 record=0
 record	cursor_acknowledges	a1ead05e01000204000801000001ff000000b320a6b5000000000000000000000000000000000000bc7c	cursor page=100 acked=1 none record=1
 record	denied_not_found	a1ead05e0000020c000a01943330322f303030325aa8b1e400000000000000000000000000000000014c	denied 404 302/0002 record=0
 record	denied_channel	a1ead05e0000020c000201f700bc6f39000000000000000000000000000000000000000000000000a49b	denied 503 record=0
@@ -224,6 +225,7 @@ records	naplps_objects_one	a1ead0020000021900250101000100010101012d0103020000c80
 records	sheet	a1ead05e0000021a0012010100010100000100000000505b302c305dae7e6d3200000000000000004a53	page 101 sub 0001 ReGIS sheet generation 1 offset 0: P[0,0]
 records	frame_begin	a1ead05e0000021b00080101000101000007d084693b0000000000000000000000000000000000008574	page 101 sub 0001 begin identifier 7
 records	frame_end	a1ead05e0000021b00080101000102000007c231c6d5000000000000000000000000000000000000d987	page 101 sub 0001 end identifier 7
+records	paint	a1ead05e00000222000e0101000101000001000004b00014ed6724050000000000000000000000009299	page 101 sub 0001 ReGIS generation 1: line speed 1200 bits a second, default paint rate 20
 records	drawing_links	a1ead05e0000020f000e01010001000101012d00033330322db4f28800000000000000000000000033f9	page 101 sub 0001 part 0 of 1: object 301 of the NAPLPS picture leads to 302; the same bytes name drawing 301 of a ReGIS picture
 records	regis_cursor	a1ead05e00000210000601010001012d835532160000000000000000000000000000000000000000cf7d	page 101 sub 0001: object 301 of the NAPLPS picture is the cursor; the same bytes name drawing 301 of a ReGIS picture
 records	rules_picture_links_group	a1ead00200000215003a0101000100010100002e00000200000001010000001d000000000107000283e4 a1ead04900010f00000e01010001000101012d00033330321000000601010001012d655998a60000cedd	page 101 sub 0001 generation 1: the whole image of the rules row picture_links_group, in one record
