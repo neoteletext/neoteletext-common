@@ -81,15 +81,31 @@
 # Python, a field and a keyword argument, not calls; the harness's snapshot asks the
 # program to draw a page or sub-page for no one in particular and answers its
 # snapshot_page or snapshot_declined.
+# Painting as a show (rdm DEC-7031 item 6; REQ-7024, REQ-7025, REQ-7026): regis and naplps take
+# their restart with how the generation it begins is painted, as one options argument whose
+# fields are written here by their Python names, TypeScript's being their camelCase
+# (lineSpeed, defaultRate): line_speed, MIN_LINE_SPEED to MAX_LINE_SPEED bits a second, and
+# for regis default_rate, 1 to MAX_DEFAULT_PAINT_RATE, each given only with restart and
+# written as the message's line_speed and default_rate after restart, in that order, and
+# left out when not given. Each kit refuses a value outside its range, or given without
+# restart, before anything is written, as the server refuses it (invalid_paint). Each kit
+# also exports the bounds and the named speeds as constants, not calls, so they are not
+# listed here: LINE_SPEED_MIN, LINE_SPEED_MAX, DEFAULT_PAINT_RATE_MAX, LINE_SPEED_300,
+# LINE_SPEED_1200, LINE_SPEED_2400 and LINE_SPEED_9600. docs/command-lines.jsonl holds
+# lines of regis and naplps with these options beside the commands', a line's arguments
+# as TypeScript takes them, the options last, and its data text written a byte a
+# character (the Python kit's naplps takes those bytes). The rule table's painted trigger
+# is the schema's type, as every trigger is, and docs/rules-examples.jsonl holds a table
+# of it, the example painted.
 what	typescript	python	message	arguments
 call	sound	sound	sound	to, member
 call	authorLog	author_log	author_log	to, level, text, page
 call	log	log	log	text
 call	packets	packets	packets	to, packets
-call	regis	regis	regis	to, page, sub-page, data, restart
+call	regis	regis	regis	to, page, sub-page, data, options (restart; line_speed; default_rate)
 call	regisLinks	regis_links	regis_links	to, page, sub-page, links
 call	regisCursor	regis_cursor	regis_cursor	to, page, sub-page, drawing
-call	naplps	naplps	naplps	to, page, sub-page, data, restart
+call	naplps	naplps	naplps	to, page, sub-page, data, options (restart; line_speed)
 call	measure	measure	measure, measured	page, screen
 call	rules	rules	rules	to, page, sub-page, table
 call	queryState	query_state	query_state, page_state	connection, page, sub-page
