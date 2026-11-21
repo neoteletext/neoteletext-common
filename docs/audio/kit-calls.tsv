@@ -54,6 +54,24 @@
 # TICKS_PER_SECOND), generated from neoteletext_rules::limits at the commit its
 # scripts/check.sh names (LIMITS_FROM) and checked against it: they are constants,
 # not calls, and are not listed here.
+# keyCode answers a key's code as a condition reads the key that fired its rule
+# (page-rules.md RULE-116, the value fired key; RULE-10), so that a condition's in_set or
+# value names a key without the program writing a code: for {"name":n} the functional
+# code of n in the engine's table (DOC-1936; neoteletext_input::keys::code), which each kit
+# holds as a copy generated from the engine's tables at LIMITS_FROM and checked against
+# them, never as figures written by hand; for {"char":c} the Unicode scalar value of c's
+# one character; and nothing (undefined in TypeScript, None in Python) for
+# {"physical":c}, whose code is the viewer's layout's, for a name the table lacks, and for
+# a char that is not one character. It checks nothing else and sends nothing.
+# Each kit also exports the limits of animation (animation.md ANIM-16) by each renderer's
+# names, generated from the renderers' own files at the commits its scripts/check.sh names
+# and checked against them: teletextLimits (teletext_limits in Python: LAYERS, MAX_SPRITES,
+# MAX_ANIMATED_OBJECTS, MAX_CYCLING_OBJECTS, MAX_OBJECT_FRAMES, MAX_CONTROLS, OBJECT_TYPES,
+# OBJECTS_PER_TYPE, OBJECT_SUBPAGES, from the engine at LIMITS_FROM), and among regisLimits
+# (MAX_ANIMATED_DRAWINGS, MAX_CYCLING_OBJECTS, MAX_OBJECT_FRAMES) and naplpsLimits
+# (MAX_OBJECTS, MAX_ANIMATED_OBJECTS, MAX_CYCLING_OBJECTS, MAX_OBJECT_FRAMES,
+# DEFINABLE_CODES), which are regis_limits and naplps_limits in Python. They are
+# constants, not calls, and are not listed here.
 # Renderer parity (neoteletext-common docs/renderer-parity.md PAR-38 to PAR-40; the server's
 # schema of neoteletext-app-server 25bc0e7): the audience kept, which only regis,
 # regisLinks, regisCursor, naplps, naplpsObjects, naplpsLinks and naplpsCursor take and
@@ -81,15 +99,50 @@
 # Python, a field and a keyword argument, not calls; the harness's snapshot asks the
 # program to draw a page or sub-page for no one in particular and answers its
 # snapshot_page or snapshot_declined.
+# Painting as a show (rdm DEC-7031 item 6; REQ-7024, REQ-7025, REQ-7026): regis and naplps take
+# their restart with how the generation it begins is painted, as one options argument whose
+# fields are written here by their Python names, TypeScript's being their camelCase
+# (lineSpeed, defaultRate): line_speed, MIN_LINE_SPEED to MAX_LINE_SPEED bits a second, and
+# for regis default_rate, 1 to MAX_DEFAULT_PAINT_RATE, each given only with restart and
+# written as the message's line_speed and default_rate after restart, in that order, and
+# left out when not given. Each kit refuses a value outside its range, or given without
+# restart, before anything is written, as the server refuses it (invalid_paint). Each kit
+# also exports the bounds and the named speeds as constants, not calls, so they are not
+# listed here: LINE_SPEED_MIN, LINE_SPEED_MAX, DEFAULT_PAINT_RATE_MAX, LINE_SPEED_300,
+# LINE_SPEED_1200, LINE_SPEED_2400 and LINE_SPEED_9600. docs/command-lines.jsonl holds
+# lines of regis and naplps with these options beside the commands', a line's arguments
+# as TypeScript takes them, the options last, and its data text written a byte a
+# character (the Python kit's naplps takes those bytes). The rule table's painted trigger
+# is the schema's type, as every trigger is, and docs/rules-examples.jsonl holds a table
+# of it, the example painted.
+# A numbered drawing's attributes (the ReGIS renderer's docs/regis-v2.md, "Attributes" and
+# the grammar's "Attributes"; rdm DEC-7036 item 7, K2): drawing and set take every one of
+# the fourteen, each optional, one left out not being written, and write those given in
+# the order the rows list them, as the letters P, R, X, Y, L, V, C, I, G, H, A, N, F, T
+# and U, with commas between, inside D(S number(...)). parent, source, hover, pressed and
+# alternative name a drawing, 0 to MAX_DRAWING_NUMBER, 0 being none; x, y and depth are
+# MIN_COORDINATE to MAX_COORDINATE; visible and detectable are written 1 or 0; clip is a
+# rectangle of x, y (MIN_COORDINATE to MAX_COORDINATE), width and height (0 to
+# MAX_COORDINATE), written C(Xx,Yy,Wwidth,Hheight), or no clip, null in TypeScript and
+# False in Python, written C0; layer is 0 to LAYERS - 1; frames is a list of 1 to
+# MAX_OBJECT_FRAMES drawings, each 1 to MAX_DRAWING_NUMBER, written F(n,...), or an empty
+# list, written F0; rate is 0 to MAX_PAINT_RATE; label is at most MAX_LABEL_BYTES of
+# plain ISO/IEC 8859-1 text. drawing writes D(S number(...)) after the definition only
+# when an attribute is given. set writes D(S number(...)) alone, the drawing's contents
+# untouched, and refuses a call that gives no attribute; delete writes D(K number) and
+# deleteAll D(Z). None of the four may be called inside a drawing's build, and none
+# commits. Each kit refuses a value outside its range, naming the bound, before anything
+# is written; the bounds are the renderer's constants by its names, which each kit
+# generates from the renderer's limits.
 what	typescript	python	message	arguments
 call	sound	sound	sound	to, member
 call	authorLog	author_log	author_log	to, level, text, page
 call	log	log	log	text
 call	packets	packets	packets	to, packets
-call	regis	regis	regis	to, page, sub-page, data, restart
+call	regis	regis	regis	to, page, sub-page, data, options (restart; line_speed; default_rate)
 call	regisLinks	regis_links	regis_links	to, page, sub-page, links
 call	regisCursor	regis_cursor	regis_cursor	to, page, sub-page, drawing
-call	naplps	naplps	naplps	to, page, sub-page, data, restart
+call	naplps	naplps	naplps	to, page, sub-page, data, options (restart; line_speed)
 call	measure	measure	measure, measured	page, screen
 call	rules	rules	rules	to, page, sub-page, table
 call	queryState	query_state	query_state, page_state	connection, page, sub-page
@@ -223,6 +276,7 @@ step	reset	reset	-	object
 builder	physicalKey	physical_key	-	character
 builder	characterKey	character_key	-	character
 builder	namedKey	named_key	-	name
+builder	keyCode	key_code	-	key
 builder	level	level	-	channel
 builder	variable	variable	-	variable
 builder	plus	plus	-	plus, variable
@@ -244,7 +298,10 @@ regis	box	box	-	x, y, width, height, options (fill; pen)
 regis	circle	circle	-	x, y, radius, options (fill)
 regis	text	text	-	text, options (language; outside; size)
 regis	bytes	bytes	-	raw
-regis	drawing	drawing	-	number, attributes (detectable; layer; hover; pressed; label), build
+regis	drawing	drawing	-	number, attributes (parent; source; x; y; depth; visible; clip; detectable; layer; hover; pressed; alternative; frames; rate; label), build
+regis	set	set	-	number, attributes (parent; source; x; y; depth; visible; clip; detectable; layer; hover; pressed; alternative; frames; rate; label)
+regis	delete	delete	-	number
+regis	deleteAll	delete_all	-	-
 regis	commit	commit	-	-
 regis	title	title	-	text
 regis	parts	parts	regis	-
