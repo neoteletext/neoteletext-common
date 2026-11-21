@@ -18,7 +18,7 @@
 
 ## 1. Sources
 
-All files are under `~/devel/teletext-reference/synthesizers/prophet-5/`. Page numbers are the printed page numbers of each document. In the MIDI Implementation they equal the PDF's page numbers; in the User's Guide the printed page n is the PDF's page n + 11.
+All files are under `~/devel/synthesizer-reference/prophet-5/`. Page numbers are the printed page numbers of each document. In the MIDI Implementation they equal the PDF's page numbers; in the User's Guide the printed page n is the PDF's page n + 11.
 
 | Short name here | File | What it is used for |
 |---|---|---|
@@ -26,7 +26,7 @@ All files are under `~/devel/teletext-reference/synthesizers/prophet-5/`. Page n
 | **User's Guide** | `manuals/Prophet-5-Users-Guide-1.3_rev4.pdf` (80 PDF pages; "Prophet-5 User's Guide", version 1.3, February 2021, Sequential LLC) | The meaning and panel range of each parameter. Page 1 (the five voices and the three revisions' filters), page 4 (the USB port's name), pages 6 to 10 (groups, banks and programs; saving), pages 12 to 16 (the global settings), 17 to 20 (oscillators), 21 (mixer), 22 to 24 (filter and the REV switch), 25 to 27 (filter envelope and velocity), 28 to 30 (amplifier envelope), 31 to 33 (low-frequency oscillator and Wheel-Mod), 34 and 35 (Poly-Mod), 36 (Vintage), 37 to 39 (the wheels, aftertouch and glide), 40 and 41 (unison and chord memory), 42 (master tune), 43 (the release switch), 45 (key priority and voice assignment), 57 to 59 (troubleshooting), 61 to 63 (calibration; exporting and importing programs), 64 (alternative tunings). The pages of tutorials (46 to 51) and of control voltage connections (52 to 56), and the descriptions of the alternative tunings after page 64, were not read page by page: their headings show they hold nothing for the interface. |
 | **Operation manual** | `manuals/Prophet-5_Owners_Manual_archiveorg.pdf` ("Prophet-5 Synthesizer Operation Manual", Sequential Circuits, CM1000D, February 1982) | Only pages 6-5 and 6-6: the original's 24-byte program record, for the finding above and for section 16. |
 | **synth53's source** | `~/devel/neoteletext-renderer-teletext/crates/neoteletext-audio-instruments/src/synth53/patch.rs`, `mod.rs`, `law.rs` and `voice.rs`, as they stood on 18 November 2026 (engine commit `dd0421c6`) | What is built today: the 24 knobs and 22 switches of a patch, the messages taken, the models, the laws of the knobs. Each constant there names its own source. |
-| **Wire format as built** | `~/devel/teletext-reference/synthesizers/synthesizer-wire-format.html` and `programming-the-synthesizers.html` | What exists today on the wire and in the kit, for section 16. |
+| **Wire format as built** | `~/devel/synthesizer-reference/synthesizer-wire-format.html` and `programming-the-synthesizers.html` | What exists today on the wire and in the kit, for section 16. |
 | **`documents.tsv`** | `prophet-5/documents.tsv` | The size of the factory program files (31,800 bytes each), used once in section 3.3 as arithmetic, without opening them. |
 | **Architecture** | `neoteletext-common/docs/audio/midi-architecture.md` (this folder), design document of 18 November 2026 | The block, its grammar and bounds, the bank codec and bank image, the restatement, the codec numbers, and the common behaviours of section 11.1 (MIDI-84 to MIDI-92), which this family follows. |
 
@@ -909,6 +909,6 @@ What exists is described in `synthesizer-wire-format.html`, `programming-the-syn
 
 **Tests and documents.**
 18. The tests that build patches from bytes (`tests/synth53_instrument.rs` and the others of synth53 in the engine, the engine's `tests/synths.rs`, the server's and the kit's patch tests) change to programs. New tests are those each requirement's "Verification" names.
-19. The module documentation of `patch.rs` ("The layout, and why this one", which gives the reasons the 2020 dump was not chosen) and of `mod.rs` (the list of messages taken) are rewritten to cite this document's requirements once they are rdm requirements. The two HTML documents in `teletext-reference/synthesizers/` describe the old form and are regenerated.
+19. The module documentation of `patch.rs` ("The layout, and why this one", which gives the reasons the 2020 dump was not chosen) and of `mod.rs` (the list of messages taken) are rewritten to cite this document's requirements once they are rdm requirements. The two HTML documents in `synthesizer-reference/` describe the old form and are regenerated.
 20. DEC-6453 item 4 describes the 24 bytes as an invented format; it is the original instrument's. The record should be corrected to say so, and that it is replaced because the 2020 instrument's MIDI interface is the adopted one (DEC-6456).
 21. Today the mode messages 124 to 127 and registered parameter number 0 are not taken by this family; they will be (S53-15, S53-22, MIDI-89, MIDI-90). After lost input the selection of a parameter number becomes none (S53-46, MIDI-102).

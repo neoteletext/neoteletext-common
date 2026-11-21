@@ -539,7 +539,7 @@ DOC-1857 (data channel 12) and DOC-1951 (the records) MUST NOT change for the sy
 - Source: TODO-6450; DEC-6465 answer 1; DEC-6462.
 - Verification: Review of the revised record.
 
-**INT-69. The reference pages are replaced.** `synthesizer-wire-format.html` and `programming-the-synthesizers.html` in `~/devel/teletext-reference/synthesizers/` describe the format and the kit as built before this change; they MUST be regenerated from the new code, or replaced by links to `PROTOCOL.html` and the TypeScript and Python documents, in the same step as the deployment, and the kit's published page "Programming the NeoTeletext synthesizers" MUST link to the items of INT-66 for the wire.
+**INT-69. The reference pages are replaced.** `synthesizer-wire-format.html` and `programming-the-synthesizers.html` in `~/devel/synthesizer-reference/` describe the format and the kit as built before this change; they MUST be regenerated from the new code, or replaced by links to `PROTOCOL.html` and the TypeScript and Python documents, in the same step as the deployment, and the kit's published page "Programming the NeoTeletext synthesizers" MUST link to the items of INT-66 for the wire.
 - Reason: A reference that describes retired codecs misleads; `midi-architecture.md` section 21 item 17 already says so.
 - Source: `midi-architecture.md`, section 21 item 17; TODO-6450 ("How it will be checked").
 - Verification: Review after deployment.

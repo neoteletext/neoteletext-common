@@ -26,7 +26,7 @@ Which instrument each synthesizer models is said once, in `synthesizers.md` in t
 
 ### 1.1 The filed documents of the adopted interfaces
 
-All under `~/devel/teletext-reference/synthesizers/`. Page numbers are the printed page numbers where a page has one, with the PDF page in brackets where they differ.
+All under `~/devel/synthesizer-reference/`. Page numbers are the printed page numbers where a page has one, with the PDF page in brackets where they differ.
 
 | Short name here | File | What it is used for here |
 |---|---|---|
@@ -74,7 +74,7 @@ The architecture decisions of the owner's brief of 18 November 2026 are cited as
 
 | Source | What it is used for here |
 |---|---|
-| `~/devel/teletext-reference/synthesizers/synthesizer-wire-format.html` and `programming-the-synthesizers.html` (both read from the code on 18 November 2026) | The wire format, the program protocol and the kit as built: section 21 lists what implementation changes. |
+| `~/devel/synthesizer-reference/synthesizer-wire-format.html` and `programming-the-synthesizers.html` (both read from the code on 18 November 2026) | The wire format, the program protocol and the kit as built: section 21 lists what implementation changes. |
 | The engine (`~/devel/neoteletext-renderer-teletext`, commit `dd0421c6`): `crates/neoteletext-audio/src/codec.rs`, `record.rs`, `store.rs`, `store/arena.rs`, `store/live.rs`, `encode.rs`, `profile.rs`, `receiver/instruments.rs`; `crates/neoteletext-audio-instruments/src/analog/volume.rs`, `synth7/rack.rs`, the instruments' `VOICES` constants, and `tests/control_sweep_support.rs` | The record layout, the store's layout of fixed blocks, the live ring, the render budget, the volume law, the voice counts and the measure of a click. |
 | The server (`~/devel/neoteletext-app-server`, commit `df662b9`): `crates/teletext-runtime/src/protocol.rs` | Program protocol 12, the line limit of 16 MiB, the bounds on instrument sounds. |
 | The TypeScript kit (`~/devel/neoteletext-server-ts-protocol`): `src/sound/midi-file.ts`, `src/sound/program-repeater.ts` | The Standard MIDI File reader and the program-change repeater as built, which move into the server under DEC-6462. |
