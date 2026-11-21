@@ -95,14 +95,27 @@
 #   with no sub-code and no query, as `neoteletext_input::snapshot` writes
 #   it.
 # - `record welcome_snapshot`: WELCOME agreeing exactly SNAPSHOT_OFFER.
+#
+# Magazine music (REQ-6927, DEC-6953) makes the version 11 and adds:
+# - the `version` rows `oldest_input`, `oldest_subprotocol` and
+#   `subprotocols`: version 10 is still spoken, a receiver offers both
+#   names, the newest first, and the name a channel answers with is the
+#   connection's version, which HELLO and WELCOME then name.
+# - `input hello_magazine` and `record welcome_magazine`: HELLO of version
+#   11 offering, and WELCOME agreeing, MAGAZINE_SOUND_CAP (bit 26) with the
+#   bits of the `hello` row. It is offered under version 11 alone and never
+#   agreed with SNAPSHOT_CAP.
 # picture_text  value is the bytes the engine's picture text encoder writes
 #               for one text part (PAR-3 to PAR-5), in hexadecimal: the name
 #               begins `regis` or `naplps`, the picture language, and the
 #               meaning is the part as a program gives it in a `regis` or
 #               `naplps` message's `parts` (PAR-21), then the language.
 #               A server given that part writes those bytes.
-version	input	10	HELLO's and WELCOME's version
-version	subprotocol	neottx.10	Sec-WebSocket-Protocol, asked for and echoed
+version	input	11	HELLO's and WELCOME's version
+version	subprotocol	neottx.11	Sec-WebSocket-Protocol, the newest name asked for and the one a channel of version 11 answers
+version	oldest_input	10	the oldest version of HELLO and WELCOME still spoken
+version	oldest_subprotocol	neottx.10	Sec-WebSocket-Protocol, the name a channel of version 10 answers
+version	subprotocols	neottx.11, neottx.10	Sec-WebSocket-Protocol as a receiver sends it: every name it speaks, the newest first
 close	broke_protocol	4000	stop
 close	wrong_version	4001	stop
 close	unnamed_stop	4050	stop
@@ -110,9 +123,10 @@ close	restarting	4100	retry
 close	unnamed_retry	4150	retry
 close	normal	1000	retry
 close	above_the_ranges	4200	retry
-input	hello	ff090a80808802	hello version=10 caps=4325376
-input	hello_pictures	ff090a8080880e	hello version=10 caps=29491200
-input	hello_snapshot	ff090a8080801eff4003313030	hello version=10 caps=62914560, select 100
+input	hello	ff090b80808802	hello version=11 caps=4325376
+input	hello_pictures	ff090b8080880e	hello version=11 caps=29491200
+input	hello_snapshot	ff090b8080801eff4003313030	hello version=11 caps=62914560, select 100
+input	hello_magazine	ff090b80808822	hello version=11 caps=71434240
 input	select_page	ff4003333032	select 302
 input	select_sub_page	ff40083330322f30303032	select 302/0002
 input	select_query	ff40073330323f613d31	select 302?a=1
@@ -134,9 +148,10 @@ refused	select_small_digits	ff4003336130	a spelling the map does not write
 refused	select_query_alone	ff4004613d3132	a query with no page
 refused	select_query_not_pairs	ff40053330323f78	a query that is not pairs
 refused	not_shortest_varint	ff09870080808802	a varint longer than it need be
-record	welcome	a1ead05e000002050007ff010a80808802dde5959000000000000000000000000000000000000000c467	welcome version=10 caps=4325376 record=0
-record	welcome_pictures	a1ead05e000002050007ff010a8080880ed453d9bb000000000000000000000000000000000000006000	welcome version=10 caps=29491200 record=0
-record	welcome_snapshot	a1ead05e000002050007ff010a8080801e013d43d7000000000000000000000000000000000000009cfb	welcome version=10 caps=62914560 record=0
+record	welcome	a1ead05e000002050007ff010b80808802e085bc200000000000000000000000000000000000000089e2	welcome version=11 caps=4325376 record=0
+record	welcome_pictures	a1ead05e000002050007ff010b8080880ee933f00b000000000000000000000000000000000000002d85	welcome version=11 caps=29491200 record=0
+record	welcome_snapshot	a1ead05e000002050007ff010b8080801e3c5d6a6700000000000000000000000000000000000000d17e	welcome version=11 caps=62914560 record=0
+record	welcome_magazine	a1ead05e000002050007ff010b80808822dbeb9ce80000000000000000000000000000000000000090b9	welcome version=11 caps=71434240 record=0
 record	cursor_acknowledges	a1ead05e01000204000801000001ff000000b320a6b5000000000000000000000000000000000000bc7c	cursor page=100 acked=1 none record=1
 record	denied_not_found	a1ead05e0000020c000a01943330322f303030325aa8b1e400000000000000000000000000000000014c	denied 404 302/0002 record=0
 record	denied_channel	a1ead05e0000020c000201f700bc6f39000000000000000000000000000000000000000000000000a49b	denied 503 record=0
