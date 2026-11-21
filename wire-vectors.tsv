@@ -12,7 +12,7 @@
 #          the name begins `skipped`, and a server told it does as meaning says.
 # refused  value is a message a reader must refuse at the top level of the
 #          stream: a protocol error, closed with close code 4000 (DOC-1919).
-#          Under push protocol 10 that includes a well-formed event of the
+#          From push protocol 10 on that includes a well-formed event of the
 #          viewer's input, which may stand only inside a RULE_EVENT
 #          (docs/page-rules.md RULE-46).
 # record   value is one 42-byte packet 4/31 on data channel 12, service 0,
@@ -23,7 +23,8 @@
 # docs/animation.md ANIM-23). The engine writes them with
 # `cargo xtask wire-vectors`, and its tests hold that this table has what
 # that prints; they are never typed by hand. Every one is for page 101,
-# sub-code 0001.
+# sub-code 0001. The `records` row `paint` is painting's PAINT record, added
+# at push protocol 11 (DEC-7031, DEC-7074 item 3).
 # rules       value is the image of one page's table, in hexadecimal
 #             (RULE-41): a header of twelve bytes, then its rectangles,
 #             rows, rules, groups and sequences. It holds neither its page
@@ -47,7 +48,7 @@
 #             21, or rules_query, 22), local_midi (28), variable (29), timer
 #             (30), report (31), run (32), sequence (33), animate (23),
 #             sprites (24), naplps_objects (25), sheet (26), frame (27),
-#             drawing_links (15) or regis_cursor (16).
+#             paint (35), drawing_links (15) or regis_cursor (16).
 # object      value is one whole OBJECT record of the audio profile as it is
 #             framed, before it is cut into fragments: version, type, a
 #             two-byte body length, the body and a CRC-32 (RULE-60).
@@ -239,6 +240,7 @@ records	naplps_objects_one	a1ead0020000021900250101000100010101012d0103020000c80
 records	sheet	a1ead05e0000021a0012010100010100000100000000505b302c305dae7e6d3200000000000000004a53	page 101 sub 0001 ReGIS sheet generation 1 offset 0: P[0,0]
 records	frame_begin	a1ead05e0000021b00080101000101000007d084693b0000000000000000000000000000000000008574	page 101 sub 0001 begin identifier 7
 records	frame_end	a1ead05e0000021b00080101000102000007c231c6d5000000000000000000000000000000000000d987	page 101 sub 0001 end identifier 7
+records	paint	a1ead05e00000223000e0101000101000001000004b000146ac1ef46000000000000000000000000055e	page 101 sub 0001 ReGIS generation 1: line speed 1200 bits a second, default paint rate 20
 records	drawing_links	a1ead05e0000020f000e01010001000101012d00033330322db4f28800000000000000000000000033f9	page 101 sub 0001 part 0 of 1: object 301 of the NAPLPS picture leads to 302; the same bytes name drawing 301 of a ReGIS picture
 records	regis_cursor	a1ead05e00000210000601010001012d835532160000000000000000000000000000000000000000cf7d	page 101 sub 0001: object 301 of the NAPLPS picture is the cursor; the same bytes name drawing 301 of a ReGIS picture
 records	rules_picture_links_group	a1ead00200000215003a0101000100010100002e00000200000001010000001d000000000107000283e4 a1ead04900010f00000e01010001000101012d00033330321000000601010001012d655998a60000cedd	page 101 sub 0001 generation 1: the whole image of the rules row picture_links_group, in one record
