@@ -169,6 +169,7 @@ The same for every renderer (RPT section 8.5). At most `MAX_SOUND_OPERATIONS_PER
 | `nt.synth.noteOn(part, note, velocity)`, `noteOff(part, note)`, `control(part, controller, value)`, `program(part, number)`, `bend(part, value)` | MIDI channel messages 0x90, 0x80, 0xB0, 0xC0, 0xE0, values in MIDI's ranges. |
 | `nt.synth.stop(part)` | All notes off and the instrument released. |
 | events on `nt.sound` | `cue` (`{ voice, cue }`, a cue point in a playing sound) and `ended` (`{ voice }`), when the decoder reports them. |
+| `nt.sound.allowed`, event `allowed` on `nt.sound` | Whether the viewer has yet pressed a key or the pointer in this tab. Until then `nt.sound` and `nt.synth` calls do nothing and are logged once (DEC-7282 item 7, pending the owner). |
 
 ### 3.6 State shared by the two levels
 
@@ -1427,8 +1428,9 @@ Recorded in rdm as one decision that waits for the owner's confirmation. Each wa
 3. **DEC-7268, one web-client process for each partition:** specified here as the safe form; it needs the owner's ruling, and it costs one process for each channel partition that uses the network.
 4. **`mode: "no-cors"` refused (D5), and local-network requests refused (D6):** confirm both departures; they are the two that remove something a web page can do.
 5. **The wording of the trusted strip** while a script holds keys (with and without the network), and when a page's program has stopped.
-7. **Scripts of a channel served over plain HTTP:** whether their requests are held to the channel itself (P8, the security review's DEC-7282 item 3), which this document specifies pending the ruling.
 6. **Whether a channel-level script may cancel navigation** that a page's own link or key caused (section 4.2 allows it; the browser's own controls are never cancellable).
+7. **Scripts of a channel served over plain HTTP:** whether their requests are held to the channel itself (P8, the security review's DEC-7282 item 3), which this document specifies pending the ruling.
+8. **The rest of DEC-7282** (section 2.1): each of its eleven rules is specified as proposed and waits for the owner's ruling on that record.
 
 **Not settled by this document:**
 
