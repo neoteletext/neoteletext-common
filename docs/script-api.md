@@ -55,6 +55,24 @@ The whole policy is implemented in one Rust type, `ChannelPolicy`, in one module
 
 P2, P3, P4 and P5 are departures from the standards; section 9.4 lists them (D1 to D4) with REQ-712 as their reason. `ChannelPolicy::relation` has a fuzz target of its own asserting that no address outside the folder is ever judged `InChannel` (TODO-7265's check).
 
+### 2.1 The security review's rules for the open points (DEC-7282, pending the owner)
+
+The independent review proposed a rule for each point DEC-7262 left open. Each is specified here as proposed, pending the owner's ruling on DEC-7282; where this document had drafted something else, the difference is stated.
+
+| DEC-7282 item | The rule as proposed | In this document |
+|---|---|---|
+| 1. Files not from their channel | A file opened from disk runs no script by default; the strip says it has a script and offers to run it once; run so, it has an opaque origin, no network, no cookies, no stored state, and may load only a script carried inside the file itself | **Differs.** Section 12.7 drafted: the script it names is read from the same folder and runs at once, with no network. Both are put to the owner (section 18 question 1); `ChannelPolicy` P6 holds the choice in one place |
+| 2. References stay inside the channel | A script reference must lie inside the channel's folder by REQ-3518's rule | The same and stricter: a script name is a file name in the folder (12.2, P5) |
+| 3. Plain HTTP | On an `http:` channel scripts may request only inside their own channel | Adopted as P8 and departure D27, pending the ruling |
+| 4. Keys declared, never computed | Declared before any code runs, "in its channel file or page file"; no "any key"; never-claimable keys never reach the script process; Escape only with the hold notice; no default send-everything table | The same rule, **in a different place:** the manifest at the head of the script file (3.1), read before any code runs, because a script named by a page file has no channel file entry to hold it |
+| 5. Input that can leave is shown | While a script page holds any key or the pointer the strip shows "Keys go to host"; a text claim shows a typing indication; REQ-6523's report gate cannot hold for script pages and is revised | Adopted. **Differs** from the first draft of 4.6, which showed a lesser indication for a script without the network; 4.6 now follows this rule, and the wording stays the owner's |
+| 6. The viewer sees and controls a script | The strip shows that a page's script is running and when it was stopped; a never-claimable browser key stops a page's script, after which the last frame stays and no callback runs | Adopted (3.1, work package F5) |
+| 7. Sound needs the viewer | No sound and no synthesizer until the viewer has pressed a key or the pointer in that tab | Adopted: until then `nt.sound` and `nt.synth` calls do nothing and are logged once; `nt.sound.allowed` says which, and an `allowed` event on `nt.sound` tells the script |
+| 8. Budgets across tabs | Browser-wide maximums of script processes, their total memory, and requests and connections a second; a hidden tab's ticks slowed and its sound stopped; a page over a browser-wide budget stopped, oldest first | Adopted as `MAX_SCRIPT_HOSTS`, `MAX_SCRIPT_MEMORY_BYTES` and the web client's rates. **Stricter** on hidden tabs: this document pauses a hidden tab's scripts entirely (3.1) |
+| 9. One realm only for one channel's scripts | The channel's and its pages' scripts may share one context because all come from the channel's folder | **Stricter:** two realms in one runtime (3.1), sharing only `nt.shared` |
+| 10. No scripts on push | A page delivered by a live push connection runs no script | Adopted: a channel whose `channel.ttx` has `push` runs no script, and its `scripts` member is ignored and logged (12.1) |
+| 11. Time stays coarse | Ticks are the only clock; no threads, no shared memory, no `Atomics` | The same (D12 to D14); `SharedArrayBuffer` and `Atomics` are removed from the global object by the prelude and absent from the build |
+
 ---
 
 ## 3. The shared core
@@ -274,7 +292,7 @@ The rule is REQ-7037 and DEC-7157's, applied to the manifest: a key is offered t
 - **Claimable only by name:** every other key, including the digits, the Fastext colours, Index, Reveal, Hold and Mix. There is no "any key" claim. A script that types claims `text`.
 - **A claimed key and its default.** This is the one change to REQ-7037 for script pages: a claimed key goes to the script first and then takes its default action unless a handler cancelled it (section 4.2). A game cancels; a page that only wants to watch the digits lets them through. A key no manifest names behaves exactly as today.
 - **Escape.** While a script claims Escape, the full-screen notice says "hold Escape to leave" (REQ-7037 item 7); holding it is the browser's and is never delivered.
-- **The badge.** While a context with `network: true` holds keys or text, the trusted strip shows the "Keys go to host" indication (DEC-7157 item 9), because what the script hears it can send. With `network: false` it shows the lesser indication that the page has the keys. The wording is the owner's (section 18, question 5).
+- **The badge.** While a script's page holds any key or the pointer, the trusted strip shows the "Keys go to host" indication (DEC-7157 item 9; DEC-7282 item 5), because what a script hears it can send; a text claim shows a typing indication as well. The strip also shows that a page's script is running, and a key of the browser's own that no page can claim stops it (DEC-7282 item 6). The wording is the owner's (section 18, question 5).
 
 ### 4.7 Queue bounds
 
@@ -818,6 +836,7 @@ Every difference from a standard is listed here and nowhere else; anything not l
 | D23 | HTML | Scripts may be modules and may `import()` | Classic scripts only | One file, one fetch, one manifest read before run (section 3.1) |
 | D24 | ECMA-402 | `Intl` | Absent | quickjs-ng has none; a script formats with its own code |
 | D25 | FETCH | `Request.destination`, `Request.referrer` default `"about:client"` resolve against a client document | `destination` is `""`; the default referrer is the script's own address | There is no document |
+| D27 | FETCH | A page on plain HTTP may make cross-origin requests | A plain `http:` channel's scripts reach only their own channel (P8) | A network attacker who replaces a plain channel's script must not gain a request cannon or the viewer's cookies elsewhere (DEC-7282 item 3, pending the owner) |
 | D26 | HTML | Unhandled errors go to `window.onerror` | To `globalThis` as for a worker (section 4.2), and count as a failure | There is no window |
 
 The standards' editions followed, pinned as rdm sources at integration: the WHATWG living standards as of 22 November 2026 (by commit), RFC 6455, RFC 9110, RFC 9111, RFC 9113, and draft-ietf-httpbis-rfc6265bis in its edition of that date.
@@ -1033,6 +1052,7 @@ Values marked * are starting values to be confirmed by measurement in the build 
 | `MAX_NAVIGATIONS_PER_SECOND` | 2 * | this document |
 | `AUDIO_CHANNELS`, `MAX_LOCAL_SOUNDS`, `MAX_SOUND_NUMBER` | 4, 2, 255 | `neoteletext-audio` |
 | `MAX_SOUND_OPERATIONS_PER_CALLBACK`, `_PER_STEP`, `_PER_SECOND`, `MAX_NOTE_TICKS` | 64, 64, 256 *, 600 | SPIKE; this document |
+| `MAX_SCRIPT_HOSTS`, `MAX_SCRIPT_MEMORY_BYTES` (browser-wide) | 64 (`MAX_TABS`), 536,870,912 * | DEC-7282 item 8; this document |
 | `MAX_BATCH_BYTES`, `MAX_SCRIPT_OUTPUT_BYTES_PER_SECOND`, `MAX_HOST_STATE_BYTES`, `SCRIPT_PROCESS_MEMORY_BYTES` | 262,144 (the engine's `MAX_FRAME_BYTES`), 1,048,576 *, 8,388,608 *, 134,217,728 * | TODO-7267; this document |
 | Host state by table: teletext (plane, overlay, sprites, controls, bitmap buffers) fixed; `REGIS_MAX_TOTAL_CONTENTS_BYTES` and the drawings table; NAPLPS macros `MAX_ALL_MACRO_BYTES` and the cast; components `MAX_UI_STATE_BYTES`; network buffers `MAX_NETWORK_BUFFER_BYTES` | fixed; 1,048,576 * and 2,048 records; 65,536 and 64 records; 262,144 *; 4,194,304 (the fetcher's `MAX_ROOM`) | this document |
 | `MAX_COLOUR_SETS_PER_SECOND` | 6 (three flashes) | RPT 10.2 finding 8 |
@@ -1162,24 +1182,33 @@ The web client holds the authoritative rates of 10.5 and D8 for each container (
 
 ### 11.4 Fuzz targets the build must have
 
-Every reader of outside input has a fuzz target, and every input that found a fault is kept and replayed first (DEVELOPMENT.md section 8). The gates check that each of these exists; the security review's analysis (`/data/neoteletext-tmp/reqresp-security/security-analysis.md`, "Fuzz targets the build must have") is the fuller list where it names more.
+The security review's list (its analysis, section 6), each attached to the work package that creates what it tests, with two this document adds. Each replays its corpus first and runs in the full gate; the gates check that each exists.
 
-| Target | Reads |
-|---|---|
-| The host call | arbitrary operation numbers, ints and payloads into `neoteletext-script`, in both contexts |
-| Painter programs | arbitrary `Int32Array` programs for the ReGIS and the NAPLPS painter |
-| Component options | arbitrary bytes to the strict JSON reader of `nt.ui` |
-| The manifest reader | arbitrary script file heads |
-| Script host to decoder | arbitrary frames as BATCH and FAILED, applied to a decoder with each renderer |
-| Decoder to script host | arbitrary frames as CONTEXT_OPEN, SOURCE and STEP |
-| The decoder's ReGIS and NAPLPS subset validators | arbitrary bytes in those two sections |
-| Script host to web client | arbitrary frames of `ToWebClient` |
-| Web client to script host | arbitrary frames of `FromWebClient`, into the prelude's fetch, event-stream and socket objects |
-| `ChannelPolicy::relation` | arbitrary addresses and channel identities, asserting nothing outside the folder is `InChannel` |
-| The web client's response path | arbitrary server bytes: heads, bodies, compressed bodies, `Set-Cookie`, event streams, WebSocket frames |
-| The URL operation | arbitrary input and base strings |
-| `channel.ttx`'s `scripts` member, the TTI `JS` line, the `SCRIPT_REF` record | the engine's existing targets, extended |
-| The sixel converter | arbitrary indexed rasters and previous frames |
+| # | Target | Tests | Work package |
+|---|---|---|---|
+| 1 | `script_host_ops` | Every host operation with arbitrary ints and payloads, interleaved with steps and input; no panic, host state within `MAX_HOST_STATE_BYTES`, a batch within `MAX_BATCH_BYTES` | F2, extended by T1 to N2 and U1 |
+| 2 | `script_imports` | Each import (`nt.call`, `clock_time_get`, `fd_write`, the `fd_*` stubs) with arbitrary pointers and lengths over an arbitrary memory image; bounded time and memory, a trap and never a panic | F2 |
+| 3 | `script_js` | Arbitrary JavaScript run under the limits; stopped within each limit's margin, process memory bounded | F2 |
+| 4 | `script_manifest` | The manifest reader | F4 |
+| 5 | `script_link_to_host`, `script_link_to_decoder` | The message readers of 11.2 | F1 |
+| 6 | `script_batch_apply` | An arbitrary BATCH applied by the decoder; only the open page and sub-page change, no channel record is produced, rows 0 and 24 untouched | F4 |
+| 7 | `regis_batch_subset`, `naplps_batch_subset` | The decoder's subset validators | D1 |
+| 8 | `web_to_client`, `web_from_client` | The messages of 11.3, both ways | F1 |
+| 9 | `channel_policy_relation` | `ChannelPolicy::relation` against an oracle that decodes as servers do; nothing outside the folder is `InChannel` | W1 |
+| 10 | `cookie_set_cookie` | `Set-Cookie` and the jar's invariants (prefixes, public suffixes, limits, SameSite) | W1 |
+| 11 | `cookie_jar_kept` | The jar bytes the trusted core hands back | W1 |
+| 12 | `cors_response` | `Access-Control-*` headers, preflight, response filtering | W1 |
+| 13 | `integrity_metadata` | The integrity parser | W1 |
+| 14 | `content_coding` | gzip, deflate and brotli with bounded room | W1 |
+| 15 | `sse_stream` | The event-stream parser | W1 |
+| 16 | `websocket_frames` | WebSocket framing | W1 |
+| 17 | `web_client_hostile_server` | Arbitrary HTTP/1.1 and HTTP/2 answers, end to end | W1 |
+| 18 | `channel_file_scripts` | The `scripts` member, the TTI `JS` line, the `SCRIPT_REF` record | C1 |
+| 19 | `bitmap_present` | An arbitrary sixel bitmap and previous frame through the converter | T3 |
+| 20 | `script_url_resolve` | The host's URL operation (40) | W2 |
+| 21 | `referrer_policy` | The referrer computation | W1 |
+| 22 | `painter_programs` | Arbitrary painter programs for ReGIS and for NAPLPS | R2, N1 |
+| 23 | `ui_options` | Arbitrary bytes to the component options reader | U1 |
 
 ---
 
@@ -1187,7 +1216,7 @@ Every reader of outside input has a fuzz target, and every input that found a fa
 
 ### 12.1 The channel file is `channel.ttx`
 
-The channel file of DEC-7254 is the channel's existing entry file, `channel.ttx` (the engine's REQ-508 and REQ-513; DEC-594 item 7), which every channel is already opened by: least machinery, one file, one strict reader (`Descriptor::parse_channel`). It gains one member. A channel without the file, or without the member, has no scripts.
+The channel file of DEC-7254 is the channel's existing entry file, `channel.ttx` (the engine's REQ-508 and REQ-513; DEC-594 item 7), which every channel is already opened by: least machinery, one file, one strict reader (`Descriptor::parse_channel`). It gains one member. A channel without the file, or without the member, has no scripts. A live channel (one whose file has the member `push`) runs no script: its `scripts` member is ignored and the fact logged, so that the push system's report gate and rule tables never meet page code (DEC-7282 item 10).
 
 ```json
 {
@@ -1214,7 +1243,7 @@ To hold 800 entries the engine's bound on a channel file, `DEFAULT_DESCRIPTOR_LI
 
 A script name is a file name: 1 to 64 characters of `A` to `Z`, `a` to `z`, `0` to `9`, `-` and `_`, then `.js`. It names a file in the channel's own folder, for a sub-page's script too: there is one place a script can be. It is never an address, never has a folder, a query or a fragment, and so can never leave the channel's folder: P5 holds by construction, and a folder inside a channel, which is a different channel (DEC-594 item 1), is never reached. `*.js` in that form is added to the fixed file names of REQ-508.
 
-A script file MUST be served with a JavaScript media type (the MIME Sniffing standard's list: `text/javascript`, `application/javascript` and their legacy aliases); any other type is refused, and the content is never sniffed. It is fetched with the channel's credentials, cached under the channel's partition by RFC 9111 like any file, and revalidated when its page is opened. Version 1 keeps no bytecode cache.
+A script file MUST be served with a JavaScript media type (the MIME Sniffing standard's list: `text/javascript`, `application/javascript` and their legacy aliases); any other type is refused, and the content is never sniffed. It is fetched with the channel's credentials, cached under the channel's partition by RFC 9111 like any file, and revalidated when its page is opened. Version 1 keeps no bytecode or compiled-code cache: a cache written by an untrusted process and read back as code is a way for one run to subvert the next.
 
 ### 12.3 A page with a script, and a JavaScript page
 
