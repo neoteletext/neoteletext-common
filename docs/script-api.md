@@ -48,6 +48,7 @@ The whole policy is implemented in one Rust type, `ChannelPolicy`, in one module
 | P4 | The HTTP cache, the script and bytecode cache, and any state kept for an event stream or a later storage API are keyed by the same `JarKey` first. | `partition() -> JarKey` |
 | P5 | A script named by a channel file or a page file is loaded only when its address is `InChannel`. | `may_load_script(url) -> bool` |
 | P6 | A page opened from disk has an opaque origin, no jar and no network (section 12.7, pending the owner). | `network_allowed() -> bool` |
+| P8 | A channel served over plain `http:` is not a secure context: its scripts' requests, event streams and sockets reach only addresses that are `InChannel` (the web's secure-context idea, DEC-7282 item 3, proposed by the security review; pending the owner, section 18 question 7). | `network_reach() -> Reach` |
 | P7 | A request to a loopback, link-local or private address from a channel that is not itself on such an address is refused, on every resolved address and every redirect (DEC-7260 item 6). | `may_connect(resolved_address) -> bool` |
 
 **One process for each partition** (DEC-7268, the security review's finding, pending the owner's ruling and specified here as the safe form; it is the browser's existing REQ-678). A *partition* is a `JarKey`: one window jar and one channel identity. The web client that serves a partition's requests is a confined process that holds only that partition's cookie jar, connections, HTTP cache and preflight cache; it may be the channel's existing fetcher process, which already has exactly one channel identity and one jar. No process ever holds two partitions' cookies or connections. The process is told its partition once, at its start, by the trusted core; a message that names any other partition ends the process (section 11.3). At most `MAX_WEB_CLIENTS` such processes live browser-wide; when one more is needed the least recently used one whose tabs are all asleep is ended, its jar saved first, and if none can be ended the new partition's scripts get no network and the developer log says why. Cookies kept between runs are held by the trusted core, sealed and written for each partition, handed to the process at its start and taken back as they change (at most `MAX_JAR_BYTES`).
@@ -105,7 +106,7 @@ P2, P3, P4 and P5 are departures from the standards; section 9.4 lists them (D1 
   2. **The step budget is hard for starting work.** When a step has used `STEP_TIME_BUDGET`, no further callback of that step starts: remaining timers stay due and remaining events stay queued for the next step (lost releases are delivered first and never deferred). A `tick` event that cannot start is counted in the next one's `missed`.
   3. **A budget over a second.** A container that uses more than `SECOND_TIME_BUDGET` of script time in any `TICKS_PER_SECOND` consecutive ticks is stopped for good, as for any passed limit. This is what stops a page whose every callback is just under its limit.
   4. **Passing `CALLBACK_TIME_LIMIT` or `START_TIME_LIMIT` stops the container for good.**
-  5. **The clock check cannot be starved.** Two mechanisms, both required. (a) Inside the container: the fuel slice is at most `FUEL_SLICE`, and the module is built so that no single instruction does unbounded work: it is compiled without WebAssembly's bulk-memory instructions (`memory.copy` and `memory.fill` become loops that are charged for each iteration), which the reproducible build checks by refusing a module that contains them. (b) Outside it: a watchdog thread in the script-host process, which holds no lock the interpreter can hold, ends the process when a callback or the top level passes its limit by more than `WATCHDOG_GRACE`; and the decoder ends the script through the trusted core when a STEP is not answered within `STEP_DEADLINE`. Neither depends on the interpreter returning.
+  5. **The clock check cannot be starved.** Two mechanisms, both required. (a) Inside the container: the fuel slice is at most `FUEL_SLICE`, and the module is built so that no single instruction does unbounded work: it holds no WebAssembly bulk-memory instruction (`memory.copy` and `memory.fill` become loops that are charged for each iteration). Compiling QuickJS and the shim with `-mno-bulk-memory` is not enough: wasi-sdk's prebuilt C library is built with bulk memory, so its `memcpy` and `memset` still hold those instructions; the build therefore rebuilds the C library without them or supplies its own `memcpy`, `memmove` and `memset`, and the reproducible build scans the final module's code section and refuses one that contains either instruction. As a fallback that stays in place, wasmi is configured to charge fuel for each byte a bulk operation copies. (b) Outside it: a watchdog thread in the script-host process, which holds no lock the interpreter can hold, ends the process when a callback or the top level passes its limit by more than `WATCHDOG_GRACE`; and the decoder ends the script through the trusted core when a STEP is not answered within `STEP_DEADLINE`. Neither depends on the interpreter returning.
   6. **Host calls check too:** the clock is read before and after every host call and at least once for every `HOST_COPY_CHECK_BYTES` a host call copies or processes.
 
 ### 3.3 `nt`: identity, time and the page
@@ -806,7 +807,7 @@ Every difference from a standard is listed here and nowhere else; anything not l
 | D12 | HTML | Timer delays are milliseconds, clamped to 4 ms when nested | A delay is rounded up to whole ticks of 1/60 s; the least is one tick | One presentation clock (AN ANIM-1); no clock finer than a tick exists for a script (RPT section 7.8 item 4) |
 | D13 | High Resolution Time | `performance.now()` is fine-grained | It advances once a tick | The same: no instrument for timing attacks |
 | D14 | ECMAScript | `Date` gives milliseconds | The time is given to the tick it was read in | The same |
-| D15 | ECMAScript | `Math.random` is unseeded | Seeded for each context by the trusted core; the runner seeds it from its command line | Deterministic runs in tests (RPT section 9.2 item 2); no shared state between tabs |
+| D15 | ECMAScript | `Math.random` is unseeded | Seeded for each context from the trusted core's fresh seed; in the runner alone, from its command line. `crypto.getRandomValues` is a cryptographic generator, never predictable from `Math.random` | Deterministic runs in tests (RPT section 9.2 item 2); no shared state between tabs |
 | D16 | DOM | `AbortSignal.timeout(ms)` | Rounded up to ticks | D12 |
 | D17 | HTML | `structuredClone` copies every serializable type | JSON-representable values, `Date`, `Map`, `Set`, `ArrayBuffer` and typed arrays; no transfer list | No other serializable platform object exists here |
 | D18 | UI Events | `KeyboardEvent` has `code`, `location`, `keyCode` | Only `key`, `repeat` and the four modifier flags | The others describe the viewer's hardware and layout and identify a viewer |
@@ -1116,7 +1117,7 @@ Framing is the browser's own (`native/protocol/src/framing.rs`): a kind byte, a 
 | section STATE | for each context: running or stopped with a reason code; `failures: u16`; and `next_due: u64`, the tick of the earliest timer, so that the decoder wakes for it and never polls |
 | FAILED | `context`; `reason: u8` (time, memory, stack, trap, failures, link); `text` ≤ 400 |
 
-**A script's output never takes the channel's stream path** (the security review's finding, TODO-7267 item 6). The batch holds only the typed drawing commands above, for the page and sub-page that are open and for nothing else: no section names a page, and none can carry an arbitrary record or packet. The decoder builds the packets and records itself (FRAME 27 begin and end around the step, the rows, X/26, X/28, the object page, SPRITES 24, ANIMATE 23, REGIS 14, NAPLPS 17, NAPLPS_OBJECTS 25, CONTROL 3, LOCAL_MIDI 28) and gives them to the engine as the open page's. A script process that has been subverted therefore cannot send a SCRIPT_REF, REDIRECT, LINKS, RULES, INDEX, SUBPAGES, DENIED, LOG or state record, cannot write a row 0 or 24, and cannot touch another page of the channel's store. The ReGIS and NAPLPS sections are still that renderer's language, which the decoder's renderers read as they read a channel's (bounded, fuzzed); the host's encoder writes only a small subset of each, and the decoder holds the rates of 10.5 and the bounds of 10.6 again, as the authority.
+**A script's output never takes the channel's stream path** (the security review's finding, TODO-7267 item 6). The batch holds only the typed drawing commands above, for the page and sub-page that are open and for nothing else: no section names a page, and none can carry an arbitrary record or packet. The decoder builds the packets and records itself (FRAME 27 begin and end around the step, the rows, X/26, X/28, the object page, SPRITES 24, ANIMATE 23, REGIS 14, NAPLPS 17, NAPLPS_OBJECTS 25, CONTROL 3, LOCAL_MIDI 28) and gives them to the engine as the open page's. A script process that has been subverted therefore cannot send a SCRIPT_REF, REDIRECT, LINKS, RULES, INDEX, SUBPAGES, DENIED, LOG or state record, cannot write a row 0 or 24, and cannot touch another page of the channel's store. The ReGIS and NAPLPS sections are still that renderer's language, which the decoder's renderers read as they read a channel's (bounded, fuzzed), so a subverted script process gains nothing a hostile server lacks. As a second line the decoder SHOULD hold both sections to the host encoder's subset before feeding them, with a small validator of its own that is fuzzed: for ReGIS, no macrograph definition outside the forms the host writes, no screen, load or report command, and `D` operations only in the shapes of section 6; for NAPLPS, only the opcodes of section 7.3 and 7.4 and the designations the host uses (work package D1). The decoder holds the rates of 10.5 and the bounds of 10.6 again, as the authority.
 
 The decoder, for its part: reads manifests (it is the process that parses outside input); reports each context's claims to the trusted core in its existing key-ask message, extended to say that a script holds them and whether it has the network; makes STEPs on its own presentation clock and for input between ticks; turns a BATCH into the open page's packets and records and applies them inside one frame; tells the trusted core each event's verdict so that defaults are taken or not; and maps what the pointer hit to the host's handle (a ReGIS drawing's handle is its number; sprites, controls and actors by the numbers the host's records gave them).
 
@@ -1158,6 +1159,27 @@ Every field is hostile input to the web client, which checks each against its bo
 | `Jar` | to the trusted core only, never relayed to a script host: the partition's jar as it changed, ≤ `MAX_JAR_BYTES` |
 
 The web client holds the authoritative rates of 10.5 and D8 for each container (requests and event-stream and socket opens for each step and second, counted whether or not they are aborted; `MAX_REQUESTS_IN_FLIGHT` at a time). A page's own files and a channel's scripts are fetched as today's page files are, by the trusted core's typed requests (section 12.5), not by these messages.
+
+### 11.4 Fuzz targets the build must have
+
+Every reader of outside input has a fuzz target, and every input that found a fault is kept and replayed first (DEVELOPMENT.md section 8). The gates check that each of these exists; the security review's analysis (`/data/neoteletext-tmp/reqresp-security/security-analysis.md`, "Fuzz targets the build must have") is the fuller list where it names more.
+
+| Target | Reads |
+|---|---|
+| The host call | arbitrary operation numbers, ints and payloads into `neoteletext-script`, in both contexts |
+| Painter programs | arbitrary `Int32Array` programs for the ReGIS and the NAPLPS painter |
+| Component options | arbitrary bytes to the strict JSON reader of `nt.ui` |
+| The manifest reader | arbitrary script file heads |
+| Script host to decoder | arbitrary frames as BATCH and FAILED, applied to a decoder with each renderer |
+| Decoder to script host | arbitrary frames as CONTEXT_OPEN, SOURCE and STEP |
+| The decoder's ReGIS and NAPLPS subset validators | arbitrary bytes in those two sections |
+| Script host to web client | arbitrary frames of `ToWebClient` |
+| Web client to script host | arbitrary frames of `FromWebClient`, into the prelude's fetch, event-stream and socket objects |
+| `ChannelPolicy::relation` | arbitrary addresses and channel identities, asserting nothing outside the folder is `InChannel` |
+| The web client's response path | arbitrary server bytes: heads, bodies, compressed bodies, `Set-Cookie`, event streams, WebSocket frames |
+| The URL operation | arbitrary input and base strings |
+| `channel.ttx`'s `scripts` member, the TTI `JS` line, the `SCRIPT_REF` record | the engine's existing targets, extended |
+| The sixel converter | arbitrary indexed rasters and previous frames |
 
 ---
 
@@ -1219,11 +1241,13 @@ The page file's own reference is used, because it is the more specific and trave
 
 Today the broker reads a T42 or TTI file the viewer chose and the trusted core passes it to a decoder with no rights; each file is its own channel with no fetcher (DEC-1762). With DEC-7255 such a file may name a script. This is a question for the owner (section 18, question 1). **The recommendation,** which `ChannelPolicy` P6 encodes until the owner rules:
 
-1. The named script is loaded only from the same folder as the page file, by the broker, under the same grant as the page file, and only when it is a script name of 12.2's form.
+1. The named script is loaded only from the same folder as the page file, by the broker, under the same grant as the page file (no folder grant wider than the page file's), and only when it is a script name of 12.2's form; the read is bounded by `MAX_SCRIPT_BYTES` and refuses a symbolic or hard link. A script carried whole inside a file (the spikes' SCRIPT record) is refused.
 2. It runs with an opaque origin, no cookie jar and **no network**: `fetch`, `EventSource` and `WebSocket` fail as a manifest with `network: false` does. Drawing, input (the keys its manifest claims), sound and synthesizers work.
 3. `nt.navigate` works to pages of the same file or folder and, to a channel on the network, only on the viewer's activation and through the trusted core's usual prompt for a link out of a file.
 
-The reason: a file a viewer was sent and opened is the least trusted way a page can arrive, a local page with the network could carry what it sees to any server that answers CORS, and nothing a local page legitimately does (a game, a demonstration, a page being authored) needs the network; an author testing network code uses the runner or a local web server.
+**The alternative the security review proposes** (DEC-7282 item 1): the script does not run until the viewer chooses, and the trusted strip says the file has a script. Rules 1 to 3 hold under either. Both are put to the owner.
+
+The reason for no network: a file a viewer was sent and opened is the least trusted way a page can arrive, a local page with the network could carry what it sees to any server that answers CORS, and nothing a local page legitimately does (a game, a demonstration, a page being authored) needs the network; an author testing network code uses the runner or a local web server.
 
 ---
 
@@ -1237,7 +1261,7 @@ For the code sessions, the points the earlier sections imply:
 4. **NAPLPS generations.** A page context's backdrop is one generation until `repaint`. A new generation is a new `naplps::Terminal` in the decoder, so the host sends the colour map, definitions and cast again.
 5. **Teletext frames.** The host keeps the 23 by 40 plane, the overlay table, the sprite and control tables and the 16 colours, and writes each step's changes as packets between FRAME records.
 6. **Paused** means the decoder sends no STEP; on resume the first STEP carries `resumed` and the tick continues from where it stopped.
-7. **The seed.** The trusted core draws 32 bytes for each context from the operating system; the host derives `Math.random`'s state and `crypto.getRandomValues`'s generator from it. No two contexts share a seed.
+7. **The seed.** The trusted core draws 32 bytes for each context from the operating system. The host derives two independent values from it with a key-derivation function under distinct labels (HKDF-SHA-256 from `ring`): the state of `Math.random`, and the key of a cryptographic generator (ChaCha20) for `crypto.getRandomValues` and `crypto.randomUUID`. QuickJS's `Math.random` is a small generator whose state a script can recover from a few outputs, so nothing else may depend on it. No two contexts share a seed. The runner's command-line seed exists only in the runner; D15's determinism is `Math.random`'s alone, and in the runner the cryptographic generator is keyed from the same command-line seed only so that runs repeat.
 
 ---
 
@@ -1369,11 +1393,12 @@ Recorded in rdm as one decision that waits for the owner's confirmation. Each wa
 
 **Questions only the owner can answer** (each an rdm to-do for the owner):
 
-1. **A file opened from disk:** may it run the script it names, and with what? Recommended: yes, from its own folder, with no network and an opaque origin (section 12.7).
+1. **A file opened from disk:** may it run the script it names, and with what? This document recommends: yes, from its own folder, with no network and an opaque origin. The security review proposes instead that it not run until the viewer chooses (DEC-7282 item 1). Section 12.7 gives both.
 2. **When the channel file and a page file both name a script for one page:** confirm that the page file's wins (section 12.6).
 3. **DEC-7268, one web-client process for each partition:** specified here as the safe form; it needs the owner's ruling, and it costs one process for each channel partition that uses the network.
 4. **`mode: "no-cors"` refused (D5), and local-network requests refused (D6):** confirm both departures; they are the two that remove something a web page can do.
 5. **The wording of the trusted strip** while a script holds keys (with and without the network), and when a page's program has stopped.
+7. **Scripts of a channel served over plain HTTP:** whether their requests are held to the channel itself (P8, the security review's DEC-7282 item 3), which this document specifies pending the ruling.
 6. **Whether a channel-level script may cancel navigation** that a page's own link or key caused (section 4.2 allows it; the browser's own controls are never cancellable).
 
 **Not settled by this document:**
@@ -1386,4 +1411,5 @@ Recorded in rdm as one decision that waits for the owner's confirmation. Each wa
 - **Where the browser shows a script's log and budget** to a channel's developer.
 - **macOS and Windows confinement of `Role::Script`** is specified as the decoder's; that the container runs unchanged under each is unverified until F3.
 - **ReGIS text measuring and NAPLPS proportional measuring** are computed by the host from cell sizes because neither renderer has a measuring call; adding one to each renderer would make them exact.
+- **The trusted indications** (a script holds the keys; a page's program has stopped): the browser's spoofing review (its `docs/security-analysis.md` section 7) must cover both, and full-screen page-only mode must end or show the indication when a script starts holding keys (TODO-7285 item 6; work package F5).
 - **Accessibility:** the decoder has no accessibility-tree message today; labels are specified and carried, and what reads them is outside this document.
